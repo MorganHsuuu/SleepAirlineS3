@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e9e8e0">
+  <title>甦醒航班｜Window Edition</title>
+  <link rel="icon" href="media/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-section" class="sr-only" aria-hidden="true"></div>
+  <div class="app-shell" id="main-section">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">✳</span><span>甦醒航班 <small>WINDOW EDITION</small></span></div>
+      <div class="topbar-right"><span class="live-dot"></span><span id="mode-label">體驗模式</span><button class="text-button" id="profile-open" type="button">登機資料 ↗</button></div>
+    </header>
+
+    <main class="main-grid">
+      <section class="story" aria-label="航班資訊">
+        <div class="eyebrow"><span class="line"></span> 01 / THE JOURNEY</div>
+        <h1>一扇窗，<br><em>飛向另一個地方。</em></h1>
+        <p class="intro">選擇今晚的方向。拉下窗簾起飛，等準備好了，再打開窗戶看看自己抵達哪裡。</p>
+        <div class="story-spacer"></div>
+        <div class="route-card">
+          <div class="route-top"><span>YOUR FLIGHT</span><span id="flight-code">SA 003</span></div>
+          <div class="route-places"><div><small>FROM</small><strong id="from-city">臺北</strong><span id="from-code">TPE</span></div><div class="route-line"><span>✈</span></div><div><small>TO</small><strong id="to-city">未知的遠方</strong><span id="to-code">???</span></div></div>
+          <div class="route-foot"><span id="route-status">等待登機</span><span id="flight-duration">00:00</span></div>
+        </div>
+      </section>
+
+      <section class="window-area" aria-label="飛機舷窗">
+        <div class="window-backdrop"></div>
+        <div class="window-frame">
+          <div class="window-rim">
+            <div class="window-glass" id="window-glass">
+              <img id="cloud-image" class="scene-image visible" src="images/clouds-dawn.png" alt="晨光中的雲層">
+              <img id="arrival-image" class="scene-image" src="images/arrival-coast.png" alt="降落後的風景">
+              <video id="descent-video" class="scene-video" src="media/takeoff2.mp4" muted playsinline loop preload="metadata" poster="images/clouds-dawn.png" aria-label="穿越雲層的下降影片"></video>
+              <video id="landing-video" class="scene-video" src="media/landing.mp4" muted playsinline preload="metadata" poster="images/clouds-dawn.png" aria-label="降落進場影片"></video>
+              <div class="scene-wash"></div>
+              <canvas id="globe-canvas" width="700" height="1000" aria-label="真實國家輪廓與地球儀航線動畫"></canvas>
+              <div class="cloud-veil" id="cloud-veil" aria-hidden="true"></div>
+              <div class="window-shade" id="window-shade"><div class="shade-texture"></div><div class="shade-handle"></div></div>
+              <div class="window-caption"><span class="caption-dot"></span><span id="window-caption">台北上空 · 等待出發</span></div>
+              <div class="window-reflection"></div>
+            </div>
+          </div>
+          <span class="frame-screw screw-a"></span><span class="frame-screw screw-b"></span><span class="frame-screw screw-c"></span><span class="frame-screw screw-d"></span>
+        </div>
+        <div class="window-index"><span>WINDOW 03A</span><span id="window-phase">BOARDING</span></div>
+      </section>
+
+      <aside class="controls" aria-label="航班操控台">
+        <div class="controls-top"><span class="eyebrow">FLIGHT CONTROL</span><span class="control-symbol">✧</span></div>
+        <div class="control-divider"></div>
+        <div class="direction-heading"><div><small>01</small><h2>航向選擇</h2></div><span>拖動旋鈕</span></div>
+        <div class="dial-wrap">
+          <div class="dial-cardinal n">N</div><div class="dial-cardinal e">E</div><div class="dial-cardinal s">S</div><div class="dial-cardinal w">W</div>
+          <div id="direction-dial" class="direction-dial" role="slider" tabindex="0" aria-label="選擇航向" aria-valuemin="0" aria-valuemax="7" aria-valuenow="2" aria-valuetext="向東">
+            <div class="dial-ticks"></div><div class="dial-inner"><span class="dial-pointer" id="dial-pointer"></span><span class="dial-center">✦</span></div>
+          </div>
+        </div>
+        <div class="direction-readout"><span>目前航向</span><strong id="direction-name">向東 · 090°</strong></div>
+        <select id="tk-direction" class="sr-only" aria-label="航向"><option value="northbound">向北</option><option value="northeast">東北</option><option value="eastbound" selected>向東</option><option value="southeast">東南</option><option value="southbound">向南</option><option value="southwest">西南</option><option value="westbound">向西</option><option value="northwest">西北</option></select>
+        <div class="control-divider"></div>
+        <div class="stage-heading"><div><small>02</small><h2 id="action-heading">準備啟程</h2></div><span id="stage-indicator">READY</span></div>
+        <p class="stage-copy" id="stage-copy">拉下舷窗簾，聽完機長廣播，這趟航班就會起飛。</p>
+        <button class="primary-button" id="btn-takeoff" type="button"><span class="button-icon">↓</span><span>拉下窗簾・起飛</span><span class="button-arrow">↗</span></button>
+        <button class="primary-button landing-button hidden" id="btn-land" type="button"><span class="button-icon">↑</span><span>打開窗戶・降落</span><span class="button-arrow">↗</span></button>
+        <button class="secondary-button hidden" id="btn-restart" type="button">再飛一次 <span>↻</span></button>
+        <button class="secondary-button sleep-report-button hidden" id="btn-sleep-report" type="button">回報實際睡眠 <span>＋</span></button>
+        <div class="sound-row"><span>♫</span><span id="sound-label">音樂與機長廣播將在起飛時播放</span><button id="sound-toggle" type="button" aria-label="切換聲音" aria-pressed="true">聲音開啟</button></div>
+      </aside>
+    </main>
+    <footer class="footer"><span>TAKE A BREATH. TAKE A FLIGHT.</span><span>為 iPad mini 橫式畫面設計 · 亦支援直式</span></footer>
+  </div>
+
+  <div class="ceremony hidden" id="ceremony" role="status" aria-live="polite"><span class="ceremony-tag" id="ceremony-tag">CAPTAIN SPEAKING</span><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p id="ceremony-copy"></p></div>
+  <div class="toast hidden" id="toast" role="alert"></div>
+
+  <dialog id="profile-dialog" class="profile-dialog"><form id="login-form" method="dialog"><div class="dialog-top"><span class="eyebrow">BOARDING PASS</span><button type="button" id="profile-close" aria-label="關閉">×</button></div><h2>登機資料</h2><p>連線航班會將窗簾操作時間、航向及地點記錄在 S3 專用資料庫。請使用研究代碼與暱稱，避免填寫真實姓名。</p><label>乘客代碼<input id="input-pid" name="passengerId" autocomplete="off" placeholder="例如 P001"></label><label>暱稱<input id="input-name" name="name" autocomplete="off" placeholder="例如 旅人 01"></label><label>Terminal 航站<input id="input-group" name="groupId" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="off" placeholder="例如 0002"></label><label class="consent"><input id="research-consent" type="checkbox"><span>我同意將本次航班與選填的睡眠回報記錄在 S3 研究資料庫。</span></label><button type="submit" id="btn-login" class="primary-button">儲存並登機 ↗</button><span class="dialog-hint" id="profile-hint"></span></form></dialog>
+  <dialog id="sleep-report-dialog" class="profile-dialog"><form id="sleep-report-form"><div class="dialog-top"><span class="eyebrow">SLEEP LOG</span><button type="button" id="sleep-report-close" aria-label="關閉">×</button></div><h2>這趟睡得如何？</h2><p>窗簾關閉到打開的時間已自動記錄為休息區間。若你知道自己實際睡了多久，可以選填下方資料。</p><label>實際睡著約幾分鐘（選填）<input id="sleep-minutes" type="number" min="0" max="1440" step="1" inputmode="numeric" placeholder="例如 45"></label><label>睡眠品質 1–5 分（選填）<select id="sleep-quality"><option value="">不填寫</option><option value="1">1 · 很差</option><option value="2">2 · 偏差</option><option value="3">3 · 普通</option><option value="4">4 · 不錯</option><option value="5">5 · 很好</option></select></label><button type="submit" id="sleep-report-submit" class="primary-button">儲存睡眠回報</button><span class="dialog-hint" id="sleep-report-hint"></span></form></dialog>
+  <script src="vendor/d3.min.js"></script><script src="globe.js"></script><script src="broadcast-audio.js"></script><script src="app.js"></script>
+</body>
+</html>

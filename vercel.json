@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "npm run build",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" }
+  ],
+  "crons": [
+    { "path": "/api/reminders/cron", "schedule": "0 12 * * *" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 120
+    }
+  }
+}

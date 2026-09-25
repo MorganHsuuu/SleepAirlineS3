@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+.vercel/
+public/cities_data.json
+public/country-iso.json
+*.tsbuildinfo
+.vercel
+.env*
+.superpowers/
