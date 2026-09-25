@@ -133,7 +133,7 @@ function spinTo(index, prefer) {
 function hideGlassPanel(id) {
   const panel = $(id);
   if (!panel) return;
-  panel.classList.remove('is-on', 'is-leaving', 'beat-blur', 'beat-climb', 'beat-arc');
+  panel.classList.remove('is-on', 'is-leaving', 'is-ask', 'is-ring', 'beat-blur', 'beat-climb', 'beat-arc');
   panel.hidden = true;
 }
 function showCompass() {
@@ -171,7 +171,7 @@ function render() {
   $('btn-takeoff').classList.toggle('hidden', !ready);
   $('btn-land').classList.toggle('hidden', !flying);
   $('shade-handle')?.classList.toggle('is-ready', (ready || flying) && !state.busy);
-  $('btn-restart').classList.toggle('hidden', !landed);
+  $('btn-restart').classList.add('hidden');
   $('btn-sleep-report').classList.toggle('hidden', !landed || FRONTEND_PREVIEW_ONLY);
   $('direction-dial').style.opacity = ready ? '1' : '.52';
   $('direction-dial').setAttribute('aria-disabled', ready ? 'false' : 'true');
@@ -615,7 +615,7 @@ function revealArrivalImage(url, late = false) {
     image.src = url;
     if (late) setScene('arrival');
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 100));
-    $('window-caption').textContent = `已抵達 ${state.destination.name}`;
+    $('window-caption').textContent = '';
   };
   preload.src = url;
 }
@@ -624,10 +624,9 @@ async function doLand() {
   state.busy = true;
   state.stage = 'landing'; render(); setShade('open');
   window.BroadcastAudio?.primeFromUserGesture?.();
-  if (state.sound) window.BroadcastAudio?.startWakeupBed?.(`media/${nextWakeup()}`, 0.14);
-  if (state.sound && !state.openaiReady) {
-    window.BroadcastAudio?.speakFromGesture?.('各位旅客，飛機正在下降。請稍候，我們即將打開窗戶。');
-  }
+  const captainFirst = state.sound && window.BroadcastAudio?.playCaptainIntro
+    ? BroadcastAudio.playCaptainIntro({ fadeInMs: 0, volume: 0.45 }).catch(() => false)
+    : Promise.resolve(false);
   primeLandingVideos();
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
@@ -669,14 +668,11 @@ async function doLand() {
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    // Speech runs in parallel; never block the visual landing sequence on TTS.
+    // 先播完 captain.mp3 前 7 秒，再接喚醒音樂與語音。畫面不等這段。
     void (async () => {
-      if (!speech) {
-        if (text) await playBroadcast(text, speech, { restoreBed: true });
-        return;
-      }
-      await delay(1600);
-      if (text) await playBroadcast(text, speech, { restoreBed: true });
+      await captainFirst;
+      if (state.sound) window.BroadcastAudio?.startWakeupBed?.(`media/${nextWakeup()}`, 0.14);
+      if (state.sound && text) await playBroadcast(text, speech, { restoreBed: true, skipCaptainIntro: true });
     })().catch(() => {});
     const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
     const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
@@ -760,7 +756,7 @@ async function doLand() {
     await delay(2200);
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
     await delay(900);
-    $('window-caption').textContent = `已抵達 ${state.destination.name}${state.sceneryUrl ? '' : ' · 示意風景'}`;
+    $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     await offerSleepDial();
     await showWeatherCard(state.destination, weather);
@@ -810,7 +806,7 @@ async function submitSleepReport(event) {
   } catch (error) { $('sleep-report-hint').textContent = error.message; }
   finally { button.disabled = false; }
 }
-function restart() {
+function restart({ keepShade = false } = {}) {
   if (state.busy) return;
   window.BroadcastAudio?.stopPlayback?.();
   window.BroadcastAudio?.stopLandingMusic?.({ fade: true });
@@ -826,8 +822,9 @@ function restart() {
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('developing');
-  $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
-  setScene('clouds'); setShade('open'); render();
+  setScene('clouds');
+  if (!keepShade) setShade('open');
+  render();
 }
 
 function paintSleep(percent) {
@@ -852,10 +849,12 @@ function offerSleepDial() {
     const sleepGlass = $('glass-sleep');
     if (sleepGlass) {
       sleepGlass.hidden = false;
-      sleepGlass.classList.remove('is-leaving');
+      sleepGlass.classList.remove('is-leaving', 'is-ask', 'is-ring');
       void sleepGlass.offsetWidth;
       sleepGlass.classList.add('is-on');
     }
+    const askTimer = setTimeout(() => sleepGlass?.classList.add('is-ask'), 1100);
+    const ringTimer = setTimeout(() => sleepGlass?.classList.add('is-ring'), 2600);
     document.querySelector('.direction-heading h2').textContent = '昨夜睡得如何';
     document.querySelector('.direction-heading > span').textContent = '轉動旋鈕';
     $('direction-dial').style.opacity = '1';
@@ -864,6 +863,8 @@ function offerSleepDial() {
     const timer = setTimeout(finish, 10000);
     function finish() {
       clearTimeout(timer);
+      clearTimeout(askTimer);
+      clearTimeout(ringTimer);
       const value = moved ? Number($('direction-dial').dataset.sleep || 0) : null;
       state.sleepDial = false;
       wrap?.classList.remove('is-sleep');
@@ -891,7 +892,7 @@ function bindShadeGesture() {
     return clamped;
   };
   handle.addEventListener('pointerdown', (event) => {
-    if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise')) return;
+    if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
     event.preventDefault();
     pulling = true;
     const rect = glass.getBoundingClientRect();
@@ -910,13 +911,15 @@ function bindShadeGesture() {
     pulling = false;
     const height = glass.getBoundingClientRect().height;
     const lip = shadeLip();
-    if (state.stage === 'ready' && lip > height * 0.86) {
+    if ((state.stage === 'ready' || state.stage === 'landed') && lip > height * 0.86) {
+      const again = state.stage === 'landed';
       state.shadeHold = true;
       setShade('closed');
       // iOS：必須在 pointerup 手勢堆疊內解鎖 Audio／後續 HTMLAudio
       window.BroadcastAudio?.primeFromUserGesture?.();
       setTimeout(() => {
         state.shadeHold = false;
+        if (again) restart({ keepShade: true });
         void doTakeoff();
       }, 1000);
       return;
