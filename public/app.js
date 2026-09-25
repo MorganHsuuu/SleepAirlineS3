@@ -211,7 +211,18 @@ function applyPassengerOrigin(passenger) {
   };
   $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
 }
+function ensureGuestProfile() {
+  if (state.profile?.passengerId && state.profile?.name && state.profile?.groupId) return;
+  let guest = null;
+  try { guest = JSON.parse(localStorage.getItem('sleepAirlineS3Guest') || 'null'); } catch { guest = null; }
+  if (!guest?.passengerId || !guest?.name || !guest?.groupId) {
+    guest = { passengerId: `G${Date.now().toString(36).toUpperCase()}`, name: '旅人', groupId: '0001' };
+    localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(guest));
+  }
+  state.profile = guest;
+}
 function flightBody() {
+  ensureGuestProfile();
   return {
     passengerId: state.profile.passengerId, name: state.profile.name,
     groupId: state.profile.groupId, locale: 'zh',
@@ -308,7 +319,7 @@ async function playBroadcast(text, speechBase64, { restoreBed = false } = {}) {
 }
 async function doTakeoff() {
   if (state.busy || state.stage !== 'ready') return;
-  if (state.mode === 'live' && !state.profile) { $('profile-dialog').showModal(); showToast('請先填寫登機資料。'); return; }
+  ensureGuestProfile();
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
   clearTimeout(compassTimer);
@@ -497,10 +508,37 @@ async function loadWeather(place) {
     return guess;
   }
 }
+const HELLO_BY_ISO = {
+  JP: 'こんにちは', KR: '안녕하세요', KP: '안녕하세요', CN: '你好', TW: '你好', HK: '你好', MO: '你好',
+  TH: 'สวัสดี', VN: 'Xin chào', ID: 'Halo', MY: 'Halo', BN: 'Halo', PH: 'Kumusta',
+  IN: 'Namaste', NP: 'Namaste', BT: 'Kuzu zangpo', LK: 'Ayubowan', MM: 'Mingalaba', KH: 'សួស្តី', LA: 'ສະບາຍດີ',
+  FR: 'Bonjour', BE: 'Bonjour', LU: 'Bonjour', MC: 'Bonjour', RE: 'Bonjour', GP: 'Bonjour', MQ: 'Bonjour', GF: 'Bonjour', NC: 'Bonjour', YT: 'Bonjour', TF: 'Bonjour',
+  SN: 'Bonjour', CI: 'Bonjour', ML: 'Bonjour', BF: 'Bonjour', NE: 'Bonjour', TG: 'Bonjour', BJ: 'Bonjour', GN: 'Bonjour', CM: 'Bonjour', GA: 'Bonjour', CG: 'Bonjour', CD: 'Bonjour', CF: 'Bonjour', GQ: 'Bonjour', TD: 'Bonjour', DJ: 'Bonjour', KM: 'Bonjour', MG: 'Bonjour', MU: 'Bonjour', SC: 'Bonjour', HT: 'Bonjour',
+  ES: 'Hola', MX: 'Hola', AR: 'Hola', CL: 'Hola', PE: 'Hola', CO: 'Hola', VE: 'Hola', EC: 'Hola', BO: 'Hola', PY: 'Hola', UY: 'Hola', GT: 'Hola', HN: 'Hola', SV: 'Hola', NI: 'Hola', CR: 'Hola', PA: 'Hola', CU: 'Hola', DO: 'Hola', PR: 'Hola', AD: 'Hola',
+  PT: 'Olá', BR: 'Olá', CV: 'Olá', ST: 'Olá', AO: 'Olá', MZ: 'Olá', GW: 'Olá',
+  IT: 'Ciao', SM: 'Ciao', VA: 'Ciao', DE: 'Hallo', AT: 'Hallo', CH: 'Hallo', LI: 'Hallo', NL: 'Hallo', CW: 'Hallo',
+  SE: 'Hej', DK: 'Hej', NO: 'Hej', FI: 'Hei', EE: 'Tere', IS: 'Halló', GR: 'Γεια σου', CY: 'Γεια σου',
+  PL: 'Cześć', CZ: 'Ahoj', SK: 'Ahoj', HU: 'Szia', RO: 'Bună', MD: 'Bună',
+  HR: 'Bok', SI: 'Živjo', RS: 'Zdravo', BA: 'Zdravo', ME: 'Zdravo', XK: 'Zdravo', BG: 'Здравей', MK: 'Здраво',
+  RU: 'Здравствуйте', BY: 'Прывітанне', UA: 'Привіт', KZ: 'Сәлем', UZ: 'Salom', KG: 'Салам', TJ: 'Салом', TM: 'Salam', MN: 'Сайн уу',
+  GE: 'გამარჯობა', AM: 'Բարև', AZ: 'Salam', TR: 'Merhaba', IL: 'שלום', IR: 'سلام', AF: 'سلام',
+  AE: 'مرحبا', SA: 'مرحبا', QA: 'مرحبا', KW: 'مرحبا', BH: 'مرحبا', OM: 'مرحبا', YE: 'مرحبا', IQ: 'مرحبا', SY: 'مرحبا', JO: 'مرحبا', PS: 'مرحبا', LB: 'مرحبا', EG: 'أهلاً', LY: 'مرحبا', SD: 'مرحبا', SS: 'مرحبا', TN: 'مرحبا', DZ: 'مرحبا', MA: 'سلام', EH: 'سلام', MR: 'سلام', SO: 'مرحبا',
+  KE: 'Jambo', TZ: 'Habari', UG: 'Oli otya', RW: 'Muraho', BI: 'Amahoro', ET: 'Selam', ZA: 'Sawubona', BW: 'Dumela', ZW: 'Mhoro',
+  US: 'Hello', GB: 'Hello', AU: 'Hello', NZ: 'Hello', IE: 'Hello', CA: 'Hello', SG: 'Hello',
+  FJ: 'Bula', WS: 'Talofa', TO: 'Mālō e lelei', VU: 'Halo',
+};
+let countryIsoMap = null;
+function helloForPlace(place) {
+  const raw = String(place?.country || '').trim();
+  const key = raw.replaceAll('台灣', '臺灣').toLowerCase();
+  const iso = countryIsoMap?.[key] || '';
+  return HELLO_BY_ISO[iso] || 'Hello';
+}
 function showWeatherCard(place, weather) {
   $('wx-temp').textContent = String(weather.temp);
   $('wx-city').textContent = place.name;
   $('wx-place').textContent = place.country || '';
+  $('wx-hello').textContent = helloForPlace(place);
   $('wx-icon').dataset.kind = weather.kind;
   const panel = $('glass-weather');
   panel.hidden = false;
@@ -749,6 +787,9 @@ async function init() {
   } catch { /* no stored profile */ }
   if (!FRONTEND_PREVIEW_ONLY) {
     try {
+      try {
+        countryIsoMap = await (await fetch('country-iso.json')).json();
+      } catch { countryIsoMap = {}; }
       const config = await api('GET', '/api/config', undefined, 5000);
       state.openaiReady = Boolean(config.openaiReady);
       state.mode = config.dataMode === 'live' && (config.notionReady || config.notionConfigured) ? 'live' : 'preview';

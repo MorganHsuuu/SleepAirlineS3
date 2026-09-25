@@ -105985,5 +105985,137 @@
     "latitude": 71.6872,
     "longitude": 128.8694,
     "population": 5063
-  }
+  },
+{
+  "city": "Valletta",
+  "city_zh": "瓦萊塔",
+  "country": "Malta",
+  "country_zh": "馬爾他",
+  "country_iso_code": "mt",
+  "timezone": "Europe/Malta",
+  "latitude": 35.8989,
+  "longitude": 14.5146,
+  "population": 6000
+},
+{
+  "city": "Monaco",
+  "city_zh": "摩納哥",
+  "country": "Monaco",
+  "country_zh": "摩納哥",
+  "country_iso_code": "mc",
+  "timezone": "Europe/Monaco",
+  "latitude": 43.7384,
+  "longitude": 7.4246,
+  "population": 39000
+},
+{
+  "city": "Andorra la Vella",
+  "city_zh": "安道爾城",
+  "country": "Andorra",
+  "country_zh": "安道爾",
+  "country_iso_code": "ad",
+  "timezone": "Europe/Andorra",
+  "latitude": 42.5063,
+  "longitude": 1.5218,
+  "population": 22000
+},
+{
+  "city": "San Marino",
+  "city_zh": "聖馬利諾",
+  "country": "San Marino",
+  "country_zh": "聖馬利諾",
+  "country_iso_code": "sm",
+  "timezone": "Europe/San_Marino",
+  "latitude": 43.9424,
+  "longitude": 12.4578,
+  "population": 4000
+},
+{
+  "city": "Vatican City",
+  "city_zh": "梵蒂岡",
+  "country": "Vatican City",
+  "country_zh": "梵蒂岡",
+  "country_iso_code": "va",
+  "timezone": "Europe/Vatican",
+  "latitude": 41.9029,
+  "longitude": 12.4534,
+  "population": 800
+},
+{
+  "city": "Victoria",
+  "city_zh": "維多利亞",
+  "country": "Seychelles",
+  "country_zh": "塞席爾",
+  "country_iso_code": "sc",
+  "timezone": "Indian/Mahe",
+  "latitude": -4.6191,
+  "longitude": 55.4513,
+  "population": 26000
+},
+{
+  "city": "Roseau",
+  "city_zh": "羅索",
+  "country": "Dominica",
+  "country_zh": "多米尼克",
+  "country_iso_code": "dm",
+  "timezone": "America/Dominica",
+  "latitude": 15.3092,
+  "longitude": -61.3794,
+  "population": 15000
+},
+{
+  "city": "Castries",
+  "city_zh": "卡斯特里",
+  "country": "Saint Lucia",
+  "country_zh": "聖露西亞",
+  "country_iso_code": "lc",
+  "timezone": "America/St_Lucia",
+  "latitude": 14.0101,
+  "longitude": -60.9875,
+  "population": 20000
+},
+{
+  "city": "St. George's",
+  "city_zh": "聖喬治",
+  "country": "Grenada",
+  "country_zh": "格瑞那達",
+  "country_iso_code": "gd",
+  "timezone": "America/Grenada",
+  "latitude": 12.0561,
+  "longitude": -61.7486,
+  "population": 4000
+},
+{
+  "city": "St. John's",
+  "city_zh": "聖約翰",
+  "country": "Antigua and Barbuda",
+  "country_zh": "安地卡及巴布達",
+  "country_iso_code": "ag",
+  "timezone": "America/Antigua",
+  "latitude": 17.1274,
+  "longitude": -61.8468,
+  "population": 22000
+},
+{
+  "city": "Basseterre",
+  "city_zh": "巴斯特爾",
+  "country": "Saint Kitts and Nevis",
+  "country_zh": "聖克里斯多福及尼維斯",
+  "country_iso_code": "kn",
+  "timezone": "America/St_Kitts",
+  "latitude": 17.3026,
+  "longitude": -62.7177,
+  "population": 14000
+},
+{
+  "city": "Kingstown",
+  "city_zh": "金斯敦",
+  "country": "Saint Vincent and the Grenadines",
+  "country_zh": "聖文森",
+  "country_iso_code": "vc",
+  "timezone": "America/St_Vincent",
+  "latitude": 13.16,
+  "longitude": -61.2248,
+  "population": 13000
+}
 ]
