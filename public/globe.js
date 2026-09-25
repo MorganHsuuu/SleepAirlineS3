@@ -203,7 +203,7 @@
     }
     ctx.restore();
 
-    if (zoom < 1.35) {
+    if (zoom < 1.08) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(225,239,229,.6)';
       ctx.font = '600 17px DM Sans, sans-serif';
@@ -214,30 +214,62 @@
     }
   }
 
-  function animate(from, to, duration = 4800, onArrival) {
+  function animate(from, to, _duration = 8000, onArrival) {
     if (frameId) cancelAnimationFrame(frameId);
+    const zoomInMs = 1500;
+    const pullbackMs = 2600;
+    const holdMs = 1700;
+    const diveMs = 1800;
     return new Promise((resolve) => {
       const start = performance.now();
-      function routeFrame(now) {
-        const raw = Math.min(1, (now - start) / duration);
-        draw(from, to, ease(raw));
-        if (raw < 1) { frameId = requestAnimationFrame(routeFrame); return; }
-        onArrival?.();
-        const zoomStart = performance.now();
-        function zoomFrame(time) {
-          const u = Math.min(1, (time - zoomStart) / 1350);
-          const eased = easeOut(u);
-          draw(from, to, 1, {
-            zoom: 1 + 4.2 * eased,
-            focus: at(to),
-            routeAlpha: 1 - eased,
+      let arrived = false;
+      const between = d3.geoInterpolate(at(from), at(to));
+      function frame(now) {
+        const t = now - start;
+        if (t < zoomInMs) {
+          const u = easeOut(Math.min(1, t / zoomInMs));
+          draw(from, to, 0, {
+            zoom: 1.05 + 2.15 * u,
+            focus: at(from),
+            routeAlpha: 0,
           });
-          if (u < 1) frameId = requestAnimationFrame(zoomFrame);
-          else { frameId = null; resolve(); }
+          frameId = requestAnimationFrame(frame);
+          return;
         }
-        frameId = requestAnimationFrame(zoomFrame);
+        if (t < zoomInMs + pullbackMs) {
+          const u = ease(Math.min(1, (t - zoomInMs) / pullbackMs));
+          draw(from, to, u, {
+            zoom: 3.15 - 2.45 * u,
+            focus: between(u * 0.5),
+            routeAlpha: Math.min(1, u * 1.6),
+          });
+          frameId = requestAnimationFrame(frame);
+          return;
+        }
+        if (t < zoomInMs + pullbackMs + holdMs) {
+          draw(from, to, 1, {
+            zoom: 0.7,
+            focus: between(0.5),
+            routeAlpha: 1,
+          });
+          frameId = requestAnimationFrame(frame);
+          return;
+        }
+        if (!arrived) {
+          arrived = true;
+          onArrival?.();
+        }
+        const u = Math.min(1, (t - zoomInMs - pullbackMs - holdMs) / diveMs);
+        const eased = easeOut(u);
+        draw(from, to, 1, {
+          zoom: 0.95 + 5.4 * eased,
+          focus: at(to),
+          routeAlpha: 1 - eased * 0.92,
+        });
+        if (u < 1) frameId = requestAnimationFrame(frame);
+        else { frameId = null; resolve(); }
       }
-      frameId = requestAnimationFrame(routeFrame);
+      frameId = requestAnimationFrame(frame);
     });
   }
 

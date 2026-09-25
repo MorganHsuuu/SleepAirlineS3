@@ -5,6 +5,8 @@ node_modules/
 public/cities_data.json
 public/country-iso.json
 *.tsbuildinfo
+api/index.js.map
+api/index.js.map
 .vercel
 .env*
 .superpowers/

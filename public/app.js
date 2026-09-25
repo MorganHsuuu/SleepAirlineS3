@@ -393,7 +393,11 @@ async function doLand() {
   window.BroadcastAudio?.primeFromUserGesture?.();
   primeLandingVideos();
   await FlightGlobe.ready;
-  FlightGlobe.draw(state.origin, state.destination || { ...state.origin, name: '目的地' }, 0);
+  FlightGlobe.draw(state.origin, state.destination || { ...state.origin, name: '目的地' }, 0, {
+    zoom: 1.08,
+    focus: [state.origin.lon, state.origin.lat],
+    routeAlpha: 0,
+  });
   setScene('globe');
   setCeremony('ROUTE CONNECTING', '正在確認這趟航班的目的地…');
   const musicJob = state.sound
