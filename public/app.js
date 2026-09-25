@@ -396,9 +396,9 @@ async function doTakeoff() {
       }
     }
     setCeremony('TAKING OFF', '飛機正在穿越雲層…');
-    if (state.sound) void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: false, volume: .45, fadeInMs: 250 });
-    await delay(2000);
-    await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 700 });
+    if (state.sound) void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: false, volume: .45, fadeInMs: 400 });
+    await delay(10000);
+    await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 4500 });
     setScene('clouds'); setShade('closed');
     state.stage = 'cruise'; render();
     $('window-caption').textContent = '雲層上方 · 飛行中';
