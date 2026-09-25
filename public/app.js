@@ -15,6 +15,8 @@ const directions = [
   { key: 'northwest', name: '西北', angle: 315 },
 ];
 const tracks = ['wakeup1.mp3', 'wakeup2.mp3', 'wakeup3.mp3', 'wakeup4.mp3'];
+/** Standby photo inside the oval window when OpenAI scenery is skipped or fails. */
+const ARRIVAL_FALLBACK = 'images/arrival-fallback.jpg';
 let wakeupIndex = Number(localStorage.getItem('sleepAirlineS3Wakeup') || 0) || 0;
 function nextWakeup() {
   const file = tracks[wakeupIndex % tracks.length];
@@ -109,7 +111,7 @@ function spinTo(index, prefer) {
 function hideGlassPanel(id) {
   const panel = $(id);
   if (!panel) return;
-  panel.classList.remove('is-on', 'is-leaving', 'beat-climb', 'beat-arc');
+  panel.classList.remove('is-on', 'is-leaving', 'beat-blur', 'beat-climb', 'beat-arc');
   panel.hidden = true;
 }
 function showCompass() {
@@ -448,6 +450,7 @@ function formatFlightSpan(minutes) {
 }
 function playGlassRoute({ minutes, distanceKm, from, to }) {
   const panel = $('glass-route');
+  const glass = $('window-glass');
   $('glass-time').textContent = formatFlightSpan(minutes);
   $('glass-to').textContent = `to ${to}`;
   $('glass-meta').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km · ${from}`;
@@ -455,25 +458,35 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   $('glass-pin-to').textContent = to;
   hideGlassPanel('glass-compass');
   panel.hidden = false;
-  panel.classList.remove('is-on', 'is-leaving', 'beat-climb', 'beat-arc');
-  $('window-glass').classList.add('revealing');
+  panel.classList.remove('is-on', 'is-leaving', 'beat-blur', 'beat-climb', 'beat-arc');
+  glass.classList.remove('sky-soft');
+  glass.classList.add('revealing');
   void panel.offsetWidth;
-  panel.classList.add('is-on', 'beat-climb');
+  // Soften the window first, then ease the plane in — no hard cut into climb.
+  panel.classList.add('is-on', 'beat-blur');
+  requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
   if (state.sound) {
-    window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: .32, fadeInMs: 1800, loop: false })?.catch(() => {});
+    window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: .32, fadeInMs: 2200, loop: false })?.catch(() => {});
   }
-  return delay(2500).then(() => {
+  return delay(2800).then(() => {
+    panel.classList.remove('beat-blur');
+    panel.classList.add('beat-climb');
+    return delay(4200);
+  }).then(() => {
     panel.classList.remove('beat-climb');
-    panel.classList.add('beat-arc');
-    return delay(7600);
+    // Brief settle so climb fade-out and arc fade-in cross, not cut.
+    return delay(420).then(() => {
+      panel.classList.add('beat-arc');
+      return delay(9800);
+    });
   }).then(() => {
     panel.classList.add('is-leaving');
-    window.BroadcastAudio?.fadeOutLandingMusic?.({ ms: 800 });
-    return delay(800);
+    window.BroadcastAudio?.fadeOutLandingMusic?.({ ms: 1400 });
+    return delay(1400);
   }).then(() => {
     hideGlassPanel('glass-route');
-    $('window-glass').classList.remove('revealing');
+    glass.classList.remove('revealing', 'sky-soft');
   });
 }
 function weatherKind(code) {
@@ -545,9 +558,9 @@ function showWeatherCard(place, weather) {
   panel.classList.remove('is-on', 'is-leaving');
   void panel.offsetWidth;
   panel.classList.add('is-on');
-  return delay(5200).then(() => {
+  return delay(5800).then(() => {
     panel.classList.add('is-leaving');
-    return delay(700);
+    return delay(1100);
   }).then(() => hideGlassPanel('glass-weather'));
 }
 function revealArrivalImage(url, late = false) {
@@ -580,22 +593,24 @@ async function doLand() {
       state.destination = locationFromFlight(data.flight, 'arrival');
       text = data.flight.captainBroadcast;
       speech = data.speechAudioBase64;
+      // No OpenAI: skip generation entirely — visuals continue with ARRIVAL_FALLBACK.
       sceneryJob = !state.openaiReady
-        ? null
+        ? Promise.resolve(null)
         : data.landingScenery?.imageUrl
           ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
           : requestScenery(data.flight.flightId);
     } else {
       state.destination ||= destinationFor(state.direction);
       text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
-      sceneryJob = delay(12000).then(async () => await preloadImage('images/arrival-coast.png') ? 'images/arrival-coast.png' : null);
+      sceneryJob = Promise.resolve(ARRIVAL_FALLBACK);
     }
     $('to-city').textContent = state.destination.name;
     $('to-code').textContent = state.destination.code;
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    const captainJob = (async () => {
+    // Speech runs in parallel; never block the visual landing sequence on TTS.
+    void (async () => {
       await delay(1600);
       if (text) await playBroadcast(text, speech, { restoreBed: true });
     })().catch(() => {});
@@ -613,22 +628,24 @@ async function doLand() {
     descentPlayed = await startSceneVideo('descent-video', true);
     if (descentPlayed) $('descent-video').classList.add('active');
     $('window-glass').classList.add('cloud-entering');
-    await delay(450);
+    await delay(1200);
     setScene(descentPlayed ? 'descent' : 'clouds');
     $('window-caption').textContent = '穿越雲層 · 緩緩下降';
-    await delay(550);
+    await delay(1400);
     $('window-glass').classList.remove('cloud-entering', 'destination-zoom');
     hideGlassPanel('glass-route');
-    $('window-glass').classList.remove('revealing');
-    // The cloud footage loops until image generation (including S2's backfill) has finished.
-    // The bound only covers an unresponsive backend, so final approach does not start early.
+    $('window-glass').classList.remove('revealing', 'sky-soft');
+    // Wait for generated scenery only when a real job exists; null/skip resolves immediately.
+    // The 165s bound only covers an unresponsive backend — not used when OpenAI is off.
+    const sceneryWait = sceneryJob
+      ? Promise.race([sceneryJob.catch(() => null), delay(165000).then(() => null)])
+      : Promise.resolve(null);
     const [readyUrl] = await Promise.all([
-      Promise.race([sceneryJob.catch(() => null), delay(165000).then(() => null)]),
+      sceneryWait,
       delay(3200),
     ]);
-    await captainJob;
     if (readyUrl && state.mode === 'live') state.sceneryUrl = readyUrl;
-    if (!readyUrl && state.mode === 'live') {
+    if (!readyUrl && state.mode === 'live' && sceneryJob) {
       const flightId = state.lastFlight?.flightId;
       void sceneryJob.then((url) => {
         if (!url || state.lastFlight?.flightId !== flightId) return;
@@ -637,11 +654,11 @@ async function doLand() {
       }).catch(() => {});
     }
 
-    // S2's final approach starts when scenery is ready (or its timeout fallback is ready).
-    let finalImage = state.sceneryUrl || 'images/arrival-coast.png';
+    // Final approach uses generated URL when present; otherwise the standby arrival photo.
+    let finalImage = state.sceneryUrl || ARRIVAL_FALLBACK;
     if (!await preloadImage(finalImage)) {
       state.sceneryUrl = null;
-      finalImage = 'images/arrival-coast.png';
+      finalImage = ARRIVAL_FALLBACK;
       await preloadImage(finalImage);
     }
     setCeremony('FINAL APPROACH', '風景已就緒，正在對準跑道…');
@@ -650,9 +667,9 @@ async function doLand() {
     const approachPlayed = await startSceneVideo('landing-video', false);
     if (approachPlayed) setScene('approach');
     if (state.sound) {
-      void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .55, fadeInMs: 850 });
+      void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .55, fadeInMs: 1200 });
     }
-    await delay(950);
+    await delay(1600);
     if (approachPlayed) $('descent-video').pause();
     if (approachPlayed) await waitForVideoEnd($('landing-video'));
     else await delay(4200);
@@ -671,13 +688,16 @@ async function doLand() {
       image.onerror = () => {
         state.sceneryUrl = null;
         image.onerror = resolve;
-        image.src = 'images/arrival-coast.png';
+        image.src = ARRIVAL_FALLBACK;
       };
     });
     setScene('arrival');
     stopLandingVideos();
     const weather = await weatherJob;
-    requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 100));
+    // Let the arrival photo ease out of developing blur before weather fades in.
+    await delay(2200);
+    requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
+    await delay(900);
     $('window-caption').textContent = `已抵達 ${state.destination.name}${state.sceneryUrl ? '' : ' · 示意風景'}`;
     state.stage = 'landed'; render(); hideCeremony();
     await showWeatherCard(state.destination, weather);
@@ -688,7 +708,7 @@ async function doLand() {
     $('window-glass').classList.remove('cloud-entering', 'destination-zoom');
     hideGlassPanel('glass-route');
     hideGlassPanel('glass-weather');
-    $('window-glass').classList.remove('revealing');
+    $('window-glass').classList.remove('revealing', 'sky-soft');
     hideCeremony();
     stopLandingVideos();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
@@ -736,12 +756,12 @@ function restart() {
   hideGlassPanel('glass-route');
   hideGlassPanel('glass-compass');
   hideGlassPanel('glass-weather');
-  $('window-glass').classList.remove('revealing');
+  $('window-glass').classList.remove('revealing', 'sky-soft');
   state.origin = state.nextOrigin || state.origin;
   state.nextOrigin = null;
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null;
-  $('arrival-image').src = 'images/arrival-coast.png';
+  $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('developing');
   $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
   setScene('clouds'); setShade('open'); render();
