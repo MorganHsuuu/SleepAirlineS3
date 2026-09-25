@@ -16,3 +16,21 @@
 #globe-canvas{background:#102e3e;transition:opacity .72s ease;z-index:3}
 .cloud-veil{position:absolute;inset:-2px;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 48% 45%,rgba(244,249,244,.99) 0%,rgba(211,229,226,.96) 30%,rgba(146,189,196,.86) 68%,rgba(39,91,112,.76) 100%);filter:blur(6px);transition:opacity .55s ease}
 .window-glass.cloud-entering .cloud-veil{opacity:1}
+.window-glass{transition:transform 1.2s ease}
+.window-glass.destination-zoom{transform:scale(1.08)}
+body.window-only{background:#101820}
+body.window-only .app-shell{max-width:none;background:radial-gradient(circle at 50% 42%,#1b3038 0,#101820 62%)}
+body.window-only .topbar{position:absolute;inset:0 0 auto;height:64px;border:0;background:linear-gradient(180deg,rgba(8,16,20,.55),transparent);z-index:8}
+body.window-only .brand,body.window-only #mode-label,body.window-only .live-dot{display:none}
+body.window-only .story,body.window-only .footer,body.window-only .window-index,body.window-only .controls-top,body.window-only .direction-heading,body.window-only .stage-heading,body.window-only .stage-copy,body.window-only .direction-readout,body.window-only .sound-row,body.window-only .control-divider{display:none}
+body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100svh;padding:72px 18px 22px}
+body.window-only .window-area{width:100%;flex:1}
+body.window-only .window-frame{width:min(92vw,860px);height:min(58svh,680px);min-height:0;max-height:none}
+body.window-only .dial-wrap{width:148px;height:148px;margin:0 auto 8px}
+body.window-only .direction-dial{inset:11px}
+body.window-only .window-backdrop{width:min(80vw,760px)}
+body.window-only .controls{order:3;width:min(92vw,360px);margin:10px 0 0;padding:0;border:0;align-items:center}
+body.window-only .dial-wrap{margin:0 auto 10px}
+body.window-only .primary-button,body.window-only .secondary-button{width:min(100%,280px)}
+body.window-only .topbar-right{margin-left:auto;color:#e7f2ee}
+body.window-only .text-button{color:#f4f7f2;border-bottom-color:rgba(244,247,242,.7)}

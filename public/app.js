@@ -2,7 +2,7 @@
 
 // S2 direction and audio behavior are retained. The independent visual prototype
 // stays in preview mode until the new data connections are ready.
-const FRONTEND_PREVIEW_ONLY = true;
+const FRONTEND_PREVIEW_ONLY = false;
 const $ = (id) => document.getElementById(id);
 const directions = [
   { key: 'northbound', name: '向北', angle: 0 },
@@ -122,6 +122,14 @@ function render() {
   $('sound-toggle').textContent = state.sound ? '聲音開啟' : '聲音關閉';
   $('sound-toggle').setAttribute('aria-pressed', String(state.sound));
   $('sound-label').textContent = landed ? '甦醒音景已漸弱' : '音樂與機長廣播隨航程轉場';
+}
+function applyWindowOnly(on) {
+  document.body.classList.toggle('window-only', on);
+  const button = $('view-toggle');
+  if (!button) return;
+  button.textContent = on ? '完整介面' : '只有窗戶';
+  button.setAttribute('aria-pressed', String(on));
+  localStorage.setItem('sleepAirlineS3WindowOnly', on ? '1' : '0');
 }
 function formatTime(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -388,9 +396,8 @@ async function doLand() {
   FlightGlobe.draw(state.origin, state.destination || { ...state.origin, name: '目的地' }, 0);
   setScene('globe');
   setCeremony('ROUTE CONNECTING', '正在確認這趟航班的目的地…');
-  const pick = tracks[Math.floor(Math.random() * tracks.length)];
   const musicJob = state.sound
-    ? (window.BroadcastAudio?.playLandingMusic?.(`media/${pick}`, { volume: .22, fadeInMs: 1600 })?.catch(() => false) ?? Promise.resolve(false))
+    ? (window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: .38, fadeInMs: 900, loop: true })?.catch(() => false) ?? Promise.resolve(false))
     : Promise.resolve(false);
   $('window-caption').textContent = '正在確認航線';
   try {
@@ -418,12 +425,11 @@ async function doLand() {
       await musicJob;
       if (text) await playBroadcast(text, speech, { restoreBed: true });
     })().catch(() => {});
-    const routeJob = FlightGlobe.animate(state.origin, state.destination, 4700, () => {
+    const routeJob = FlightGlobe.animate(state.origin, state.destination, 7200, () => {
       $('window-caption').textContent = `即將抵達 ${state.destination.name}`;
       $('window-glass').classList.add('destination-zoom');
     });
-    // Start the cloud film behind the globe before its final push-in.
-    await delay(3800);
+    await delay(5600);
     const descentPlayed = await startSceneVideo('descent-video', true);
     if (descentPlayed) $('descent-video').classList.add('active');
     await routeJob;
@@ -582,6 +588,9 @@ async function init() {
     } catch { state.mode = 'preview'; }
   }
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
+  const windowOnly = localStorage.getItem('sleepAirlineS3WindowOnly') !== '0';
+  applyWindowOnly(windowOnly);
+  $('view-toggle').addEventListener('click', () => applyWindowOnly(!document.body.classList.contains('window-only')));
   $('profile-open').classList.toggle('hidden', FRONTEND_PREVIEW_ONLY);
   $('profile-open').addEventListener('click', () => $('profile-dialog').showModal());
   $('profile-close').addEventListener('click', () => $('profile-dialog').close());

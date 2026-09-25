@@ -71,14 +71,66 @@ export function findArrivalDestination(
     return Math.abs(a.distanceKm - distanceKm) - Math.abs(b.distanceKm - distanceKm);
   };
 
-  // Primary: correct direction, closest to the in-flight tip
-  const directional = candidates.filter((c) => c.inDirection);
-  if (directional.length > 0) {
-    directional.sort(byTipThenDistance);
-    return directional[0];
-  }
+  const pick = (pool: Candidate[]) => {
+    const iconicReach = Math.max(320, distanceKm * 0.72);
+    const iconic = pool.filter((c) => isIconicCity(c.city) && c.tipDistanceKm <= iconicReach);
+    if (iconic.length > 0) {
+      iconic.sort((a, b) => a.tipDistanceKm - b.tipDistanceKm);
+      return iconic[0];
+    }
+    pool.sort(byTipThenDistance);
+    return pool[0];
+  };
 
-  // Fallback: any direction, closest to tip
-  candidates.sort(byTipThenDistance);
-  return candidates[0];
+  const directional = candidates.filter((c) => c.inDirection);
+  if (directional.length > 0) return pick(directional);
+  return pick(candidates);
+}
+
+const ICONIC_CITIES = new Set([
+  'tokyo', 'kyoto', 'osaka', 'nara', 'hiroshima', 'sapporo', 'fukuoka', 'naha',
+  'seoul', 'busan',
+  'taipei', 'kaohsiung', 'taichung', 'tainan', 'hualien',
+  'hong kong', 'macau', 'macao',
+  'shanghai', 'beijing', 'xian', "xi'an", 'guilin', 'chengdu', 'hangzhou',
+  'bangkok', 'chiang mai', 'phuket',
+  'singapore',
+  'hanoi', 'ho chi minh city',
+  'manila', 'cebu',
+  'jakarta', 'denpasar', 'ubud',
+  'kuala lumpur',
+  'sydney', 'melbourne', 'cairns',
+  'auckland', 'queenstown',
+  'paris', 'lyon',
+  'london', 'edinburgh',
+  'rome', 'venice', 'florence', 'milan',
+  'barcelona', 'madrid', 'seville',
+  'amsterdam',
+  'berlin', 'munich',
+  'prague', 'vienna', 'budapest',
+  'athens', 'santorini',
+  'istanbul',
+  'cairo', 'giza', 'luxor',
+  'marrakech', 'marrakesh', 'fes',
+  'cape town',
+  'dubai', 'abu dhabi',
+  'jerusalem',
+  'mumbai', 'delhi', 'new delhi', 'agra', 'jaipur', 'varanasi',
+  'kathmandu',
+  'moscow', 'saint petersburg',
+  'new york', 'los angeles', 'san francisco', 'las vegas', 'chicago',
+  'vancouver', 'toronto', 'montreal', 'banff',
+  'rio de janeiro', 'sao paulo', 'são paulo',
+  'buenos aires',
+  'mexico city', 'cancun', 'cancún',
+  'reykjavik', 'reykjavík',
+  'lisbon', 'porto',
+  'dublin',
+  'copenhagen', 'stockholm', 'oslo',
+  'zurich', 'zürich', 'geneva',
+  'cusco', 'cuzco',
+]);
+
+function isIconicCity(city: string): boolean {
+  return ICONIC_CITIES.has(city.trim().toLowerCase());
 }

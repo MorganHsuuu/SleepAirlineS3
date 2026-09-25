@@ -66,11 +66,20 @@
 
     ctx.clearRect(0, 0, width, height);
     const backdrop = ctx.createLinearGradient(0, 0, width, height);
-    backdrop.addColorStop(0, '#0c2635');
-    backdrop.addColorStop(.55, '#183d4b');
-    backdrop.addColorStop(1, '#092432');
+    backdrop.addColorStop(0, '#07131f');
+    backdrop.addColorStop(.5, '#10283a');
+    backdrop.addColorStop(1, '#061018');
     ctx.fillStyle = backdrop;
     ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    for (let i = 0; i < 80; i++) {
+      const x = (i * 97 + 20) % width;
+      const y = (i * 53 + 11) % height;
+      ctx.globalAlpha = 0.25 + ((i * 17) % 10) / 16;
+      ctx.fillStyle = i % 4 === 0 ? '#f8e7c0' : '#d7f3ee';
+      ctx.fillRect(x, y, i % 6 === 0 ? 2.2 : 1.2, i % 6 === 0 ? 2.2 : 1.2);
+    }
+    ctx.restore();
 
     ctx.save();
     ctx.shadowColor = 'rgba(107,178,177,.42)';
@@ -104,8 +113,16 @@
       ctx.stroke();
     }
 
+    ctx.save();
     ctx.beginPath(); path(globe);
-    ctx.strokeStyle = 'rgba(206,235,225,.43)';
+    ctx.strokeStyle = 'rgba(132, 230, 214, .72)';
+    ctx.lineWidth = 8;
+    ctx.shadowColor = 'rgba(110, 230, 210, .85)';
+    ctx.shadowBlur = 26;
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); path(globe);
+    ctx.strokeStyle = 'rgba(236,248,244,.7)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -141,17 +158,31 @@
         if (i === 0) ctx.moveTo(point[0], point[1]);
         else ctx.lineTo(point[0], point[1]);
       }
-      ctx.strokeStyle = 'rgba(244,226,187,.21)';
-      ctx.lineWidth = 15; ctx.stroke();
+      ctx.strokeStyle = 'rgba(92, 220, 255, .28)';
+      ctx.lineWidth = 22; ctx.stroke();
       ctx.beginPath();
       for (let i = 0; i <= steps; i++) {
         const point = arcPoint(progress * i / steps);
         if (i === 0) ctx.moveTo(point[0], point[1]);
         else ctx.lineTo(point[0], point[1]);
       }
-      ctx.strokeStyle = '#f4dfba';
-      ctx.lineWidth = 3.5;
-      ctx.setLineDash([10, 9]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = '#fff4d2';
+      ctx.shadowColor = '#ffd98a';
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 3.2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      const sparkCount = 5;
+      for (let s = 0; s < sparkCount; s++) {
+        const u = Math.max(0, progress - s * 0.045);
+        const spark = arcPoint(u);
+        ctx.globalAlpha = (1 - s / sparkCount) * routeAlpha;
+        ctx.fillStyle = s === 0 ? '#fffaf0' : '#7ee7ff';
+        ctx.beginPath();
+        ctx.arc(spark[0], spark[1], 7 - s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = routeAlpha;
       plane = arcPoint(progress);
       const next = arcPoint(Math.min(1, progress + .01));
       planeAngle = Math.atan2(next[1] - plane[1], next[0] - plane[0]);
