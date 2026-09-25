@@ -65,13 +65,13 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function stopPlayback() {
+function stopPlayback({ keepSpeech = false } = {}) {
   stopCeremonyWebAudio();
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
-  if (window.speechSynthesis) speechSynthesis.cancel();
+  if (!keepSpeech && window.speechSynthesis) speechSynthesis.cancel();
 }
 
 function clampVolume(v) {
@@ -417,20 +417,27 @@ async function fadeLandingBedVolume(target, ms = CEREMONY_CROSSFADE_MS) {
   }
 }
 
-async function playCaptainIntro({ fadeInMs = 0 } = {}) {
+async function playCaptainIntro({ fadeInMs = 0, volume } = {}) {
   const cfg = { ...CAPTAIN_SFX, ...window.SLEEP_AIRLINE_CAPTAIN_SFX };
   if (!cfg.url) return false;
   const sec = Math.max(0.5, Math.min(30, Number(cfg.seconds) || 7));
+  const vol = typeof volume === 'number' ? clampVolume(volume) : (cfg.volume ?? 0.95);
   // 直接等 playTimedClip（內建 Web Audio → HTML Audio 後備與秒數上限）。
   // 舊寫法 Promise.race(play, delay) 在 play 失敗時會立刻結束，整段 captain.mp3 被跳過。
   const ok = await playTimedClip(cfg.url, {
     seconds: sec,
-    volume: cfg.volume ?? 0.95,
+    volume: vol,
     loop: false,
     fadeInMs,
   });
   await fadeOutCeremonyTag('captain', Math.min(450, fadeInMs || 450));
   return ok;
+}
+
+/** 起飛鉛音：塔台 bibibi+PA → captain.mp3 前 7 秒（語音須等此鏈結束） */
+async function playTakeoffLeadIn({ captainVolume = 0.45 } = {}) {
+  await playTowerSignal();
+  return playCaptainIntro({ fadeInMs: 0, volume: captainVolume });
 }
 
 /** captain.mp3 起播時：wakeup 同步漸弱至無聲 */
@@ -501,6 +508,21 @@ async function stopFlightSfx({ fade = true, ms = 550 } = {}) {
   audio.src = '';
 }
 
+function startWakeupBed(url, volume = 0.14) {
+  if (!url) return false;
+  primeFromUserGesture();
+  try { if (landingAudio) { landingAudio.pause(); landingAudio.src = ''; } } catch { /* noop */ }
+  const audio = new Audio(url);
+  audio.loop = true;
+  audio.volume = volume;
+  audio.playsInline = true;
+  audio.preload = 'auto';
+  landingAudio = audio;
+  landingVolume = volume;
+  const played = audio.play();
+  if (played && typeof played.catch === 'function') played.catch(() => {});
+  return true;
+}
 async function playLandingMusic(url, opts = {}) {
   if (!url) return false;
   await stopLandingMusic({ fade: false });
@@ -618,7 +640,7 @@ async function muteCeremonyBedForSpeech() {
   const ms = Math.max(1100, CEREMONY_CROSSFADE_MS);
   const jobs = [];
   if (landingAudio) {
-    jobs.push(fadeLandingBedVolume(0, ms));
+    jobs.push(fadeLandingBedVolume(0.08, ms));
   }
   if (flightSfxAudio) {
     if (savedFlightSfxVolume == null) savedFlightSfxVolume = flightSfxAudio.volume;
@@ -713,6 +735,25 @@ function resetKeepAliveToSilent() {
   if (audio.dataset.src === CAPTAIN_SFX.url || audio.dataset.src === TAKEOFF_SFX_URL) {
     try { audio.pause(); } catch { /* noop */ }
     tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
+  }
+}
+
+/** iPhone 的系統朗讀吃靜音鍵，而且必須在點擊當下 speak，之後再叫就沒聲音。 */
+function speakFromGesture(text) {
+  if (!text?.trim() || !window.speechSynthesis) return false;
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-TW';
+  utter.rate = 0.9;
+  utter.pitch = 0.95;
+  utter.volume = 1;
+  const voice = pickSpeechVoice('zh-TW');
+  if (voice) utter.voice = voice;
+  try {
+    speechSynthesis.resume();
+    speechSynthesis.speak(utter);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -856,7 +897,7 @@ function speakTextOnce(text) {
     // otherwise landing/takeoff can advance and cancel the voice mid-sentence.
     const estMs = Math.min(180000, Math.max(45000, text.length * 650));
     const timer = setTimeout(() => finish(true), estMs);
-    speechSynthesis.cancel();
+    const start = () => {
     // 開頭短停頓，減少首字「歡迎」被吃掉
     const utter = new SpeechSynthesisUtterance(`… ${text}`);
     const locale = window.SleepI18n?.getLocale?.() === 'en' ? 'en' : 'zh';
@@ -868,7 +909,19 @@ function speakTextOnce(text) {
     if (voice) utter.voice = voice;
     utter.onend = () => finish(true);
     utter.onerror = () => finish(false);
+    try { speechSynthesis.resume(); } catch { /* noop */ }
     speechSynthesis.speak(utter);
+    const keep = setInterval(() => {
+      if (done) { clearInterval(keep); return; }
+      try { if (speechSynthesis.paused) speechSynthesis.resume(); } catch { /* noop */ }
+    }, 4000);
+    };
+    // cancel() 會把緊接著的朗讀一起清掉，iPhone 上就完全沒人聲。
+    if (speechSynthesis.speaking || speechSynthesis.pending) start();
+    else {
+      speechSynthesis.cancel();
+      setTimeout(start, 80);
+    }
   });
 }
 
@@ -1020,14 +1073,28 @@ async function prepareCaptainSpeechForPlay(text, style, speechBase64) {
   return openaiP;
 }
 
-async function playCaptainBroadcast(text, style, { speechBase64, restoreBed = true } = {}) {
+async function playCaptainBroadcast(text, style, {
+  speechBase64,
+  restoreBed = true,
+  skipCaptainIntro = false,
+} = {}) {
   if (!text?.trim()) return false;
-  stopPlayback();
+  const alreadySpeaking = !!(window.speechSynthesis?.speaking || window.speechSynthesis?.pending);
+  stopPlayback({ keepSpeech: alreadySpeaking });
+  if (alreadySpeaking && !speechBase64) {
+    speakFromGesture(text);
+    return waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
+  }
   try {
     await unlockMedia();
     await ensureAudioCtx();
     const prepPromise = prepareCaptainSpeechForPlay(text, style, speechBase64);
-    await crossfadeLandingToCaptainIntro();
+    if (skipCaptainIntro) {
+      stopCaptainIntro();
+      resetKeepAliveToSilent();
+    } else {
+      await crossfadeLandingToCaptainIntro();
+    }
     await muteCeremonyBedForSpeech();
     const prepared = await prepPromise;
     await unlockMedia();
@@ -1149,6 +1216,7 @@ window.addEventListener('focus', resumeAudioOnForeground);
 window.BroadcastAudio = {
   playCaptainBroadcast,
   playCaptainIntro,
+  playTakeoffLeadIn,
   stopCaptainIntro,
   prepareCaptainSpeech,
   playTowerSignal,
@@ -1160,6 +1228,7 @@ window.BroadcastAudio = {
   isSpeechActive,
   waitForSpeechComplete,
   primeFromUserGesture,
+  speakFromGesture,
   unlockMedia,
   startMediaKeepAlive,
   stopMediaKeepAlive,
@@ -1167,6 +1236,7 @@ window.BroadcastAudio = {
   playFlightSfx,
   stopFlightSfx,
   playLandingMusic,
+  startWakeupBed,
   stopLandingMusic,
   resumeLandingMusicAfterApproach,
   crossfadeApproachSfxToWakeup,

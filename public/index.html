@@ -76,6 +76,16 @@
                 <p class="glass-time" id="compass-degree">090°</p>
                 <p class="glass-to" id="compass-name">向東</p>
               </div>
+              <div class="glass-sleep" id="glass-sleep" hidden>
+                <div class="glass-mist"></div>
+                <svg class="sleep-ring" viewBox="0 0 120 120" aria-hidden="true">
+                  <circle class="sleep-arc-track" cx="60" cy="60" r="54"></circle>
+                  <circle class="sleep-ring-draw" id="sleep-ring-draw" cx="60" cy="60" r="54"></circle>
+                </svg>
+                <p class="glass-kicker">LAST NIGHT</p>
+                <p class="glass-time" id="sleep-ring-pct">0%</p>
+                <p class="glass-to">昨夜睡得如何</p>
+              </div>
               <div class="glass-weather" id="glass-weather" hidden>
                 <div class="glass-mist"></div>
                 <div class="wx-plate">
@@ -91,7 +101,7 @@
                 <p class="wx-hello" id="wx-hello"></p>
                 </div>
               </div>
-              <div class="window-shade" id="window-shade"><div class="shade-panel"><div class="shade-texture"></div><div class="shade-handle"></div></div></div>
+              <div class="window-shade" id="window-shade"><div class="shade-panel"><div class="shade-texture"></div><button type="button" id="shade-handle" class="shade-handle" aria-label="拉動窗簾"></button></div></div>
               <div class="window-caption"><span class="caption-dot"></span><span id="window-caption">台北上空 · 等待出發</span></div>
               <div class="window-reflection"></div>
             </div>
@@ -106,6 +116,10 @@
         <div class="control-divider"></div>
         <div class="direction-heading"><div><small>01</small><h2>航向選擇</h2></div><span>拖動旋鈕</span></div>
         <div class="dial-wrap">
+          <svg class="sleep-arc" id="sleep-arc" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="sleep-arc-track" cx="60" cy="60" r="54"></circle>
+            <circle class="sleep-arc-draw" id="sleep-arc-draw" cx="60" cy="60" r="54"></circle>
+          </svg>
           <div class="dial-cardinal n">N</div><div class="dial-cardinal e">E</div><div class="dial-cardinal s">S</div><div class="dial-cardinal w">W</div>
           <div id="direction-dial" class="direction-dial" role="slider" tabindex="0" aria-label="選擇航向" aria-valuemin="0" aria-valuemax="7" aria-valuenow="2" aria-valuetext="向東">
             <div class="dial-ticks"></div><div class="dial-inner"><span class="dial-pointer" id="dial-pointer"></span><span class="dial-center">✦</span></div>
