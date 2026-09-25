@@ -601,9 +601,11 @@ function showWeatherCard(place, weather) {
   panel.classList.remove('is-on', 'is-leaving');
   void panel.offsetWidth;
   panel.classList.add('is-on');
-  return delay(5800).then(() => {
+  return delay(6200).then(() => {
+    panel.classList.remove('is-on');
+    void panel.offsetWidth;
     panel.classList.add('is-leaving');
-    return delay(1100);
+    return delay(1400);
   }).then(() => hideGlassPanel('glass-weather'));
 }
 function revealArrivalImage(url, late = false) {
@@ -859,13 +861,14 @@ function offerSleepDial() {
     document.querySelector('.direction-heading > span').textContent = '轉動旋鈕';
     $('direction-dial').style.opacity = '1';
     $('direction-dial').setAttribute('aria-disabled', 'false');
+    $('direction-dial')._sleepValue = 0;
     paintSleep(0);
     const timer = setTimeout(finish, 10000);
     function finish() {
       clearTimeout(timer);
       clearTimeout(askTimer);
       clearTimeout(ringTimer);
-      const value = moved ? Number($('direction-dial').dataset.sleep || 0) : null;
+      const value = moved ? Math.round(Number($('direction-dial')._sleepValue) || 0) : null;
       state.sleepDial = false;
       wrap?.classList.remove('is-sleep');
       hideGlassPanel('glass-sleep');
@@ -952,10 +955,17 @@ function bindDial() {
     }
     dragAngle = angle;
     if (state.sleepDial) {
-      const percent = Math.round(angle / 360 * 100);
-      $('direction-dial').dataset.sleep = String(percent);
-      $('direction-dial')._sleepMoved?.();
-      paintSleep(percent);
+      if (follow && dragAngle != null) {
+        let diff = angle - dragAngle;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        const next = Math.max(0, Math.min(100, (Number(el._sleepValue) || 0) + diff / 3.6));
+        el._sleepValue = next;
+        el.dataset.sleep = String(Math.round(next));
+        el._sleepMoved?.();
+        paintSleep(next);
+      }
+      dragAngle = angle;
       return;
     }
     setDirection(Math.round(angle / 45) % 8, prefer);
@@ -998,6 +1008,8 @@ async function init() {
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
   const windowOnly = localStorage.getItem('sleepAirlineS3WindowOnly') !== '0';
   applyWindowOnly(windowOnly);
+  window.addEventListener('wheel', (event) => { if (event.ctrlKey) event.preventDefault(); }, { passive: false });
+  window.addEventListener('gesturestart', (event) => event.preventDefault());
   $('view-toggle').addEventListener('click', () => applyWindowOnly(!document.body.classList.contains('window-only')));
   $('profile-open').classList.toggle('hidden', FRONTEND_PREVIEW_ONLY);
   $('profile-open').addEventListener('click', () => $('profile-dialog').showModal());
