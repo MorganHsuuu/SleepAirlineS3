@@ -132,7 +132,8 @@ function logReminderCleanup(err: unknown) {
 
 app.get('/api/config', async (_req, res) => {
   try {
-    res.json(await getDataModeStatus());
+    const status = await getDataModeStatus();
+    res.json({ ...status, openaiReady: Boolean(process.env.OPENAI_API_KEY) });
   } catch (err) {
     res.status(500).json({ error: formatNotionError(err) });
   }

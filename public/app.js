@@ -42,7 +42,7 @@ const state = {
   profile: null, activeFlight: null, lastFlight: null, takeoffAt: null,
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
-  destination: null, busy: false, sceneryUrl: null,
+  destination: null, busy: false, sceneryUrl: null, openaiReady: false,
 };
 let clockTimer = null;
 let toastTimer = null;
@@ -200,6 +200,17 @@ async function api(method, path, body, timeoutMs = 90000) {
     return data;
   } finally { clearTimeout(timer); }
 }
+function applyPassengerOrigin(passenger) {
+  if (!passenger?.currentLocation) return;
+  state.origin = {
+    name: cityOnly(passenger.currentLocation),
+    country: String(passenger.currentLocation).split(',')[1]?.trim() || '',
+    code: codeFor(passenger.currentLocation),
+    lat: finiteCoordinate(passenger.currentLatitude, 25.033),
+    lon: finiteCoordinate(passenger.currentLongitude, 121.5654),
+  };
+  $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
+}
 function flightBody() {
   return {
     passengerId: state.profile.passengerId, name: state.profile.name,
@@ -225,14 +236,7 @@ async function doLogin(event) {
         researchConsentAt: new Date().toISOString(),
       });
       state.profile = { passengerId, name, groupId };
-      if (result.passenger?.currentLocation) {
-        state.origin = {
-          name: cityOnly(result.passenger.currentLocation),
-          code: codeFor(result.passenger.currentLocation),
-          lat: finiteCoordinate(result.passenger.currentLatitude, 25.033),
-          lon: finiteCoordinate(result.passenger.currentLongitude, 121.5654),
-        };
-      }
+      applyPassengerOrigin(result.passenger);
       if (result.passenger?.status === 'in_flight') {
         await refreshProgress();
       }
@@ -350,7 +354,7 @@ async function doTakeoff() {
   } finally { state.busy = false; }
 }
 async function requestScenery(flightId) {
-  if (!flightId || state.mode !== 'live') return null;
+  if (!flightId || state.mode !== 'live' || !state.openaiReady) return null;
   const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     try {
@@ -538,9 +542,11 @@ async function doLand() {
       state.destination = locationFromFlight(data.flight, 'arrival');
       text = data.flight.captainBroadcast;
       speech = data.speechAudioBase64;
-      sceneryJob = data.landingScenery?.imageUrl
-        ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
-        : requestScenery(data.flight.flightId);
+      sceneryJob = !state.openaiReady
+        ? null
+        : data.landingScenery?.imageUrl
+          ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
+          : requestScenery(data.flight.flightId);
     } else {
       state.destination ||= destinationFor(state.direction);
       text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
@@ -744,7 +750,8 @@ async function init() {
   if (!FRONTEND_PREVIEW_ONLY) {
     try {
       const config = await api('GET', '/api/config', undefined, 5000);
-      state.mode = config.dataMode === 'live' && config.notionReady ? 'live' : 'preview';
+      state.openaiReady = Boolean(config.openaiReady);
+      state.mode = config.dataMode === 'live' && (config.notionReady || config.notionConfigured) ? 'live' : 'preview';
     } catch { state.mode = 'preview'; }
   }
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
@@ -772,7 +779,15 @@ async function init() {
   });
   bindDial();
   if (state.mode === 'live' && state.profile) {
-    try { await refreshProgress(); } catch { showToast('暫時無法恢復航班進度。'); }
+    try {
+      const result = await api('POST', '/api/passenger', {
+        ...state.profile,
+        researchConsent: true,
+        researchConsentAt: new Date().toISOString(),
+      });
+      applyPassengerOrigin(result.passenger);
+      await refreshProgress();
+    } catch { showToast('暫時無法恢復航班進度。'); }
   }
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
   render();
