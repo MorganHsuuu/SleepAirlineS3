@@ -16,9 +16,47 @@
 #globe-canvas{background:#102e3e;transition:opacity .72s ease;z-index:3;border-radius:inherit}
 .cloud-veil{position:absolute;inset:-2px;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 48% 45%,rgba(244,249,244,.99) 0%,rgba(211,229,226,.96) 30%,rgba(146,189,196,.86) 68%,rgba(39,91,112,.76) 100%);filter:blur(6px);transition:opacity .55s ease}
 .window-glass.cloud-entering .cloud-veil{opacity:1}
+.glass-route{position:absolute;inset:0;z-index:5;display:grid;place-items:center;align-content:center;color:#fff;text-align:center;pointer-events:none;border-radius:inherit;overflow:hidden}
+.glass-route[hidden]{display:none}
+.glass-mist{position:absolute;inset:0;background:rgba(255,252,247,.62);backdrop-filter:blur(28px) brightness(1.18);-webkit-backdrop-filter:blur(28px) brightness(1.18)}
+.glass-route.is-on .glass-mist{animation:mist-clear 9s cubic-bezier(.42,.02,.18,1) forwards}
+@keyframes mist-clear{to{opacity:.08;background:transparent;backdrop-filter:blur(0) brightness(1);-webkit-backdrop-filter:blur(0) brightness(1)}}
+.window-glass.revealing .scene-image.visible{filter:blur(16px) brightness(1.12);animation:sky-clear 9s cubic-bezier(.42,.02,.18,1) forwards}
+@keyframes sky-clear{to{filter:blur(0) brightness(1)}}
+.window-glass.revealing .window-caption{opacity:0}
+.glass-route.is-leaving{animation:glass-leave .8s ease forwards}
+@keyframes glass-leave{to{opacity:0}}
+.glass-plane{position:absolute;left:50%;top:6%;z-index:2;width:92px;height:88%;opacity:0}
+.glass-plane svg{width:100%;height:100%;display:block;overflow:visible}
+.glass-plane path,.glass-plane rect{stroke:none;fill:#fff}
+.glass-route.beat-climb .glass-plane{animation:plane-rise 2.5s cubic-bezier(.4,.02,.2,1) forwards}
+@keyframes plane-rise{0%{opacity:0;transform:translate(-50%,68%)}15%{opacity:1}80%{opacity:1;transform:translate(-50%,-6%)}100%{opacity:0;transform:translate(-50%,-14%)}}
+.glass-arc{position:absolute;left:3%;right:3%;top:5%;width:94%;height:42%;opacity:0}
+.glass-arc-track,.glass-arc-draw{fill:none;stroke:#fff;stroke-linecap:round;stroke-width:6;vector-effect:non-scaling-stroke}
+.glass-arc-track{opacity:0}
+.glass-arc-draw{stroke-dasharray:none;clip-path:inset(0 100% 0 0)}
+.glass-route.beat-arc .glass-arc{animation:rise 1.1s ease .15s forwards}
+.glass-route.beat-arc .glass-arc-draw{animation:arc-fill 6.4s cubic-bezier(.45,.04,.2,1) .35s forwards}
+@keyframes arc-fill{to{clip-path:inset(0 0 0 0)}}
+.glass-kicker,.glass-time,.glass-to,.glass-meta{position:relative;z-index:1;opacity:0;transform:translateY(12px)}
+.glass-kicker{margin:18% 0 0;font-size:10px;letter-spacing:.28em;font-weight:700}
+.glass-time{margin:8px 0 0;font-family:'Noto Serif TC',serif;font-size:clamp(32px,4vw,46px);font-weight:500;letter-spacing:.02em;text-shadow:0 10px 28px rgba(8,20,32,.28)}
+.glass-to{margin:4px 0 0;font-size:15px;letter-spacing:.08em}
+.glass-meta{margin:10px 0 0;font-size:12px;letter-spacing:.06em}
+.glass-route.beat-arc .glass-kicker{animation:rise 1.1s ease .25s forwards}
+.glass-route.beat-arc .glass-time{animation:rise 1.25s ease .7s forwards}
+.glass-route.beat-arc .glass-to{animation:rise 1.15s ease 1.15s forwards}
+.glass-route.beat-arc .glass-meta{animation:rise 1.15s ease 1.6s forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+.glass-pin{position:absolute;z-index:1;top:40%;font-size:12px;letter-spacing:.04em;padding-top:18px;opacity:0;transform:translateY(8px)}
+.glass-pin:before{content:'';position:absolute;top:0;left:50%;width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.2);transform:translateX(-50%)}
+.glass-pin.from{left:8%}.glass-pin.to{right:8%}
+.glass-route.beat-arc .glass-pin.from{animation:rise 1s ease .9s forwards}
+.glass-route.beat-arc .glass-pin.to{animation:rise 1s ease 6.2s forwards}
 .window-frame{overflow:hidden;isolation:isolate;z-index:3}
 .window-rim{position:relative;overflow:hidden;z-index:1}
-.window-frame::after{content:"";position:absolute;inset:0;z-index:6;pointer-events:none;border-radius:inherit;padding:clamp(17px,2.15vw,31px);background:linear-gradient(125deg,#fdfdf7 0,#c7ceca 29%,#f9faf4 49%,#b8c0be 74%,#f8faf3 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;box-shadow:inset 0 0 0 1px #aeb8b3}
+.window-frame::after{content:"";position:absolute;inset:0;z-index:8;pointer-events:none;border-radius:inherit;padding:clamp(17px,2.15vw,31px);background:linear-gradient(125deg,#fdfdf7 0,#c7ceca 29%,#f9faf4 49%,#b8c0be 74%,#f8faf3 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;box-shadow:inset 0 0 0 1px #aeb8b3}
+.window-glass{clip-path:inset(0 round 48% 48% 44% 44% / 36% 36% 33% 33%);transform:translateZ(0)}
 .frame-screw{z-index:7}
 .scene-image,.scene-video,#globe-canvas,.cloud-veil,.window-shade{border-radius:inherit}
 body.window-only{background:#101820}
@@ -42,3 +80,36 @@ body.window-only .text-button{color:#f4f7f2;border-bottom-color:rgba(244,247,242
 .window-shade.closed .shade-panel{transform:translateY(-4%)}
 .window-shade.peek .shade-panel{transform:translateY(-76%)}
 .shade-texture{border:0}
+.glass-compass,.glass-weather{position:absolute;inset:0;z-index:4;display:grid;place-items:center;align-content:center;color:#fff;text-align:center;pointer-events:none;border-radius:inherit;overflow:hidden}
+.glass-compass[hidden],.glass-weather[hidden]{display:none}
+.glass-compass .glass-mist,.glass-weather .glass-mist{background:rgba(255,252,247,.42);backdrop-filter:blur(22px) brightness(1.08);-webkit-backdrop-filter:blur(22px) brightness(1.08)}
+.glass-compass.is-on{opacity:1;animation:glass-in .7s ease both}
+.window-glass:has(.glass-compass:not([hidden])) .window-caption,
+.window-glass:has(.glass-weather:not([hidden])) .window-caption,
+.window-glass:has(.glass-route:not([hidden])) .window-caption{opacity:0}
+.glass-compass.is-leaving,.glass-weather.is-leaving{animation:glass-leave .7s ease forwards}
+@keyframes glass-in{from{opacity:0}to{opacity:1}}
+.compass-face{position:relative;width:148px;height:148px;border-radius:50%;border:1.5px solid rgba(255,255,255,.72);box-shadow:0 0 0 10px rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.25);margin-bottom:14px}
+.compass-face span{position:absolute;font-size:12px;font-weight:700;letter-spacing:.12em}
+.compass-n{top:8px;left:50%;transform:translateX(-50%)}.compass-e{right:10px;top:50%;transform:translateY(-50%)}.compass-s{bottom:8px;left:50%;transform:translateX(-50%)}.compass-w{left:10px;top:50%;transform:translateY(-50%)}
+.compass-needle{position:absolute;left:50%;top:50%;width:2px;height:52px;border-radius:2px;background:linear-gradient(#fff,#f3b07a);transform-origin:50% 100%;transform:translate(-50%,-100%) rotate(90deg);transition:transform .45s cubic-bezier(.4,.04,.2,1)}
+.compass-needle:before{content:"";position:absolute;top:-7px;left:-4px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #fff}
+.glass-compass .glass-kicker,.glass-compass .glass-time,.glass-compass .glass-to{opacity:0}
+.glass-compass.is-on .glass-kicker{animation:rise .8s ease .1s forwards}
+.glass-compass.is-on .glass-time{animation:rise .9s ease .22s forwards}
+.glass-compass.is-on .glass-to{animation:rise .9s ease .38s forwards}
+.glass-weather.is-on{animation:glass-in .9s ease forwards}
+.glass-weather .glass-mist{background:transparent;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.wx-plate{position:relative;z-index:1;display:grid;justify-items:center}
+.wx-icon{position:relative;z-index:1;width:54px;height:54px;margin-top:8%;opacity:0}
+.wx-icon svg{position:absolute;inset:0;width:100%;height:100%;opacity:0}
+.wx-icon[data-kind="sun"] .wx-sun,.wx-icon[data-kind="cloud"] .wx-cloud,.wx-icon[data-kind="rain"] .wx-rain,.wx-icon[data-kind="snow"] .wx-snow{opacity:1}
+.wx-temp,.wx-city,.wx-place{position:relative;z-index:1;margin:0;opacity:0}
+.wx-temp{font-family:'Noto Serif TC',serif;font-size:clamp(64px,8vw,92px);font-weight:500;line-height:.9;letter-spacing:-.03em;text-shadow:0 12px 30px rgba(8,20,32,.28)}
+.wx-temp:after{content:"°";font-size:.42em;vertical-align:super}
+.wx-city{margin-top:10px;font-size:22px;letter-spacing:.22em;font-weight:600}
+.wx-place{margin-top:8px;font-size:13px;letter-spacing:.28em;opacity:0}
+.glass-weather.is-on .wx-icon{animation:rise 1s ease .2s forwards}
+.glass-weather.is-on .wx-temp{animation:rise 1.1s ease .45s forwards}
+.glass-weather.is-on .wx-city{animation:rise 1s ease .75s forwards}
+.glass-weather.is-on .wx-place{animation:rise 1s ease 1.05s forwards}

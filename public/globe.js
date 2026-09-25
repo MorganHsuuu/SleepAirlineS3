@@ -203,7 +203,7 @@
     }
     ctx.restore();
 
-    if (zoom < 1.08) {
+    if (zoom < 1.08 && progress < 0.04) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(225,239,229,.6)';
       ctx.font = '600 17px DM Sans, sans-serif';
@@ -214,42 +214,64 @@
     }
   }
 
-  function animate(from, to, _duration = 8000, onArrival) {
+  function animate(from, to, _duration, onArrival, onPhase) {
     if (frameId) cancelAnimationFrame(frameId);
-    const zoomInMs = 1500;
-    const pullbackMs = 2600;
-    const holdMs = 1700;
-    const diveMs = 1800;
+    const liftMs = 1700;
+    const aboveOriginMs = 1200;
+    const widenMs = 1500;
+    const flyMs = 6200;
+    const diveMs = 2100;
+    const marks = [0, liftMs, liftMs + aboveOriginMs, liftMs + aboveOriginMs + widenMs, liftMs + aboveOriginMs + widenMs + flyMs];
     return new Promise((resolve) => {
       const start = performance.now();
       let arrived = false;
+      let phase = '';
       const between = d3.geoInterpolate(at(from), at(to));
+      function setPhase(name) {
+        if (phase === name) return;
+        phase = name;
+        onPhase?.(name);
+      }
       function frame(now) {
         const t = now - start;
-        if (t < zoomInMs) {
-          const u = easeOut(Math.min(1, t / zoomInMs));
+        if (t < marks[1]) {
+          setPhase('lift');
+          const u = easeOut(Math.min(1, t / liftMs));
           draw(from, to, 0, {
-            zoom: 1.05 + 2.15 * u,
+            zoom: 8.4 - 5.6 * u,
             focus: at(from),
             routeAlpha: 0,
           });
           frameId = requestAnimationFrame(frame);
           return;
         }
-        if (t < zoomInMs + pullbackMs) {
-          const u = ease(Math.min(1, (t - zoomInMs) / pullbackMs));
-          draw(from, to, u, {
-            zoom: 3.15 - 2.45 * u,
-            focus: between(u * 0.5),
-            routeAlpha: Math.min(1, u * 1.6),
+        if (t < marks[2]) {
+          setPhase('origin');
+          draw(from, to, 0, {
+            zoom: 2.8,
+            focus: at(from),
+            routeAlpha: 0,
           });
           frameId = requestAnimationFrame(frame);
           return;
         }
-        if (t < zoomInMs + pullbackMs + holdMs) {
-          draw(from, to, 1, {
-            zoom: 0.7,
-            focus: between(0.5),
+        if (t < marks[3]) {
+          setPhase('globe');
+          const u = ease(Math.min(1, (t - marks[2]) / widenMs));
+          draw(from, to, 0, {
+            zoom: 2.8 - 2.34 * u,
+            focus: between(u * 0.5),
+            routeAlpha: 0,
+          });
+          frameId = requestAnimationFrame(frame);
+          return;
+        }
+        if (t < marks[4]) {
+          setPhase('fly');
+          const u = ease(Math.min(1, (t - marks[3]) / flyMs));
+          draw(from, to, u, {
+            zoom: 0.46,
+            focus: between(u),
             routeAlpha: 1,
           });
           frameId = requestAnimationFrame(frame);
@@ -257,14 +279,15 @@
         }
         if (!arrived) {
           arrived = true;
+          setPhase('dive');
           onArrival?.();
         }
-        const u = Math.min(1, (t - zoomInMs - pullbackMs - holdMs) / diveMs);
+        const u = Math.min(1, (t - marks[4]) / diveMs);
         const eased = easeOut(u);
         draw(from, to, 1, {
-          zoom: 0.95 + 5.4 * eased,
+          zoom: 0.46 + 8.2 * eased,
           focus: at(to),
-          routeAlpha: 1 - eased * 0.92,
+          routeAlpha: 1 - eased,
         });
         if (u < 1) frameId = requestAnimationFrame(frame);
         else { frameId = null; resolve(); }

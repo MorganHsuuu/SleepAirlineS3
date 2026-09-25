@@ -41,6 +41,49 @@
               <div class="scene-wash"></div>
               <canvas id="globe-canvas" width="700" height="1000" aria-label="真實國家輪廓與地球儀航線動畫"></canvas>
               <div class="cloud-veil" id="cloud-veil" aria-hidden="true"></div>
+              <div class="glass-route" id="glass-route" hidden>
+                <div class="glass-mist"></div>
+                <div class="glass-plane" aria-hidden="true">
+                  <svg viewBox="0 0 120 520">
+                    <path fill="#fff" d="M60 2c1.6 0 3.2 7 3.6 16l.3 12 34 12c9 3.2 18 8 18 12.5 0 3.6-7 6.2-16 5.4L64 50v16l14 9c5 3.2 7 6.4 4.2 8.6-2.6 2-9 .2-13.4-3.6L66 88v8h-12v-8l-2.8-7.6C47 84 40.6 86 38 84c-2.8-2.2-.8-5.4 4.2-8.6l14-9V50L20 60c-9 .8-16-1.8-16-5.4 0-4.5 9-9.3 18-12.5l34-12.3-.3-12C56.8 9 58.4 2 60 2z"/>
+                    <rect x="59" y="96" width="2" height="420" rx="1" fill="#fff"/>
+                  </svg>
+                </div>
+                <svg class="glass-arc" viewBox="0 0 200 86" aria-hidden="true">
+                  <path class="glass-arc-track" d="M14 74 A 92 58 0 0 1 186 74"/>
+                  <path class="glass-arc-draw" id="glass-arc-draw" d="M14 74 A 92 58 0 0 1 186 74"/>
+                </svg>
+                <p class="glass-kicker">YOUR FLIGHT</p>
+                <p class="glass-time" id="glass-time">—</p>
+                <p class="glass-to" id="glass-to">前往</p>
+                <p class="glass-meta" id="glass-meta"></p>
+                <span class="glass-pin from" id="glass-pin-from"></span>
+                <span class="glass-pin to" id="glass-pin-to"></span>
+              </div>
+              <div class="glass-compass" id="glass-compass" hidden>
+                <div class="glass-mist"></div>
+                <div class="compass-face" aria-hidden="true">
+                  <span class="compass-n">N</span><span class="compass-e">E</span><span class="compass-s">S</span><span class="compass-w">W</span>
+                  <i class="compass-needle" id="compass-needle"></i>
+                </div>
+                <p class="glass-kicker">HEADING</p>
+                <p class="glass-time" id="compass-degree">090°</p>
+                <p class="glass-to" id="compass-name">向東</p>
+              </div>
+              <div class="glass-weather" id="glass-weather" hidden>
+                <div class="glass-mist"></div>
+                <div class="wx-plate">
+                <div class="wx-icon" id="wx-icon" aria-hidden="true">
+                  <svg class="wx-sun" viewBox="0 0 64 64"><circle cx="32" cy="32" r="10" fill="#fff"/><g stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M32 8v8M32 48v8M8 32h8M48 32h8M14 14l6 6M44 44l6 6M50 14l-6 6M20 44l-6 6"/></g></svg>
+                  <svg class="wx-cloud" viewBox="0 0 64 64"><path fill="#fff" d="M22 46h24a12 12 0 0 0 2-23.8A16 16 0 0 0 20 26a11 11 0 0 0 2 20z"/></svg>
+                  <svg class="wx-rain" viewBox="0 0 64 64"><path fill="#fff" d="M22 40h24a12 12 0 0 0 2-23.8A16 16 0 0 0 20 20a11 11 0 0 0 2 20z"/><g stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M24 46l-3 8M32 46l-3 8M40 46l-3 8"/></g></svg>
+                  <svg class="wx-snow" viewBox="0 0 64 64"><path fill="#fff" d="M22 36h24a12 12 0 0 0 2-23.8A16 16 0 0 0 20 16a11 11 0 0 0 2 20z"/><g stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M24 44v10M21 47h6M40 44v10M37 47h6M32 46v10M29 49h6"/></g></svg>
+                </div>
+                <p class="wx-temp" id="wx-temp">—</p>
+                <p class="wx-city" id="wx-city"></p>
+                <p class="wx-place" id="wx-place"></p>
+                </div>
+              </div>
               <div class="window-shade" id="window-shade"><div class="shade-panel"><div class="shade-texture"></div><div class="shade-handle"></div></div></div>
               <div class="window-caption"><span class="caption-dot"></span><span id="window-caption">台北上空 · 等待出發</span></div>
               <div class="window-reflection"></div>

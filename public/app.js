@@ -15,26 +15,33 @@ const directions = [
   { key: 'northwest', name: '西北', angle: 315 },
 ];
 const tracks = ['wakeup1.mp3', 'wakeup2.mp3', 'wakeup3.mp3', 'wakeup4.mp3'];
+let wakeupIndex = Number(localStorage.getItem('sleepAirlineS3Wakeup') || 0) || 0;
+function nextWakeup() {
+  const file = tracks[wakeupIndex % tracks.length];
+  wakeupIndex = (wakeupIndex + 1) % tracks.length;
+  localStorage.setItem('sleepAirlineS3Wakeup', String(wakeupIndex));
+  return file;
+}
 const demoCities = [
-  { name: '東京', code: 'TYO', lat: 35.6762, lon: 139.6503 },
-  { name: '大阪', code: 'OSA', lat: 34.6937, lon: 135.5023 },
-  { name: '首爾', code: 'SEL', lat: 37.5665, lon: 126.978 },
-  { name: '上海', code: 'SHA', lat: 31.2304, lon: 121.4737 },
-  { name: '香港', code: 'HKG', lat: 22.3193, lon: 114.1694 },
-  { name: '馬尼拉', code: 'MNL', lat: 14.5995, lon: 120.9842 },
-  { name: '曼谷', code: 'BKK', lat: 13.7563, lon: 100.5018 },
-  { name: '新加坡', code: 'SIN', lat: 1.3521, lon: 103.8198 },
-  { name: '胡志明市', code: 'SGN', lat: 10.8231, lon: 106.6297 },
-  { name: '札幌', code: 'CTS', lat: 43.0618, lon: 141.3545 },
-  { name: '沖繩', code: 'OKA', lat: 26.2124, lon: 127.6809 },
-  { name: '臺中', code: 'RMQ', lat: 24.1477, lon: 120.6736 },
-  { name: '高雄', code: 'KHH', lat: 22.6273, lon: 120.3014 },
+  { name: '東京', code: 'TYO', country: '日本', lat: 35.6762, lon: 139.6503 },
+  { name: '大阪', code: 'OSA', country: '日本', lat: 34.6937, lon: 135.5023 },
+  { name: '首爾', code: 'SEL', country: '韓國', lat: 37.5665, lon: 126.978 },
+  { name: '上海', code: 'SHA', country: '中國', lat: 31.2304, lon: 121.4737 },
+  { name: '香港', code: 'HKG', country: '中國', lat: 22.3193, lon: 114.1694 },
+  { name: '馬尼拉', code: 'MNL', country: '菲律賓', lat: 14.5995, lon: 120.9842 },
+  { name: '曼谷', code: 'BKK', country: '泰國', lat: 13.7563, lon: 100.5018 },
+  { name: '新加坡', code: 'SIN', country: '新加坡', lat: 1.3521, lon: 103.8198 },
+  { name: '胡志明市', code: 'SGN', country: '越南', lat: 10.8231, lon: 106.6297 },
+  { name: '札幌', code: 'CTS', country: '日本', lat: 43.0618, lon: 141.3545 },
+  { name: '沖繩', code: 'OKA', country: '日本', lat: 26.2124, lon: 127.6809 },
+  { name: '臺中', code: 'RMQ', country: '臺灣', lat: 24.1477, lon: 120.6736 },
+  { name: '高雄', code: 'KHH', country: '臺灣', lat: 22.6273, lon: 120.3014 },
 ];
 const state = {
   mode: 'preview', stage: 'ready', direction: 2, sound: true,
   profile: null, activeFlight: null, lastFlight: null, takeoffAt: null,
   nextOrigin: null,
-  origin: { name: '臺北', code: 'TPE', lat: 25.033, lon: 121.5654 },
+  origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
   destination: null, busy: false, sceneryUrl: null,
 };
 let clockTimer = null;
@@ -50,9 +57,12 @@ function codeFor(name) {
   return demoCities.find((c) => city.includes(c.name) || c.name.includes(city))?.code || 'ARR';
 }
 function locationFromFlight(flight, prefix) {
+  const raw = String(flight?.[prefix + 'Location'] || '');
+  const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
   return {
-    name: cityOnly(flight?.[prefix + 'Location']) || '臺北',
-    code: codeFor(flight?.[prefix + 'Location']),
+    name: parts[0] || '臺北',
+    country: parts[1] || '',
+    code: codeFor(raw),
     lat: finiteCoordinate(flight?.[prefix + 'Latitude'], 25.033),
     lon: finiteCoordinate(flight?.[prefix + 'Longitude'], 121.5654),
   };
@@ -80,16 +90,55 @@ function setShade(kind) {
   $('window-shade').classList.toggle('closed', kind === 'closed');
   $('window-shade').classList.toggle('peek', kind === 'peek');
 }
-function setDirection(index) {
+let compassTimer = null;
+let heading = 90;
+function spinTo(index, prefer) {
+  const next = (index + 8) % 8;
+  const target = directions[next].angle;
+  const current = ((heading % 360) + 360) % 360;
+  let delta = ((target - current + 540) % 360) - 180;
+  if (next !== state.direction) {
+    if (prefer === 'cw' && delta <= 0) delta += 360;
+    if (prefer === 'ccw' && delta >= 0) delta -= 360;
+    heading += delta;
+  }
+  const spin = `translate(-50%,-100%) rotate(${heading}deg)`;
+  $('dial-pointer').style.transform = spin;
+  $('compass-needle').style.transform = spin;
+}
+function hideGlassPanel(id) {
+  const panel = $(id);
+  if (!panel) return;
+  panel.classList.remove('is-on', 'is-leaving', 'beat-climb', 'beat-arc');
+  panel.hidden = true;
+}
+function showCompass() {
+  const d = directions[state.direction];
+  $('compass-degree').textContent = `${String(d.angle).padStart(3, '0')}°`;
+  $('compass-name').textContent = d.name;
+  $('compass-needle').style.transform = `translate(-50%,-100%) rotate(${heading}deg)`;
+  const panel = $('glass-compass');
+  panel.hidden = false;
+  panel.classList.remove('is-leaving');
+  void panel.offsetWidth;
+  panel.classList.add('is-on');
+  clearTimeout(compassTimer);
+  compassTimer = setTimeout(() => {
+    panel.classList.add('is-leaving');
+    compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 700);
+  }, 1600);
+}
+function setDirection(index, prefer) {
   if (state.stage !== 'ready') return;
+  spinTo(index, prefer);
   state.direction = (index + 8) % 8;
   const d = directions[state.direction];
   $('tk-direction').value = d.key;
-  $('dial-pointer').style.transform = `translate(-50%,-100%) rotate(${d.angle}deg)`;
   $('direction-name').textContent = `${d.name} · ${String(d.angle).padStart(3, '0')}°`;
   $('direction-dial').setAttribute('aria-valuenow', String(state.direction));
   $('direction-dial').setAttribute('aria-valuetext', d.name);
   window.BroadcastAudio?.playCompassTick?.();
+  showCompass();
 }
 function render() {
   const ready = state.stage === 'ready';
@@ -258,6 +307,8 @@ async function doTakeoff() {
   if (state.mode === 'live' && !state.profile) { $('profile-dialog').showModal(); showToast('請先填寫登機資料。'); return; }
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
+  clearTimeout(compassTimer);
+  hideGlassPanel('glass-compass');
   window.BroadcastAudio?.primeFromUserGesture?.();
   if (state.sound) window.BroadcastAudio?.startTowerSignalLoop?.();
   $('window-caption').textContent = '舷窗已關閉 · 準備起飛';
@@ -373,6 +424,90 @@ function waitForVideoEnd(video, minMs = 4200, maxMs = 14000) {
     }),
   ]);
 }
+function formatFlightSpan(minutes) {
+  const total = Math.max(1, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (!hours) return `${mins} min`;
+  return mins ? `${hours}h ${mins}min` : `${hours}h`;
+}
+function playGlassRoute({ minutes, distanceKm, from, to }) {
+  const panel = $('glass-route');
+  $('glass-time').textContent = formatFlightSpan(minutes);
+  $('glass-to').textContent = `to ${to}`;
+  $('glass-meta').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km · ${from}`;
+  $('glass-pin-from').textContent = from;
+  $('glass-pin-to').textContent = to;
+  hideGlassPanel('glass-compass');
+  panel.hidden = false;
+  panel.classList.remove('is-on', 'is-leaving', 'beat-climb', 'beat-arc');
+  $('window-glass').classList.add('revealing');
+  void panel.offsetWidth;
+  panel.classList.add('is-on', 'beat-climb');
+  setScene('clouds');
+  if (state.sound) {
+    window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: .32, fadeInMs: 1800, loop: false })?.catch(() => {});
+  }
+  return delay(2500).then(() => {
+    panel.classList.remove('beat-climb');
+    panel.classList.add('beat-arc');
+    return delay(7600);
+  }).then(() => {
+    panel.classList.add('is-leaving');
+    window.BroadcastAudio?.fadeOutLandingMusic?.({ ms: 800 });
+    return delay(800);
+  }).then(() => {
+    hideGlassPanel('glass-route');
+    $('window-glass').classList.remove('revealing');
+  });
+}
+function weatherKind(code) {
+  if (code === 0 || code === 1) return 'sun';
+  if (code >= 71 && code <= 77) return 'snow';
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95) return 'rain';
+  return 'cloud';
+}
+function climateGuess(lat) {
+  const month = new Date().getMonth();
+  const northWinter = month <= 1 || month === 11;
+  const northSummer = month >= 5 && month <= 7;
+  const winter = lat >= 0 ? northWinter : northSummer;
+  const summer = lat >= 0 ? northSummer : northWinter;
+  const abs = Math.abs(lat);
+  let temp = abs < 15 ? 28 : abs < 28 ? 24 : abs < 40 ? 18 : abs < 55 ? 8 : -2;
+  if (winter) temp -= abs < 20 ? 3 : 10;
+  if (summer) temp += abs < 20 ? 2 : 8;
+  const rounded = Math.round(temp);
+  return { temp: rounded, kind: rounded >= 27 ? 'sun' : rounded <= 1 ? 'snow' : 'cloud' };
+}
+async function loadWeather(place) {
+  const guess = climateGuess(place?.lat ?? 25);
+  try {
+    const data = await Promise.race([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,weather_code`).then((res) => res.json()),
+      delay(4000).then(() => null),
+    ]);
+    if (!data?.current || !Number.isFinite(data.current.temperature_2m)) return guess;
+    return { temp: Math.round(data.current.temperature_2m), kind: weatherKind(data.current.weather_code) };
+  } catch {
+    return guess;
+  }
+}
+function showWeatherCard(place, weather) {
+  $('wx-temp').textContent = String(weather.temp);
+  $('wx-city').textContent = place.name;
+  $('wx-place').textContent = place.country || '';
+  $('wx-icon').dataset.kind = weather.kind;
+  const panel = $('glass-weather');
+  panel.hidden = false;
+  panel.classList.remove('is-on', 'is-leaving');
+  void panel.offsetWidth;
+  panel.classList.add('is-on');
+  return delay(5200).then(() => {
+    panel.classList.add('is-leaving');
+    return delay(700);
+  }).then(() => hideGlassPanel('glass-weather'));
+}
 function revealArrivalImage(url, late = false) {
   if (!url) return;
   const preload = new Image();
@@ -393,16 +528,7 @@ async function doLand() {
   window.BroadcastAudio?.primeFromUserGesture?.();
   primeLandingVideos();
   await FlightGlobe.ready;
-  FlightGlobe.draw(state.origin, state.destination || { ...state.origin, name: '目的地' }, 0, {
-    zoom: 1.08,
-    focus: [state.origin.lon, state.origin.lat],
-    routeAlpha: 0,
-  });
-  setScene('globe');
-  setCeremony('ROUTE CONNECTING', '正在確認這趟航班的目的地…');
-  const musicJob = state.sound
-    ? (window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: .38, fadeInMs: 900, loop: true })?.catch(() => false) ?? Promise.resolve(false))
-    : Promise.resolve(false);
+  setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
   try {
     let text, speech, sceneryJob = null;
@@ -422,27 +548,34 @@ async function doLand() {
     }
     $('to-city').textContent = state.destination.name;
     $('to-code').textContent = state.destination.code;
+    const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    // The captain speaks over the route, the destination zoom and the cloud descent.
     const captainJob = (async () => {
-      await musicJob;
+      await delay(1600);
       if (text) await playBroadcast(text, speech, { restoreBed: true });
     })().catch(() => {});
-    const routeJob = FlightGlobe.animate(state.origin, state.destination, 7200, () => {
-      $('window-caption').textContent = `即將抵達 ${state.destination.name}`;
-      $('window-glass').classList.add('destination-zoom');
+    const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
+    const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
+    const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
+    await playGlassRoute({
+      minutes,
+      distanceKm,
+      from: state.origin.name,
+      to: state.destination.name,
     });
-    await delay(5600);
-    const descentPlayed = await startSceneVideo('descent-video', true);
+    let descentPlayed = false;
+    $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
+    descentPlayed = await startSceneVideo('descent-video', true);
     if (descentPlayed) $('descent-video').classList.add('active');
-    await routeJob;
     $('window-glass').classList.add('cloud-entering');
     await delay(450);
     setScene(descentPlayed ? 'descent' : 'clouds');
     $('window-caption').textContent = '穿越雲層 · 緩緩下降';
     await delay(550);
     $('window-glass').classList.remove('cloud-entering', 'destination-zoom');
+    hideGlassPanel('glass-route');
+    $('window-glass').classList.remove('revealing');
     // The cloud footage loops until image generation (including S2's backfill) has finished.
     // The bound only covers an unresponsive backend, so final approach does not start early.
     const [readyUrl] = await Promise.all([
@@ -479,8 +612,11 @@ async function doLand() {
     if (approachPlayed) $('descent-video').pause();
     if (approachPlayed) await waitForVideoEnd($('landing-video'));
     else await delay(4200);
-    if (state.sound) await BroadcastAudio?.crossfadeApproachSfxToWakeup?.({ sfxFadeMs: 900, musicFadeMs: 1100 });
-    else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
+    if (state.sound) {
+      await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 900 });
+      await BroadcastAudio?.stopLandingMusic?.({ fade: true, ms: 700 });
+      await BroadcastAudio?.playLandingMusic?.(`media/${nextWakeup()}`, { volume: .22, fadeInMs: 1100, loop: true });
+    } else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
 
     const image = $('arrival-image');
     image.classList.add('developing');
@@ -496,14 +632,19 @@ async function doLand() {
     });
     setScene('arrival');
     stopLandingVideos();
+    const weather = await weatherJob;
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 100));
     $('window-caption').textContent = `已抵達 ${state.destination.name}${state.sceneryUrl ? '' : ' · 示意風景'}`;
     state.stage = 'landed'; render(); hideCeremony();
+    await showWeatherCard(state.destination, weather);
     if (state.sound) void BroadcastAudio?.fadeOutLandingMusic?.({ ms: 4500 });
     state.nextOrigin = state.destination;
     if (state.mode === 'live') void fetchBoard().catch(() => {});
   } catch (error) {
     $('window-glass').classList.remove('cloud-entering', 'destination-zoom');
+    hideGlassPanel('glass-route');
+    hideGlassPanel('glass-weather');
+    $('window-glass').classList.remove('revealing');
     hideCeremony();
     stopLandingVideos();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
@@ -548,6 +689,10 @@ function restart() {
   window.BroadcastAudio?.stopLandingMusic?.({ fade: true });
   stopLandingVideos();
   $('window-glass').classList.remove('cloud-entering', 'destination-zoom');
+  hideGlassPanel('glass-route');
+  hideGlassPanel('glass-compass');
+  hideGlassPanel('glass-weather');
+  $('window-glass').classList.remove('revealing');
   state.origin = state.nextOrigin || state.origin;
   state.nextOrigin = null;
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
@@ -560,18 +705,29 @@ function restart() {
 
 function bindDial() {
   const el = $('direction-dial');
-  const pointToIndex = (event) => {
+  let dragAngle = null;
+  const pointToIndex = (event, follow) => {
     const rect = el.getBoundingClientRect();
     const x = event.clientX - (rect.left + rect.width / 2);
     const y = event.clientY - (rect.top + rect.height / 2);
     const angle = (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
-    setDirection(Math.round(angle / 45) % 8);
+    let prefer;
+    if (follow && dragAngle != null) {
+      let diff = angle - dragAngle;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      if (Math.abs(diff) > 0.5) prefer = diff > 0 ? 'cw' : 'ccw';
+    }
+    dragAngle = angle;
+    setDirection(Math.round(angle / 45) % 8, prefer);
   };
-  el.addEventListener('pointerdown', (event) => { el.setPointerCapture(event.pointerId); pointToIndex(event); });
-  el.addEventListener('pointermove', (event) => { if (el.hasPointerCapture(event.pointerId)) pointToIndex(event); });
+  el.addEventListener('pointerdown', (event) => { el.setPointerCapture(event.pointerId); dragAngle = null; pointToIndex(event, false); });
+  el.addEventListener('pointermove', (event) => { if (el.hasPointerCapture(event.pointerId)) pointToIndex(event, true); });
+  el.addEventListener('pointerup', () => { dragAngle = null; });
+  el.addEventListener('pointercancel', () => { dragAngle = null; });
   el.addEventListener('keydown', (event) => {
-    if (['ArrowRight', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setDirection(state.direction + 1); }
-    if (['ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setDirection(state.direction - 1); }
+    if (['ArrowRight', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setDirection(state.direction + 1, 'cw'); }
+    if (['ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setDirection(state.direction - 1, 'ccw'); }
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
