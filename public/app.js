@@ -262,15 +262,15 @@ function flightBody() {
 }
 async function doLogin(event) {
   event?.preventDefault();
-  const passengerId = $('input-pid').value.trim();
-  const name = $('input-name').value.trim();
-  const groupId = $('input-group').value.trim();
-  if (!passengerId || !name || !/^[0-9]{4}$/.test(groupId)) {
-    $('profile-hint').textContent = '請填寫乘客 ID、姓名與四位數航站代碼。'; return;
-  }
-  if (state.mode === 'live' && !$('research-consent').checked) {
-    $('profile-hint').textContent = '連接活動資料庫前，請先同意資料使用。'; return;
-  }
+  ensureGuestProfile();
+  const passengerId = $('input-pid').value.trim() || state.profile.passengerId;
+  const name = $('input-name').value.trim() || state.profile.name;
+  const rawGroup = $('input-group').value.trim();
+  const groupId = /^[0-9]{4}$/.test(rawGroup) ? rawGroup : state.profile.groupId;
+  $('input-pid').value = passengerId;
+  $('input-name').value = name;
+  $('input-group').value = groupId;
+  $('research-consent').checked = true;
   $('btn-login').disabled = true;
   try {
     if (state.mode === 'live') {
@@ -287,6 +287,7 @@ async function doLogin(event) {
       state.profile = { passengerId, name, groupId };
     }
     localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
+    localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
     $('profile-dialog').close();
     $('profile-hint').textContent = '';
     render();
@@ -590,11 +591,11 @@ function helloForPlace(place) {
   return HELLO_BY_ISO[iso] || 'Hello';
 }
 function showWeatherCard(place, weather) {
-  $('wx-temp').textContent = String(weather.temp);
-  $('wx-city').textContent = place.name;
-  $('wx-place').textContent = place.country || '';
-  $('wx-hello').textContent = helloForPlace(place);
-  $('wx-icon').dataset.kind = weather.kind;
+  if ($('wx-temp')) $('wx-temp').textContent = String(weather.temp);
+  if ($('wx-city')) $('wx-city').textContent = place.name;
+  if ($('wx-place')) $('wx-place').textContent = place.country || '';
+  if ($('wx-hello')) $('wx-hello').textContent = helloForPlace(place);
+  if ($('wx-icon')) $('wx-icon').dataset.kind = weather.kind;
   const panel = $('glass-weather');
   panel.hidden = false;
   panel.classList.remove('is-on', 'is-leaving');
@@ -628,23 +629,36 @@ async function doLand() {
     window.BroadcastAudio?.speakFromGesture?.('各位旅客，飛機正在下降。請稍候，我們即將打開窗戶。');
   }
   primeLandingVideos();
-  await FlightGlobe.ready;
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
   try {
     let text, speech, sceneryJob = null;
     if (state.mode === 'live') {
-      const data = await api('POST', '/api/flight/land', flightBody(), 110000);
-      state.lastFlight = data.flight;
-      state.destination = locationFromFlight(data.flight, 'arrival');
-      text = data.flight.captainBroadcast;
-      speech = data.speechAudioBase64;
-      // No OpenAI: skip generation entirely — visuals continue with ARRIVAL_FALLBACK.
-      sceneryJob = !state.openaiReady
-        ? Promise.resolve(null)
-        : data.landingScenery?.imageUrl
-          ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
-          : requestScenery(data.flight.flightId);
+      ensureGuestProfile();
+      let data = null;
+      try {
+        data = await api('POST', '/api/flight/land', flightBody(), 110000);
+      } catch (landError) {
+        // 找不到進行中航班或 Notion 暫時失敗時，仍完成窗景降落。
+        console.warn('live land failed, continuing locally', landError);
+        showToast(`連線降落未寫入：${landError.message}`);
+      }
+      if (data) {
+        state.lastFlight = data.flight;
+        state.destination = locationFromFlight(data.flight, 'arrival');
+        text = data.flight.captainBroadcast;
+        speech = data.speechAudioBase64;
+        // No OpenAI: skip generation entirely — visuals continue with ARRIVAL_FALLBACK.
+        sceneryJob = !state.openaiReady
+          ? Promise.resolve(null)
+          : data.landingScenery?.imageUrl
+            ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
+            : requestScenery(data.flight.flightId);
+      } else {
+        state.destination ||= destinationFor(state.direction);
+        text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
+        sceneryJob = Promise.resolve(ARRIVAL_FALLBACK);
+      }
     } else {
       state.destination ||= destinationFor(state.direction);
       text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
@@ -963,6 +977,11 @@ async function init() {
       $('input-group').value = profile.groupId;
     }
   } catch { /* no stored profile */ }
+  ensureGuestProfile();
+  if (!$('input-pid').value) $('input-pid').value = state.profile.passengerId;
+  if (!$('input-name').value) $('input-name').value = state.profile.name;
+  if (!$('input-group').value) $('input-group').value = state.profile.groupId;
+  if ($('research-consent')) $('research-consent').checked = true;
   if (!FRONTEND_PREVIEW_ONLY) {
     try {
       try {
