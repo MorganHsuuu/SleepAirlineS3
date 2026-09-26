@@ -208,7 +208,7 @@ function render() {
   $('btn-land').classList.toggle('hidden', !flying);
   $('shade-handle')?.classList.toggle('is-ready', (ready || flying) && !state.busy);
   $('btn-restart').classList.add('hidden');
-  $('btn-sleep-report').classList.toggle('hidden', !landed || FRONTEND_PREVIEW_ONLY);
+  $('btn-sleep-report').classList.add('hidden');
   const dialLive = dialCanTurn();
   $('direction-dial').style.opacity = dialLive ? '1' : '.52';
   $('direction-dial').setAttribute('aria-disabled', dialLive ? 'false' : 'true');
@@ -555,9 +555,9 @@ function formatFlightSpan(minutes) {
 function playGlassRoute({ minutes, distanceKm, from, to }) {
   const panel = $('glass-route');
   const glass = $('window-glass');
-  $('glass-time').textContent = formatFlightSpan(minutes);
+  $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
   $('glass-to').textContent = `to ${to}`;
-  $('glass-meta').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km · ${from}`;
+  $('glass-meta').textContent = `${formatFlightSpan(minutes)} · ${from}`;
   $('glass-pin-from').textContent = from;
   $('glass-pin-to').textContent = to;
   hideGlassPanel('glass-compass');
@@ -755,8 +755,8 @@ async function doLand() {
     const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
     const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
-    $('glass-time').textContent = formatFlightSpan(minutes);
-    $('glass-meta').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km · ${state.origin.name}`;
+    $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
+    $('glass-meta').textContent = `${formatFlightSpan(minutes)} · ${state.origin.name}`;
     await routeVisual;
     let approachPlayed = false;
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
@@ -987,17 +987,18 @@ function bindShadeGesture() {
     shade.style.transform = `translateY(${clamped - height}px)`;
     return clamped;
   };
-  handle.addEventListener('pointerdown', (event) => {
+  const shadePanel = panel();
+  shadePanel.addEventListener('pointerdown', (event) => {
     if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
     event.preventDefault();
     pulling = true;
     const rect = glass.getBoundingClientRect();
     offset = shadeLip() - (event.clientY - rect.top);
     handle.classList.add('is-dragging');
-    panel().classList.add('is-dragging');
-    try { handle.setPointerCapture(event.pointerId); } catch { /* already released */ }
+    shadePanel.classList.add('is-dragging');
+    try { shadePanel.setPointerCapture(event.pointerId); } catch { /* already released */ }
   });
-  handle.addEventListener('pointermove', (event) => {
+  shadePanel.addEventListener('pointermove', (event) => {
     if (!pulling) return;
     const rect = glass.getBoundingClientRect();
     place((event.clientY - rect.top) + offset);
@@ -1029,8 +1030,8 @@ function bindShadeGesture() {
     }
     setShade(state.stage === 'cruise' ? 'closed' : 'open');
   };
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
+  shadePanel.addEventListener('pointerup', end);
+  shadePanel.addEventListener('pointercancel', end);
   syncShadeHandle();
 }
 function applySleepTurn(delta) {
