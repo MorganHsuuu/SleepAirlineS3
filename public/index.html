@@ -18,7 +18,7 @@
   <div id="login-section" class="sr-only" aria-hidden="true"></div>
   <div class="app-shell" id="main-section">
     <header class="topbar">
-      <div class="brand"><img class="brand-mark" src="images/brand-logo.png" alt=""><span>甦醒航班 <small>Sleep Airline3</small></span></div>
+      <div class="brand"><img class="brand-mark" src="images/brand-logo.png" alt=""><span>甦醒航班 <small>Sleep Airline 3</small></span></div>
       <div class="topbar-right"><span class="live-dot"></span><span id="mode-label">體驗模式</span><button class="text-button" id="view-toggle" type="button" aria-pressed="true">完整介面</button><button class="text-button" id="profile-open" type="button">登機資料 ↗</button></div>
     </header>
 
@@ -41,19 +41,19 @@
           <div class="window-rim">
             <div class="window-glass" id="window-glass">
               <img id="cloud-image" class="scene-image visible" src="images/clouds-dawn.png" alt="晨光中的雲層">
-              <img id="arrival-image" class="scene-image" src="images/arrival-fallback.jpg" alt="降落後的風景">
-              <video id="descent-video" class="scene-video" src="media/takeoff2.mp4" muted playsinline loop preload="metadata" poster="images/clouds-dawn.png" aria-label="穿越雲層的下降影片"></video>
-              <video id="landing-video" class="scene-video" src="media/landing.mp4" muted playsinline preload="metadata" poster="images/clouds-dawn.png" aria-label="降落進場影片"></video>
+              <img id="arrival-image" class="scene-image" src="images/inflight-standby.jpg" alt="降落後的風景">
+              <video id="descent-video" class="scene-video" src="media/newlanding.mp4" muted playsinline loop preload="metadata" poster="images/inflight-standby.jpg" aria-label="穿越雲層的下降影片"></video>
+              <video id="landing-video" class="scene-video" src="media/newlanding.mp4" muted playsinline preload="metadata" poster="images/inflight-standby.jpg" aria-label="降落進場影片"></video>
               <div class="scene-wash"></div>
               <canvas id="globe-canvas" width="700" height="1000" aria-label="真實國家輪廓與地球儀航線動畫"></canvas>
               <div class="cloud-veil" id="cloud-veil" aria-hidden="true"></div>
               <div class="glass-route" id="glass-route" hidden>
                 <div class="glass-mist"></div>
                 <div class="glass-plane" aria-hidden="true">
-                  <svg viewBox="0 0 120 520">
+                  <svg class="plane-body" viewBox="0 0 120 110">
                     <path fill="#fff" d="M60 2c1.6 0 3.2 7 3.6 16l.3 12 34 12c9 3.2 18 8 18 12.5 0 3.6-7 6.2-16 5.4L64 50v16l14 9c5 3.2 7 6.4 4.2 8.6-2.6 2-9 .2-13.4-3.6L66 88v8h-12v-8l-2.8-7.6C47 84 40.6 86 38 84c-2.8-2.2-.8-5.4 4.2-8.6l14-9V50L20 60c-9 .8-16-1.8-16-5.4 0-4.5 9-9.3 18-12.5l34-12.3-.3-12C56.8 9 58.4 2 60 2z"/>
-                    <rect x="59" y="96" width="2" height="420" rx="1" fill="#fff"/>
                   </svg>
+                  <div class="plane-trail" aria-hidden="true"></div>
                 </div>
                 <svg class="glass-arc" viewBox="0 0 200 86" aria-hidden="true">
                   <path class="glass-arc-track" d="M14 74 A 92 58 0 0 1 186 74"/>
@@ -86,11 +86,14 @@
                   </div>
                   <p class="sleep-q">昨夜睡得如何？</p>
                 </div>
-                <svg class="sleep-ring" viewBox="0 0 120 120" aria-hidden="true">
-                  <circle class="sleep-arc-track" cx="60" cy="60" r="54"></circle>
-                  <circle class="sleep-ring-draw" id="sleep-ring-draw" cx="60" cy="60" r="54"></circle>
+                <svg class="mood-face" id="mood-face" viewBox="0 0 120 120" aria-label="昨夜睡眠">
+                  <circle cx="60" cy="60" r="42" fill="none" stroke="#fff" stroke-width="2"></circle>
+                  <circle class="mood-eye-dot" cx="48" cy="54" r="2.4" fill="#fff"></circle>
+                  <circle class="mood-eye-dot" cx="72" cy="54" r="2.4" fill="#fff"></circle>
+                  <path class="mood-eye-laugh" id="mood-laugh-l" d="M42 55 Q48 49 54 55" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"></path>
+                  <path class="mood-eye-laugh" id="mood-laugh-r" d="M66 55 Q72 49 78 55" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"></path>
+                  <path id="mood-mouth" d="M46 74 Q60 74 74 74" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"></path>
                 </svg>
-                <p class="glass-time" id="sleep-ring-pct">0%</p>
               </div>
               <div class="glass-weather" id="glass-weather" hidden>
                 <div class="glass-mist"></div>
@@ -107,6 +110,7 @@
                 <p class="wx-hello" id="wx-hello"></p>
                 </div>
               </div>
+              <div class="holy-light" aria-hidden="true"></div>
               <div class="window-shade" id="window-shade"><div class="shade-panel"><div class="shade-texture"></div><button type="button" id="shade-handle" class="shade-handle" aria-label="拉動窗簾"></button></div></div>
               <div class="window-caption"><span class="caption-dot"></span><span id="window-caption">台北上空 · 等待出發</span></div>
               <div class="window-reflection"></div>

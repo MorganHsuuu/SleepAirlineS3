@@ -508,20 +508,28 @@ async function stopFlightSfx({ fade = true, ms = 550 } = {}) {
   audio.src = '';
 }
 
-function startWakeupBed(url, volume = 0.14) {
+let wakeupBedOpen = false;
+
+function startWakeupBed(url, volume = 0.14, fadeInMs = 0) {
   if (!url) return false;
   primeFromUserGesture();
   try { if (landingAudio) { landingAudio.pause(); landingAudio.src = ''; } } catch { /* noop */ }
   const audio = new Audio(url);
   audio.loop = true;
-  audio.volume = volume;
+  audio.volume = fadeInMs > 0 ? 0 : volume;
   audio.playsInline = true;
   audio.preload = 'auto';
   landingAudio = audio;
   landingVolume = volume;
+  wakeupBedOpen = true;
   const played = audio.play();
   if (played && typeof played.catch === 'function') played.catch(() => {});
+  if (fadeInMs > 0) void fadeAudioVolume(audio, 0, volume, fadeInMs);
   return true;
+}
+
+function wakeupIsPlaying() {
+  return wakeupBedOpen && !!landingAudio;
 }
 async function playLandingMusic(url, opts = {}) {
   if (!url) return false;
@@ -549,6 +557,7 @@ let landingFadeOutPromise = null;
 
 async function stopLandingMusic({ fade = true, ms = 900 } = {}) {
   landingFadeOutPromise = null;
+  wakeupBedOpen = false;
   const audio = landingAudio;
   if (!audio) return;
   landingAudio = null;
@@ -598,6 +607,7 @@ async function fadeOutLandingMusic({ ms = 3200 } = {}) {
     await fadeAudioVolume(audio, vol, 0, ms);
     if (landingAudio === audio) {
       landingAudio = null;
+      wakeupBedOpen = false;
       audio.pause();
       try { audio.currentTime = 0; } catch { /* noop */ }
       audio.src = '';
@@ -1237,6 +1247,7 @@ window.BroadcastAudio = {
   stopFlightSfx,
   playLandingMusic,
   startWakeupBed,
+  wakeupIsPlaying,
   stopLandingMusic,
   resumeLandingMusicAfterApproach,
   crossfadeApproachSfxToWakeup,
