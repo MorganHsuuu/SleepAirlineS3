@@ -671,6 +671,7 @@ function revealArrivalImage(url, late = false) {
   preload.onload = () => {
     const image = $('arrival-image');
     image.classList.add('developing');
+    image.classList.remove('is-inflight');
     image.src = url;
     if (late) setScene('arrival');
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 100));
@@ -769,7 +770,7 @@ async function doLand() {
       setScene('approach');
       if (state.sound) {
         void window.BroadcastAudio?.duckCeremonyBed?.();
-        void window.BroadcastAudio?.playFlightSfx?.('media/landing.mp3', { loop: false, volume: 0.72, fadeInMs: 350 });
+        void window.BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .55, fadeInMs: 1200 });
       }
     } else setScene('clouds');
     await delay(380);
@@ -797,11 +798,11 @@ async function doLand() {
       }).catch(() => {});
     }
 
-    // Final still is the generated photo when it exists; otherwise the inflight picture.
-    let finalImage = state.sceneryUrl || INFLIGHT_STANDBY;
+    // Generated scenery when the API returns one; otherwise the local standby photo.
+    let finalImage = state.sceneryUrl || ARRIVAL_FALLBACK;
     if (!await preloadImage(finalImage)) {
       state.sceneryUrl = null;
-      finalImage = INFLIGHT_STANDBY;
+      finalImage = ARRIVAL_FALLBACK;
       await preloadImage(finalImage);
     }
     setCeremony('FINAL APPROACH', '風景已就緒，正在對準跑道…');
@@ -814,7 +815,7 @@ async function doLand() {
 
     const image = $('arrival-image');
     image.classList.add('developing');
-    image.classList.toggle('is-inflight', finalImage === INFLIGHT_STANDBY);
+    image.classList.remove('is-inflight');
     image.src = state.sceneryUrl || finalImage;
     await new Promise((resolve) => {
       if (image.complete && image.naturalWidth > 0) { resolve(); return; }
@@ -822,8 +823,8 @@ async function doLand() {
       image.onerror = () => {
         state.sceneryUrl = null;
         image.onerror = resolve;
-        image.classList.add('is-inflight');
-        image.src = INFLIGHT_STANDBY;
+        image.classList.remove('is-inflight');
+        image.src = ARRIVAL_FALLBACK;
       };
     });
     pinLandingFrame(landingVideo);
@@ -899,9 +900,8 @@ function restart({ keepShade = false } = {}) {
   state.nextOrigin = null;
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null;
-  $('arrival-image').src = INFLIGHT_STANDBY;
-  $('arrival-image').classList.add('is-inflight');
-  $('arrival-image').classList.remove('developing');
+  $('arrival-image').src = ARRIVAL_FALLBACK;
+  $('arrival-image').classList.remove('is-inflight', 'developing');
   setInflightStandby(false);
   setScene('clouds');
   if (!keepShade) setShade('open');
