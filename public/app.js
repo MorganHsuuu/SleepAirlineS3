@@ -165,6 +165,13 @@ function applyDirection(index) {
   $('compass-degree').textContent = `${String(d.angle).padStart(3, '0')}°`;
   $('compass-name').textContent = d.name;
 }
+function applyStoredDirection(routeDirection) {
+  const index = directions.findIndex((d) => d.key === routeDirection);
+  if (index < 0) return false;
+  applyDirection(index);
+  paintNeedles(directions[index].angle, false);
+  return true;
+}
 function hideGlassPanel(id) {
   const panel = $(id);
   if (!panel) return;
@@ -316,10 +323,7 @@ async function doLogin(event) {
         researchConsentAt: new Date().toISOString(),
       });
       state.profile = { passengerId, name, groupId };
-      applyPassengerOrigin(result.passenger);
-      if (result.passenger?.status === 'in_flight') {
-        await refreshProgress();
-      }
+      await restoreNotionFlight(result);
     } else {
       state.profile = { passengerId, name, groupId };
     }
@@ -328,7 +332,7 @@ async function doLogin(event) {
     $('profile-dialog').close();
     $('profile-hint').textContent = '';
     render();
-    showToast(`歡迎登機，${name}。`);
+    if (state.stage === 'ready') showToast(`歡迎登機，${name}。`);
   } catch (error) { $('profile-hint').textContent = error.message; }
   finally { $('btn-login').disabled = false; }
 }
@@ -339,17 +343,70 @@ async function fetchBoard() {
 async function refreshProgress() {
   if (state.mode !== 'live' || !state.profile) return null;
   const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(state.profile.passengerId)}`);
-  if (data.activeFlight) {
-    state.activeFlight = data.activeFlight;
-    state.stage = 'cruise';
-    state.origin = locationFromFlight(data.activeFlight, 'departure');
-    state.takeoffAt = new Date(data.activeFlight.takeoffTime).getTime();
-    setInflightStandby(true);
-    setScene('clouds'); setShade('closed');
-    $('window-caption').textContent = '雲層上方 · 飛行中';
-    render();
-  }
+  if (data.activeFlight) adoptInFlight(data.activeFlight);
   return data;
+}
+function adoptInFlight(flight) {
+  state.activeFlight = flight;
+  state.lastFlight = null;
+  state.stage = 'cruise';
+  state.origin = locationFromFlight(flight, 'departure');
+  state.destination = null;
+  state.takeoffAt = new Date(flight.takeoffTime).getTime();
+  applyStoredDirection(flight.routeDirection);
+  setInflightStandby(true);
+  setScene('clouds');
+  setShade('closed');
+  $('window-caption').textContent = '雲層上方 · 飛行中';
+  render();
+}
+function adoptLanded(flight) {
+  const arrival = locationFromFlight(flight, 'arrival');
+  const departure = locationFromFlight(flight, 'departure');
+  state.lastFlight = flight;
+  state.activeFlight = null;
+  state.stage = 'landed';
+  state.origin = departure;
+  state.destination = arrival;
+  state.nextOrigin = arrival;
+  state.takeoffAt = null;
+  state.sceneryUrl = null;
+  applyStoredDirection(flight.routeDirection);
+  setInflightStandby(false);
+  setShade('open');
+  const image = $('arrival-image');
+  image.classList.remove('is-inflight', 'developing');
+  image.src = ARRIVAL_FALLBACK;
+  setScene('arrival');
+  $('window-caption').textContent = `已抵達 ${arrival.name}`;
+  render();
+  if (!flight.flightId || state.mode !== 'live') return;
+  void api('GET', `/api/scenery?flightId=${encodeURIComponent(flight.flightId)}`, undefined, 12000)
+    .then((data) => {
+      const url = data?.scenery?.imageUrl;
+      if (!url || state.stage !== 'landed' || state.lastFlight?.flightId !== flight.flightId) return;
+      state.sceneryUrl = url;
+      revealArrivalImage(url, true);
+    })
+    .catch(() => {});
+}
+async function restoreNotionFlight(passengerResult) {
+  const progress = await refreshProgress();
+  if (progress?.activeFlight) {
+    const headingName = directions[state.direction]?.name || '';
+    showToast(headingName ? `航班仍在飛行，航向${headingName}` : '航班仍在飛行');
+    return;
+  }
+  const landed = passengerResult?.lastLandedFlight;
+  if (landed?.arrivalLocation) {
+    adoptLanded(landed);
+    const headingName = directions[state.direction]?.name || '';
+    showToast(headingName
+      ? `上次降落在${state.destination.name}，航向${headingName}`
+      : `上次降落在${state.destination.name}`);
+    return;
+  }
+  applyPassengerOrigin(passengerResult?.passenger);
 }
 function destinationFor(direction) {
   const d = directions[direction];
@@ -987,9 +1044,23 @@ function bindShadeGesture() {
     shade.style.transform = `translateY(${clamped - height}px)`;
     return clamped;
   };
+  let armedWakeup = '';
+  const armAudio = () => {
+    window.BroadcastAudio?.primeFromUserGesture?.();
+    if (state.stage === 'cruise' && state.sound && !armedWakeup) {
+      armedWakeup = `media/${nextWakeup()}`;
+      window.BroadcastAudio?.warmWakeupBed?.(armedWakeup);
+    }
+  };
   const shadePanel = panel();
+  shadePanel.addEventListener('touchstart', (event) => {
+    if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
+    if (event.touches?.length > 1) return;
+    armAudio();
+  }, { passive: true });
   shadePanel.addEventListener('pointerdown', (event) => {
     if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
+    armAudio();
     event.preventDefault();
     pulling = true;
     const rect = glass.getBoundingClientRect();
@@ -1014,6 +1085,8 @@ function bindShadeGesture() {
       setShade('closed');
       // iOS：必須在 pointerup 手勢堆疊內解鎖 Audio／後續 HTMLAudio
       window.BroadcastAudio?.primeFromUserGesture?.();
+      window.BroadcastAudio?.stopWakeupWarmup?.();
+      armedWakeup = '';
       setTimeout(() => {
         state.shadeHold = false;
         if (again) restart({ keepShade: true });
@@ -1024,10 +1097,13 @@ function bindShadeGesture() {
     if (state.stage === 'cruise' && lip < height * 0.22) {
       setShade('open');
       window.BroadcastAudio?.primeFromUserGesture?.();
-      if (state.sound) window.BroadcastAudio?.startWakeupBed?.(`media/${nextWakeup()}`, 0.16, 2800);
+      if (state.sound) window.BroadcastAudio?.startWakeupBed?.(armedWakeup || `media/${nextWakeup()}`, 0.16, 2800);
+      armedWakeup = '';
       void doLand();
       return;
     }
+    window.BroadcastAudio?.stopWakeupWarmup?.();
+    armedWakeup = '';
     setShade(state.stage === 'cruise' ? 'closed' : 'open');
   };
   shadePanel.addEventListener('pointerup', end);
@@ -1186,8 +1262,7 @@ async function init() {
         researchConsent: true,
         researchConsentAt: new Date().toISOString(),
       });
-      applyPassengerOrigin(result.passenger);
-      await refreshProgress();
+      await restoreNotionFlight(result);
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);

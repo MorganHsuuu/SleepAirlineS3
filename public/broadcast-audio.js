@@ -513,18 +513,25 @@ let wakeupBedOpen = false;
 function startWakeupBed(url, volume = 0.14, fadeInMs = 0) {
   if (!url) return false;
   primeFromUserGesture();
-  try { if (landingAudio) { landingAudio.pause(); landingAudio.src = ''; } } catch { /* noop */ }
-  const audio = new Audio(url);
+  const audio = ensureBedAudio();
+  const same = audio.dataset.src === url;
+  if (!same) {
+    try { audio.pause(); } catch { /* noop */ }
+    audio.src = url;
+    audio.dataset.src = url;
+    try { audio.load(); } catch { /* noop */ }
+  }
   audio.loop = true;
-  audio.volume = fadeInMs > 0 ? 0 : volume;
-  audio.playsInline = true;
-  audio.preload = 'auto';
   landingAudio = audio;
   landingVolume = volume;
   wakeupBedOpen = true;
+  bedCommitted = true;
+  const from = same && !audio.paused ? audio.volume : Math.max(0.02, volume * 0.12);
+  if (audio.paused || audio.volume < 0.015) audio.volume = from;
   const played = audio.play();
   if (played && typeof played.catch === 'function') played.catch(() => {});
-  if (fadeInMs > 0) void fadeAudioVolume(audio, 0, volume, fadeInMs);
+  if (fadeInMs > 0) void fadeAudioVolume(audio, audio.volume, volume, fadeInMs);
+  else audio.volume = volume;
   return true;
 }
 
@@ -707,9 +714,81 @@ function primeAudioContextSync() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return;
   if (!audioCtx) audioCtx = new Ctx();
-  if (audioCtx.state === 'suspended') {
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     try { void audioCtx.resume(); } catch { /* noop */ }
   }
+}
+
+let webKeepAlive = null;
+
+/** Safari 在真正無聲時會把 AudioContext 暫停。維持一條聽不見的振盪，後面的 mp3 才能接著播。 */
+function startWebKeepAlive() {
+  primeAudioContextSync();
+  if (!audioCtx) return;
+  try {
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const blip = audioCtx.createBufferSource();
+    blip.buffer = buffer;
+    blip.connect(audioCtx.destination);
+    blip.start(0);
+  } catch { /* already running */ }
+  if (!webKeepAlive) {
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = 30;
+      gain.gain.value = 0.00001;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      webKeepAlive = { osc, gain };
+    } catch { /* oscillator already started */ }
+  }
+}
+
+function ensureBedAudio() {
+  let audio = document.getElementById('ceremony-bed');
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.id = 'ceremony-bed';
+    audio.loop = true;
+    audio.preload = 'auto';
+    audio.style.display = 'none';
+    markInlineAudio(audio);
+    document.body.appendChild(audio);
+  }
+  return audio;
+}
+
+let bedCommitted = false;
+
+/** 手指按下遮板時就開始播，音量先壓低。Safari 不承認之後的 pointerup。 */
+function warmWakeupBed(url) {
+  if (!url) return false;
+  primeFromUserGesture();
+  const audio = ensureBedAudio();
+  if (audio.dataset.src !== url) {
+    audio.src = url;
+    audio.dataset.src = url;
+    try { audio.load(); } catch { /* noop */ }
+  }
+  audio.loop = true;
+  audio.volume = 0.02;
+  landingAudio = audio;
+  landingVolume = 0.16;
+  wakeupBedOpen = true;
+  bedCommitted = false;
+  const played = audio.play();
+  if (played && typeof played.catch === 'function') played.catch(() => {});
+  return true;
+}
+
+function stopWakeupWarmup() {
+  if (bedCommitted) return;
+  wakeupBedOpen = false;
+  const audio = landingAudio;
+  if (!audio) return;
+  try { audio.pause(); } catch { /* noop */ }
 }
 
 function ensureKeepAliveElement() {
@@ -769,7 +848,7 @@ function speakFromGesture(text) {
 
 /** 必須同步呼叫（click / touch 當下，不可 await）— iOS 才允許後續 captain / TTS / takeoff.mp3 */
 function primeFromUserGesture() {
-  primeAudioContextSync();
+  startWebKeepAlive();
   preloadCeremonyMp3Buffers();
   const audio = ensureKeepAliveElement();
   if (!audio.paused && audio.currentTime > 0) {
@@ -1247,6 +1326,8 @@ window.BroadcastAudio = {
   stopFlightSfx,
   playLandingMusic,
   startWakeupBed,
+  warmWakeupBed,
+  stopWakeupWarmup,
   wakeupIsPlaying,
   stopLandingMusic,
   resumeLandingMusicAfterApproach,
