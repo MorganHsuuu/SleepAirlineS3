@@ -78,9 +78,13 @@ body.window-only .story,body.window-only .footer,body.window-only .window-index,
 body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;min-height:0;overflow:hidden;padding:72px 18px 12px}
 body.window-only .window-area{position:relative;z-index:1;width:100%;flex:1;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
 body.window-only .window-frame{aspect-ratio:388 / 458;width:min(86vw,calc((100dvh - 300px) * 388 / 458));height:auto;min-height:0;max-height:calc(100dvh - 300px)}
-body.window-only .dial-wrap{width:168px;height:168px;margin:0 auto 8px;touch-action:none;z-index:8}
+body.window-only .dial-cardinal.n{top:-7px}
+body.window-only .dial-cardinal.e{right:-7px}
+body.window-only .dial-cardinal.s{bottom:-7px}
+body.window-only .dial-cardinal.w{left:-7px}
 body.window-only .direction-dial{inset:11px}
 body.window-only .window-backdrop{display:none}
+body.window-only .controls{order:3;position:relative;z-index:20;flex:none;width:min(92vw,360px);margin:6px 0 0;padding:0;border:0;align-items:center}
 body.weather-focus .dial-wrap,
 body.weather-focus .direction-heading,
 body.weather-focus .direction-readout{visibility:hidden}
