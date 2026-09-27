@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#e9e8e0">
+  <meta name="theme-color" content="#101820">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="甦醒航班">
@@ -14,7 +14,7 @@
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="booting window-only">
   <div id="login-section" class="sr-only" aria-hidden="true"></div>
   <div class="app-shell" id="main-section">
     <header class="topbar">
@@ -55,16 +55,22 @@
                   </svg>
                   <div class="plane-trail" aria-hidden="true"></div>
                 </div>
-                <svg class="glass-arc" viewBox="0 0 200 86" aria-hidden="true">
-                  <path class="glass-arc-track" d="M14 74 A 92 58 0 0 1 186 74"/>
-                  <path class="glass-arc-draw" id="glass-arc-draw" d="M14 74 A 92 58 0 0 1 186 74"/>
-                </svg>
-                <p class="glass-kicker">YOUR FLIGHT</p>
-                <p class="glass-time" id="glass-time">—</p>
-                <p class="glass-to" id="glass-to">前往</p>
-                <p class="glass-meta" id="glass-meta"></p>
-                <span class="glass-pin from" id="glass-pin-from"></span>
-                <span class="glass-pin to" id="glass-pin-to"></span>
+                <div class="glass-board">
+                  <div class="glass-arc-slot">
+                    <svg class="glass-arc" viewBox="6 34 188 46" aria-hidden="true">
+                      <path class="glass-arc-track" d="M14 74 A 92 58 0 0 1 186 74"/>
+                      <path class="glass-arc-draw" id="glass-arc-draw" d="M14 74 A 92 58 0 0 1 186 74"/>
+                    </svg>
+                    <span class="glass-pin from" id="glass-pin-from"></span>
+                    <span class="glass-pin to" id="glass-pin-to"></span>
+                    <div class="glass-copy">
+                      <p class="glass-kicker">YOUR FLIGHT</p>
+                      <p class="glass-time" id="glass-time">—</p>
+                      <p class="glass-to" id="glass-to">前往</p>
+                      <p class="glass-meta" id="glass-meta"></p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="glass-compass" id="glass-compass" hidden>
                 <div class="glass-mist"></div>

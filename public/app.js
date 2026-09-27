@@ -384,19 +384,35 @@ function adoptLanded(flight) {
   setScene('arrival');
   $('window-caption').textContent = `已抵達 ${arrival.name}`;
   render();
-  if (!flight.flightId || state.mode !== 'live') return;
-  void api('GET', `/api/scenery?flightId=${encodeURIComponent(flight.flightId)}`, undefined, 12000)
-    .then((data) => {
-      const url = data?.scenery?.imageUrl;
-      if (!url || state.stage !== 'landed' || state.lastFlight?.flightId !== flight.flightId) return;
-      state.sceneryUrl = url;
-      revealArrivalImage(url, true);
-    })
-    .catch(() => {});
+}
+function whenImageReady(img) {
+  if (!img || (img.complete && img.naturalWidth)) return Promise.resolve();
+  return new Promise((resolve) => {
+    img.addEventListener('load', resolve, { once: true });
+    img.addEventListener('error', resolve, { once: true });
+  });
+}
+async function applyStoredScenery(flight) {
+  if (!flight?.flightId || state.mode !== 'live') return;
+  try {
+    const data = await api('GET', `/api/scenery?flightId=${encodeURIComponent(flight.flightId)}`, undefined, 4000);
+    const url = data?.scenery?.imageUrl;
+    if (!url || state.stage !== 'landed' || state.lastFlight?.flightId !== flight.flightId) return;
+    state.sceneryUrl = url;
+    const image = $('arrival-image');
+    image.classList.remove('is-inflight', 'developing');
+    const current = image.currentSrc || image.src;
+    if (!current.endsWith(url)) {
+      image.src = url;
+      await Promise.race([whenImageReady(image), delay(2500)]);
+    }
+    setScene('arrival');
+  } catch { /* keep the standby arrival photo */ }
 }
 async function restoreNotionFlight(passengerResult) {
   const progress = await refreshProgress();
   if (progress?.activeFlight) {
+    await Promise.race([whenImageReady($('cloud-image')), delay(1800)]);
     const headingName = directions[state.direction]?.name || '';
     showToast(headingName ? `航班仍在飛行，航向${headingName}` : '航班仍在飛行');
     return;
@@ -405,13 +421,19 @@ async function restoreNotionFlight(passengerResult) {
   if (landed?.arrivalLocation) {
     adoptLanded(landed);
     const place = state.destination;
-    void loadWeather(place).then((weather) => {
-      if (state.stage !== 'landed' || state.destination?.name !== place?.name) return;
-      return showWeatherCard(place, weather, { kicker: '上次降落' });
-    }).catch(() => {});
+    const [weather] = await Promise.all([
+      loadWeather(place).catch(() => null),
+      applyStoredScenery(landed),
+    ]);
+    if (weather && state.stage === 'landed' && state.destination?.name === place?.name) {
+      void showWeatherCard(place, weather, { kicker: '上次降落' });
+    }
     return;
   }
   applyPassengerOrigin(passengerResult?.passenger);
+}
+function revealApp() {
+  document.body.classList.remove('booting');
 }
 function destinationFor(direction) {
   const d = directions[direction];
@@ -618,8 +640,8 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   const panel = $('glass-route');
   const glass = $('window-glass');
   $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
-  $('glass-to').textContent = `to ${to}`;
-  $('glass-meta').textContent = `${formatFlightSpan(minutes)} · ${from}`;
+  $('glass-to').textContent = '';
+  $('glass-meta').textContent = formatFlightSpan(minutes);
   $('glass-pin-from').textContent = from;
   $('glass-pin-to').textContent = to;
   hideGlassPanel('glass-compass');
@@ -803,7 +825,7 @@ async function doLand() {
     }
     $('to-city').textContent = state.destination.name;
     $('to-code').textContent = state.destination.code;
-    $('glass-to').textContent = `to ${state.destination.name}`;
+    $('glass-to').textContent = '';
     $('glass-pin-from').textContent = state.origin.name;
     $('glass-pin-to').textContent = state.destination.name;
     const weatherJob = loadWeather(state.destination);
@@ -818,7 +840,7 @@ async function doLand() {
     const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
     $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
-    $('glass-meta').textContent = `${formatFlightSpan(minutes)} · ${state.origin.name}`;
+    $('glass-meta').textContent = formatFlightSpan(minutes);
     await routeVisual;
     let approachPlayed = false;
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
@@ -1234,8 +1256,7 @@ async function init() {
     } catch { state.mode = 'preview'; }
   }
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
-  const windowOnly = localStorage.getItem('sleepAirlineS3WindowOnly') !== '0';
-  applyWindowOnly(windowOnly);
+  applyWindowOnly(true);
   window.addEventListener('wheel', (event) => { if (event.ctrlKey) event.preventDefault(); }, { passive: false });
   window.addEventListener('gesturestart', (event) => event.preventDefault());
   $('view-toggle').addEventListener('click', () => applyWindowOnly(!document.body.classList.contains('window-only')));
@@ -1271,6 +1292,9 @@ async function init() {
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
+  const opening = document.querySelector('.scene-image.visible');
+  if (opening && !opening.complete) await Promise.race([whenImageReady(opening), delay(1800)]);
   render();
+  revealApp();
 }
-void init();
+void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
