@@ -186,15 +186,19 @@ function showCompass() {
   $('compass-name').textContent = d.name;
   $('compass-needle').style.transform = `translate(-50%,-100%) rotate(${heading}deg)`;
   const panel = $('glass-compass');
+  const already = !panel.hidden && panel.classList.contains('is-on') && !panel.classList.contains('is-leaving');
   panel.hidden = false;
   panel.classList.remove('is-leaving');
-  void panel.offsetWidth;
-  panel.classList.add('is-on');
+  if (!already) {
+    panel.classList.remove('is-on');
+    void panel.offsetWidth;
+    panel.classList.add('is-on');
+  }
   clearTimeout(compassTimer);
   compassTimer = setTimeout(() => {
     panel.classList.add('is-leaving');
-    compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 700);
-  }, 1600);
+    compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 1300);
+  }, 1800);
 }
 function dialCanTurn() {
   if (state.sleepDial) return true;
@@ -400,10 +404,11 @@ async function restoreNotionFlight(passengerResult) {
   const landed = passengerResult?.lastLandedFlight;
   if (landed?.arrivalLocation) {
     adoptLanded(landed);
-    const headingName = directions[state.direction]?.name || '';
-    showToast(headingName
-      ? `上次降落在${state.destination.name}，航向${headingName}`
-      : `上次降落在${state.destination.name}`);
+    const place = state.destination;
+    void loadWeather(place).then((weather) => {
+      if (state.stage !== 'landed' || state.destination?.name !== place?.name) return;
+      return showWeatherCard(place, weather, { kicker: '上次降落' });
+    }).catch(() => {});
     return;
   }
   applyPassengerOrigin(passengerResult?.passenger);
@@ -699,12 +704,12 @@ function helloForPlace(place) {
   const iso = countryIsoMap?.[key] || '';
   return HELLO_BY_ISO[iso] || 'Hello';
 }
-function showWeatherCard(place, weather) {
+function showWeatherCard(place, weather, { kicker } = {}) {
   hideGlassPanel('glass-compass');
   document.body.classList.add('weather-focus');
   if ($('wx-temp')) $('wx-temp').textContent = String(weather.temp);
   if ($('wx-city')) $('wx-city').textContent = place.name;
-  if ($('wx-place')) $('wx-place').textContent = place.country || '';
+  if ($('wx-place')) $('wx-place').textContent = kicker || place.country || '';
   if ($('wx-hello')) $('wx-hello').textContent = helloForPlace(place);
   if ($('wx-icon')) $('wx-icon').dataset.kind = weather.kind;
   const panel = $('glass-weather');
