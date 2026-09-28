@@ -186,19 +186,21 @@ function showCompass() {
   $('compass-name').textContent = d.name;
   $('compass-needle').style.transform = `translate(-50%,-100%) rotate(${heading}deg)`;
   const panel = $('glass-compass');
-  const already = !panel.hidden && panel.classList.contains('is-on') && !panel.classList.contains('is-leaving');
+  const visible = !panel.hidden;
   panel.hidden = false;
-  panel.classList.remove('is-leaving');
-  if (!already) {
-    panel.classList.remove('is-on');
+  if (!visible) {
+    panel.classList.remove('is-on', 'is-leaving');
     void panel.offsetWidth;
-    panel.classList.add('is-on');
+  } else {
+    panel.classList.remove('is-leaving');
   }
+  panel.classList.add('is-on');
   clearTimeout(compassTimer);
   compassTimer = setTimeout(() => {
+    if (panel.hidden) return;
     panel.classList.add('is-leaving');
-    compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 1300);
-  }, 1800);
+    compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 2900);
+  }, 2400);
 }
 function dialCanTurn() {
   if (state.sleepDial) return true;
