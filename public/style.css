@@ -79,7 +79,7 @@ body.window-only .story,body.window-only .footer,body.window-only .window-index,
 body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100svh;min-height:0;overflow:hidden;padding:max(60px,calc(env(safe-area-inset-top) + 8px)) 14px max(8px,env(safe-area-inset-bottom))}
 body.window-only .window-area{position:relative;z-index:1;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
 body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc((100svh - 280px) * 388 / 458));height:auto;min-height:0;max-height:calc(100svh - 260px)}
-.leg-strip{position:absolute;z-index:7;left:50%;bottom:16%;width:min(74%,280px);translate:-50% 0;display:none;grid-template-columns:minmax(0,1fr) minmax(64px,1.35fr) minmax(0,1fr);align-items:center;column-gap:2.4cqi;color:#fff;pointer-events:none;text-shadow:0 1px 8px rgba(8,20,32,.55)}
+.leg-strip{position:absolute;z-index:3;left:50%;bottom:8%;width:min(68%,240px);translate:-50% 0;display:none;grid-template-columns:minmax(0,1fr) minmax(64px,1.35fr) minmax(0,1fr);align-items:center;column-gap:2.4cqi;color:#fff;pointer-events:none;text-shadow:0 1px 8px rgba(8,20,32,.55)}
 .leg-strip.is-route{display:grid}
 .leg-strip[hidden]{display:none}
 .leg-place{font-family:'Noto Serif TC','Songti TC',serif;font-size:4.2cqi;letter-spacing:.06em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -180,7 +180,7 @@ body.window-only .text-button{color:#f4f7f2;border-bottom-color:rgba(244,247,242
 .glass-compass.is-on .glass-kicker{animation:rise 1s cubic-bezier(.42,.02,.18,1) .15s forwards}
 .glass-compass.is-on .glass-time{animation:rise 1.1s cubic-bezier(.42,.02,.18,1) .3s forwards}
 .glass-compass.is-on .glass-to{animation:rise 1.1s cubic-bezier(.42,.02,.18,1) .48s forwards}
-.glass-weather{opacity:0}
+.glass-weather{opacity:0;padding-bottom:20cqh}
 .glass-weather.is-on{animation:glass-in 1.4s cubic-bezier(.42,.02,.18,1) forwards}
 .glass-weather.is-leaving{animation:glass-leave 1.4s cubic-bezier(.45,.05,.2,1) forwards}
 .wx-plate{position:relative;z-index:1;display:grid;justify-items:center}
