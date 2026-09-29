@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { openAiApiKey } from './openai-env';
 
 export interface SceneryGenerationResult {
   imageBuffer: Buffer;
@@ -189,10 +190,11 @@ export async function generateLandingScenery(
   flightId: string,
   context: SceneryPromptContext = {}
 ): Promise<SceneryGenerationResult | null> {
-  if (!process.env.OPENAI_API_KEY) return null;
+  const apiKey = openAiApiKey();
+  if (!apiKey) return null;
 
   const imagePrompt = buildSceneryPrompt(city, country, displayName, context);
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_IMAGE_MODEL ?? DEFAULT_SCENERY_IMAGE_MODEL;
   const useGptImage = isGptImageModel(model);
 

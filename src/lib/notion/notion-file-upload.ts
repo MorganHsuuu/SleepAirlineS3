@@ -50,6 +50,31 @@ export async function uploadImageToNotion(
   return uploadId;
 }
 
+/** 把已上傳的檔案掛到頁面的 Files 欄。file upload 需要較新的 Notion API。 */
+export async function attachFileUploadToProperty(
+  pageId: string,
+  propertyName: string,
+  fileUploadId: string,
+  filename: string
+): Promise<void> {
+  const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+    method: 'PATCH',
+    headers: {
+      ...notionHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      properties: {
+        [propertyName]: wFileUpload(fileUploadId, filename),
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Notion attach file failed: ${res.status} ${await res.text()}`);
+  }
+}
+
 export function wFileUpload(fileUploadId: string, name: string) {
   return {
     files: [{

@@ -79,6 +79,21 @@ body.window-only .story,body.window-only .footer,body.window-only .window-index,
 body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100svh;min-height:0;overflow:hidden;padding:max(60px,calc(env(safe-area-inset-top) + 8px)) 14px max(8px,env(safe-area-inset-bottom))}
 body.window-only .window-area{position:relative;z-index:1;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
 body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc((100svh - 280px) * 388 / 458));height:auto;min-height:0;max-height:calc(100svh - 260px)}
+.leg-strip{position:absolute;z-index:7;left:50%;bottom:16%;width:min(74%,280px);translate:-50% 0;display:none;grid-template-columns:minmax(0,1fr) minmax(64px,1.35fr) minmax(0,1fr);align-items:center;column-gap:2.4cqi;color:#fff;pointer-events:none;text-shadow:0 1px 8px rgba(8,20,32,.55)}
+.leg-strip.is-route{display:grid}
+.leg-strip[hidden]{display:none}
+.leg-place{font-family:'Noto Serif TC','Songti TC',serif;font-size:4.2cqi;letter-spacing:.06em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leg-place.from{text-align:right}
+.leg-place.to{text-align:left}
+.leg-track{position:relative;height:4.6cqi}
+.leg-line{position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.28),rgba(255,255,255,.95),rgba(255,255,255,.28))}
+.leg-line:before,.leg-line:after{content:'';position:absolute;top:50%;width:1.3cqi;height:1.3cqi;border-radius:50%;background:#fff;translate:0 -50%;box-shadow:0 0 0 .7cqi rgba(255,255,255,.2)}
+.leg-line:before{left:0}
+.leg-line:after{right:0}
+.leg-plane{position:absolute;top:50%;left:0;width:4.6cqi;height:2.3cqi;color:#fff;translate:0 -50%;filter:drop-shadow(0 0 4px rgba(255,255,255,.5));z-index:1}
+.leg-strip.is-flying .leg-plane{animation:leg-fly 3.2s linear infinite}
+.leg-strip.is-landed .leg-plane{left:calc(100% - 4.6cqi)}
+@keyframes leg-fly{0%{left:0;opacity:.4}10%{opacity:1}90%{opacity:1}100%{left:calc(100% - 4.6cqi);opacity:.4}}
 body.window-only .dial-cardinal.n{top:-7px}
 body.window-only .dial-cardinal.e{right:-7px}
 body.window-only .dial-cardinal.s{bottom:-7px}
@@ -190,15 +205,16 @@ body.window-only .text-button{color:#f4f7f2;border-bottom-color:rgba(244,247,242
 .wx-place{font-size:2.8cqw}
 .app-shell{transition:opacity .4s ease}
 body.booting .app-shell{opacity:0;pointer-events:none}
-.glass-board{position:absolute;z-index:1;left:50%;top:47%;width:min(92%,78cqh);translate:-50% -50%}
+.glass-board{position:absolute;z-index:1;left:50%;top:42%;width:min(92%,78cqh);translate:-50% -50%}
 .glass-arc-slot{position:relative;width:100%;container-type:inline-size}
 .glass-board .glass-arc{position:relative;left:auto;right:auto;top:auto;width:100%;height:auto;aspect-ratio:188 / 46;display:block}
-.glass-copy{position:absolute;left:50%;top:18%;translate:-50% 0;display:grid;justify-items:center;gap:2.4cqi;width:max-content}
+.glass-route,.glass-route *{-webkit-user-select:none;user-select:none}
+.glass-copy{position:absolute;left:50%;top:108%;translate:-50% 0;display:grid;justify-items:center;gap:4.8cqi;width:max-content}
 .glass-copy .glass-kicker,.glass-copy .glass-time,.glass-copy .glass-to,.glass-copy .glass-meta{position:static;margin:0;transform:none;white-space:nowrap}
 .glass-copy .glass-kicker{font-size:2.7cqi;letter-spacing:.24em;line-height:1}
 .glass-copy .glass-time{font-size:11cqi;line-height:.9;letter-spacing:.01em}
 .glass-copy .glass-meta{font-size:3.5cqi;letter-spacing:.04em;line-height:1.1}
-.glass-board .glass-pin{top:calc(87% + max(5px, 2.1cqi));left:4.3%;right:auto;max-width:34%;overflow:hidden;text-overflow:ellipsis;padding-top:1.7cqi;font-size:3.5cqi;line-height:1.15;text-align:center;white-space:nowrap;translate:-50% 0;transform:none}
+.glass-board .glass-pin{top:calc(87% + max(5px, 2.1cqi));left:4.3%;right:auto;max-width:34%;overflow:hidden;text-overflow:ellipsis;padding-top:3.2cqi;font-size:3.5cqi;line-height:1.15;text-align:center;white-space:nowrap;translate:-50% 0;transform:none}
 .glass-board .glass-pin.to{left:95.7%}
 .glass-board .glass-pin:before{top:0;width:1.55cqi;height:1.55cqi;transform:none;translate:-50% -50%;box-shadow:0 0 0 .55cqi rgba(255,255,255,.22)}
 @keyframes route-pin-in{to{opacity:1}}

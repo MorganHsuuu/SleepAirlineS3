@@ -17,6 +17,7 @@ import { findArrivalDestination } from './src/lib/flight/direction';
 import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-context';
 import { resolveGroupSocialCue } from './src/lib/flight/social';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
+import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech } from './src/lib/ai/speech';
 import { generateSocialTakeaway, fallbackSocialTakeaway } from './src/lib/ai/social-takeaway';
 import type { SocialTakeawayInput } from './src/lib/ai/social-takeaway';
@@ -81,7 +82,7 @@ async function generateSpeechWithBudget(
   text: string,
   style: BroadcastStyle
 ): Promise<string | null> {
-  if (!process.env.OPENAI_API_KEY || !text?.trim()) return null;
+  if (!openAiApiKey() || !text?.trim()) return null;
   try {
     return await withTimeout(
       generateBroadcastSpeech(text.trim(), style).then((buf) => buf.toString('base64')),
@@ -133,7 +134,7 @@ function logReminderCleanup(err: unknown) {
 app.get('/api/config', async (_req, res) => {
   try {
     const status = await getDataModeStatus();
-    res.json({ ...status, openaiReady: Boolean(process.env.OPENAI_API_KEY) });
+    res.json({ ...status, openaiReady: Boolean(openAiApiKey()) });
   } catch (err) {
     res.status(500).json({ error: formatNotionError(err) });
   }

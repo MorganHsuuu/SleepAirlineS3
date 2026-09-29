@@ -17,8 +17,10 @@ import {
   wUrl,
 } from './client';
 import { resolveLandscapeDbId } from './ensure-landscape-db';
-import { uploadImageToNotion, wFileUpload } from './notion-file-upload';
+import { attachFileUploadToProperty, uploadImageToNotion, wFileUpload } from './notion-file-upload';
+import { getFlightByFlightId } from './flight-lookup';
 import {
+  getDashboardPropertyTypes,
   getLandscapePropertyNames,
   getLandscapePropertyTypes,
   pickExistingProperties,
@@ -60,8 +62,82 @@ function wGroupId(value: string, type: string | undefined) {
   return wSelect(value);
 }
 
+const LEGACY_SCENERY_URL = 'Image URL';
+const FLIGHT_MEDIA_PROP = 'Files & media';
+
+function listUrlProperties(types: Map<string, string>): string[] {
+  return [...types.entries()].filter(([, type]) => type === 'url').map(([name]) => name);
+}
+
+function urlFieldScore(name: string): number {
+  if (/風景|圖片|生圖|scenery|image|photo|landing/i.test(name)) return 2;
+  if (/url/i.test(name)) return 1;
+  return 0;
+}
+
+/**
+ * 只選一個 URL 欄。風景庫裡另外加的欄優先於原本的 Image URL；
+ * 風景庫沒有新欄時，改寫航班紀錄上使用者加的 URL 欄。
+ */
+function chooseSceneryUrlField(
+  sceneryTypes: Map<string, string>,
+  flightTypes: Map<string, string>
+): { database: 'scenery' | 'flight'; name: string } | null {
+  const addedOnScenery = listUrlProperties(sceneryTypes).filter((name) => name !== LEGACY_SCENERY_URL);
+  if (addedOnScenery.length) {
+    const [name] = [...addedOnScenery].sort((a, b) => urlFieldScore(b) - urlFieldScore(a));
+    return { database: 'scenery', name };
+  }
+
+  const flightUrls = listUrlProperties(flightTypes);
+  if (flightUrls.length) {
+    const [name] = [...flightUrls].sort((a, b) => urlFieldScore(b) - urlFieldScore(a));
+    return { database: 'flight', name };
+  }
+
+  if (sceneryTypes.get(LEGACY_SCENERY_URL) === 'url') {
+    return { database: 'scenery', name: LEGACY_SCENERY_URL };
+  }
+  return null;
+}
+
+function readPropertyFileUrl(prop: unknown): string {
+  const files = (prop as { files?: Array<{ type?: string; file?: { url?: string }; external?: { url?: string } }> })?.files;
+  const file = files?.[0];
+  if (!file) return '';
+  if (file.type === 'file' && file.file?.url) return file.file.url;
+  if (file.type === 'external' && file.external?.url) return file.external.url;
+  return '';
+}
+
 function resolveImageUrl(props: Record<string, unknown>): string {
-  return readFirstFileUrl(props, 'Image') || readUrl(props, 'Image URL');
+  const namedFile = readFirstFileUrl(props, 'Image');
+  if (namedFile) return namedFile;
+
+  for (const prop of Object.values(props)) {
+    const typed = prop as { type?: string };
+    if (typed?.type === 'files') {
+      const url = readPropertyFileUrl(prop);
+      if (url) return url;
+    }
+  }
+
+  const named = readUrl(props, LEGACY_SCENERY_URL);
+  if (named) return named;
+
+  for (const prop of Object.values(props)) {
+    const typed = prop as { type?: string; url?: string | null };
+    if (typed?.type === 'url' && typed.url) return typed.url;
+  }
+  return '';
+}
+
+function filesPropertyName(types: Map<string, string>): string | null {
+  if (types.get('Image') === 'files') return 'Image';
+  for (const [name, type] of types) {
+    if (type === 'files') return name;
+  }
+  return null;
 }
 
 function parseLandscape(page: Record<string, unknown>): LandingScenery {
@@ -125,11 +201,50 @@ export async function saveLandingScenery(params: {
   );
 
   const client = getNotionClient();
+  const flightTypes = await getDashboardPropertyTypes();
+  if (flightTypes.get(FLIGHT_MEDIA_PROP) === 'files') {
+    const flight = await getFlightByFlightId(params.flightId);
+    if (!flight?.notionId) {
+      console.error(`[scenery] ${params.flightId} 找不到航班列，無法寫入 ${FLIGHT_MEDIA_PROP}`);
+      return null;
+    }
+    await attachFileUploadToProperty(
+      flight.notionId,
+      FLIGHT_MEDIA_PROP,
+      fileUploadId,
+      params.filename
+    );
+    const freshFlight = await client.pages.retrieve({ page_id: flight.notionId });
+    const imageUrl = readFirstFileUrl(
+      (freshFlight as { properties?: Record<string, unknown> }).properties ?? {},
+      FLIGHT_MEDIA_PROP
+    );
+    if (!imageUrl) {
+      console.error(`[scenery] ${params.flightId} ${FLIGHT_MEDIA_PROP} 沒有讀到圖片`);
+      return null;
+    }
+    return {
+      notionId: flight.notionId,
+      entryId,
+      flightId: params.flightId,
+      passengerId: params.passengerId,
+      passengerName: params.passengerName,
+      groupId: params.groupId,
+      arrivalLocation: params.arrivalLocation,
+      country: params.country,
+      imageUrl,
+      imagePrompt: params.imagePrompt,
+      landingTime: params.landingTime,
+      createdAt: now,
+    };
+  }
+
   const dbId = await resolveLandscapeDbId();
   const allowed = await getLandscapePropertyNames();
   const types = await getLandscapePropertyTypes();
+  const filesProp = filesPropertyName(types);
 
-  const fullProperties = {
+  const fullProperties: Record<string, unknown> = {
       'Entry ID': wTitle(entryId),
       'Flight ID': wText(params.flightId),
       'Passenger ID': wText(params.passengerId),
@@ -137,11 +252,11 @@ export async function saveLandingScenery(params: {
       'Group ID': wGroupId(params.groupId, types.get('Group ID')),
       'Arrival Location': wText(params.arrivalLocation),
       'Country': wText(params.country),
-      'Image': wFileUpload(fileUploadId, params.filename),
       'Image Prompt': wText(toNotionImagePrompt(params.imagePrompt)),
       'Landing Time': wDate(params.landingTime),
       'Created At': wDate(now),
   };
+  if (filesProp) fullProperties[filesProp] = wFileUpload(fileUploadId, params.filename);
 
   const page = await client.pages.create({
     parent: { database_id: dbId },
@@ -152,16 +267,59 @@ export async function saveLandingScenery(params: {
   const fresh = await client.pages.retrieve({ page_id: page.id });
   const props = (fresh as { properties: Record<string, unknown> }).properties;
   const imageUrl = resolveImageUrl(props);
+  if (!imageUrl) {
+    console.error('[scenery] 圖片已上傳，但資料庫沒有檔案欄可掛上，URL 欄寫不進去');
+  }
+  const target = chooseSceneryUrlField(types, await getDashboardPropertyTypes());
 
-  if (imageUrl && allowed.has('Image URL')) {
+  if (imageUrl && target?.database === 'scenery' && allowed.has(target.name)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await client.pages.update({
       page_id: page.id,
-      properties: { 'Image URL': wUrl(imageUrl) } as any,
+      properties: { [target.name]: wUrl(imageUrl) } as any,
     });
+  } else if (imageUrl && target?.database === 'flight') {
+    const flight = await getFlightByFlightId(params.flightId);
+    if (flight?.notionId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await client.pages.update({
+        page_id: flight.notionId,
+        properties: { [target.name]: wUrl(imageUrl) } as any,
+      });
+    }
   }
 
-  return parseLandscape(fresh as unknown as Record<string, unknown>);
+  const saved = parseLandscape(fresh as unknown as Record<string, unknown>);
+  if (!saved.imageUrl && imageUrl) saved.imageUrl = imageUrl;
+  return saved;
+}
+
+async function readFlightMedia(flightId: string): Promise<LandingScenery | null> {
+  const types = await getDashboardPropertyTypes();
+  if (types.get(FLIGHT_MEDIA_PROP) !== 'files') return null;
+  const flight = await getFlightByFlightId(flightId);
+  if (!flight?.notionId) return null;
+  const client = getNotionClient();
+  const page = await client.pages.retrieve({ page_id: flight.notionId });
+  const imageUrl = readFirstFileUrl(
+    (page as { properties?: Record<string, unknown> }).properties ?? {},
+    FLIGHT_MEDIA_PROP
+  );
+  if (!imageUrl) return null;
+  return {
+    notionId: flight.notionId,
+    entryId: `SC-${flight.flightId}`,
+    flightId: flight.flightId,
+    passengerId: flight.passengerId,
+    passengerName: flight.passengerName,
+    groupId: flight.groupId,
+    arrivalLocation: flight.arrivalLocation ?? '',
+    country: '',
+    imageUrl,
+    imagePrompt: '',
+    landingTime: flight.landingTime,
+    createdAt: flight.createdAt,
+  };
 }
 
 export async function getLandscapeByFlightId(flightId: string): Promise<LandingScenery | null> {
@@ -170,6 +328,12 @@ export async function getLandscapeByFlightId(flightId: string): Promise<LandingS
   if (!isNotionConfigured()) {
     return mem.find((r) => r.flightId === flightId) ?? null;
   }
+
+  const fromFlight = await readFlightMedia(flightId);
+  if (fromFlight) return fromFlight;
+
+  const sceneryProps = await getLandscapePropertyNames();
+  if (!sceneryProps.has('Flight ID')) return null;
 
   const client = getNotionClient();
   const dbId = await resolveLandscapeDbId();
@@ -189,5 +353,18 @@ export async function getLandscapeByFlightId(flightId: string): Promise<LandingS
   if (parsed.imageUrl) return parsed;
 
   const fresh = await client.pages.retrieve({ page_id: result.results[0].id });
-  return parseLandscape(fresh as unknown as Record<string, unknown>);
+  const refreshed = parseLandscape(fresh as unknown as Record<string, unknown>);
+  if (refreshed.imageUrl) return refreshed;
+
+  const flightTypes = await getDashboardPropertyTypes();
+  const target = chooseSceneryUrlField(await getLandscapePropertyTypes(), flightTypes);
+  if (target?.database !== 'flight') return refreshed;
+
+  const flight = await getFlightByFlightId(flightId);
+  if (!flight?.notionId) return refreshed;
+  const flightPage = await client.pages.retrieve({ page_id: flight.notionId });
+  const flightProps = (flightPage as { properties?: Record<string, unknown> }).properties ?? {};
+  const flightUrl = readUrl(flightProps, target.name);
+  if (!flightUrl) return refreshed;
+  return { ...refreshed, imageUrl: flightUrl };
 }

@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { backfillSceneryForFlights } from '../src/lib/notion/scenery-backfill';
+import { openAiApiKey } from '../src/lib/ai/openai-env';
 
 async function main() {
   const flightIds = process.argv.slice(2);
@@ -15,7 +16,7 @@ async function main() {
     console.error('Usage: npx tsx scripts/backfill-scenery.ts <Flight ID> [...]');
     process.exit(1);
   }
-  if (!process.env.NOTION_API_KEY || !process.env.OPENAI_API_KEY) {
+  if (!process.env.NOTION_API_KEY || !openAiApiKey()) {
     console.error('❌ 請在 .env.local 設定 NOTION_API_KEY 與 OPENAI_API_KEY');
     process.exit(1);
   }

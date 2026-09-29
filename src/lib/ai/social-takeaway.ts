@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { openAiApiKey } from './openai-env';
 import type { SocialCue } from '../../types';
 
 /**
@@ -194,11 +195,12 @@ const SYSTEM_PROMPT = `你是「甦醒航班 Sleep Airline」的社交語音短�
 
 export async function generateSocialTakeaway(input: SocialTakeawayInput): Promise<string> {
   const groupSummary = input.groupSummary ?? input.socialCue.groupSummary ?? null;
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = openAiApiKey();
+  if (!apiKey) {
     return fallbackSocialTakeaway({ ...input, groupSummary });
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   const direction = DIRECTION_LABEL[input.routeDirection] ?? input.routeDirection;
   const related = relatedTeammateName(input);

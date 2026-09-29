@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { openAiApiKey } from './openai-env';
 import type { SocialCueCandidate } from '../flight/social-candidates';
 
 const DIRECTION_LABEL: Record<string, string> = {
@@ -79,11 +80,12 @@ export async function generateSocialCueText(
   candidate: SocialCueCandidate,
   phase: 'takeoff' | 'landing' = 'landing'
 ): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = openAiApiKey();
+  if (!apiKey) {
     return fallbackSocialCueText(candidate);
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   const isTakeoff = phase === 'takeoff';
 

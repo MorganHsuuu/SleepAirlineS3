@@ -164,6 +164,23 @@ function applyDirection(index) {
   $('direction-dial').setAttribute('aria-valuetext', d.name);
   $('compass-degree').textContent = `${String(d.angle).padStart(3, '0')}°`;
   $('compass-name').textContent = d.name;
+  paintLeg();
+}
+function paintLeg() {
+  const from = $('leg-from');
+  const to = $('leg-to');
+  const strip = $('leg-strip');
+  if (!from || !to || !strip) return;
+  const place = state.destination?.name || '';
+  const headingOn = !$('glass-compass')?.hidden;
+  from.textContent = state.origin?.name || '';
+  to.textContent = place;
+  const show = !!place && !headingOn;
+  const flying = show && (state.stage === 'takeoff' || state.stage === 'cruise' || state.stage === 'landing');
+  strip.classList.toggle('is-route', show);
+  strip.hidden = !show;
+  strip.classList.toggle('is-flying', flying);
+  strip.classList.toggle('is-landed', show && state.stage === 'landed');
 }
 function applyStoredDirection(routeDirection) {
   const index = directions.findIndex((d) => d.key === routeDirection);
@@ -177,6 +194,7 @@ function hideGlassPanel(id) {
   if (!panel) return;
   panel.classList.remove('is-on', 'is-leaving', 'is-ask', 'is-ring', 'beat-blur', 'beat-climb', 'beat-arc');
   panel.hidden = true;
+  if (id === 'glass-compass') paintLeg();
 }
 function showCompass() {
   const weather = $('glass-weather');
@@ -195,6 +213,7 @@ function showCompass() {
     panel.classList.remove('is-leaving');
   }
   panel.classList.add('is-on');
+  paintLeg();
   clearTimeout(compassTimer);
   compassTimer = setTimeout(() => {
     if (panel.hidden) return;
@@ -230,6 +249,7 @@ function render() {
   $('from-code').textContent = state.origin.code;
   $('to-city').textContent = state.destination?.name || '未知的遠方';
   $('to-code').textContent = state.destination?.code || '???';
+  paintLeg();
   const labels = {
     ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],
     takeoff: ['正在起飛', '機長廣播中。窗外的故事即將開始。', 'TAKEOFF', '起飛中', 'DEPARTING'],
@@ -641,6 +661,7 @@ function formatFlightSpan(minutes) {
 function playGlassRoute({ minutes, distanceKm, from, to }) {
   const panel = $('glass-route');
   const glass = $('window-glass');
+  window.getSelection?.()?.removeAllRanges();
   $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
   $('glass-to').textContent = '';
   $('glass-meta').textContent = formatFlightSpan(minutes);
@@ -830,6 +851,7 @@ async function doLand() {
     $('glass-to').textContent = '';
     $('glass-pin-from').textContent = state.origin.name;
     $('glass-pin-to').textContent = state.destination.name;
+    paintLeg();
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { SocialCue } from '../../types';
 import type { LocalContext } from '../flight/local-context';
@@ -257,12 +258,13 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 }
 
 export async function generateCaptainBroadcast(input: BroadcastInput): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = openAiApiKey();
+  if (!apiKey) {
     throw new Error('OPENAI_API_KEY 尚未設定。');
   }
 
   const locale = normalizeLocale(input.locale);
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   const isTakeoff = input.phase === 'takeoff';
   const pax = passengerLabel(input.passengerName, locale);

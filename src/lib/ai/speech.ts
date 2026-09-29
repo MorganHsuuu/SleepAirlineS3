@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { BroadcastStyle } from '../../types';
+import { openAiApiKey } from './openai-env';
 
 type OpenAIVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 
@@ -16,11 +17,12 @@ export async function generateBroadcastSpeech(
   text: string,
   style?: BroadcastStyle
 ): Promise<Buffer> {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = openAiApiKey();
+  if (!apiKey) {
     throw new Error('OPENAI_API_KEY 尚未設定。');
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_TTS_MODEL ?? 'tts-1';
   const envVoice = process.env.OPENAI_TTS_VOICE as OpenAIVoice | undefined;
   const voice = (style && VOICE_BY_STYLE[style]) || envVoice || 'onyx';
