@@ -201,9 +201,9 @@ export async function generateLandingScenery(
     ? [
         aligned,
         `The scene is the view just outside an airplane window after landing in ${place}.`,
-        `Keep the same place, the same morning detail, and the same calm atmosphere as the narration.`,
-        `Everyday destination scene, soft natural light, realistic, welcoming, low visual stimulation.`,
-        `Do not swap in a famous landmark unless the prompt above already names that exact place.`,
+        `Keep the same place, the same cultural detail, and the same weather as the narration.`,
+        `Make that local cultural character the dominant subject: architecture, materials, street life, food, transport, or landscape that belongs to this exact place.`,
+        `Do not replace it with a generic suburb or with a landmark from a different city.`,
         `Absolutely no text, letters, numbers, signs, logos, or watermarks.`,
         `No close-up faces. No dark, gloomy, empty, or threatening mood.`,
       ].join(' ')

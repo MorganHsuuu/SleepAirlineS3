@@ -22,6 +22,9 @@ export interface MorningContentInput {
   city: string;
   /** 已知的當地語言早安；模型沒給時用這個 */
   localGreeting?: string | null;
+  /** 例如「氣溫 18°C，大致晴朗」 */
+  weatherSummary?: string | null;
+  localTimeLabel?: string | null;
 }
 
 const UNSAFE_VOICE = /獨自|孤單|寂寞|孤獨|一個人|沒有人|被丟下|失敗|浪費|掙扎|撐過|逃避|黑暗|迷失|你應該|你必須|振作|正向一點|一定會很棒|別難過|做得很好|又撐過一夜|alone|lonely|by yourself|isolated|abandoned|cheer up|you should|you must/i;
@@ -38,14 +41,17 @@ function fallbackMorning(input: MorningContentInput): MorningContent {
   const city = input.city.trim() || input.country.trim() || '今天的目的地';
   const country = input.country.trim() || city;
   const greeting = (input.localGreeting || '早安').replace(/[。！!]+$/g, '');
-  const voiceText = `${greeting}。早安，Sleep Airline 已抵達今天的目的地——${city}。清晨的街道正慢慢亮起來，晨光落在這裡的日常風景上。歡迎抵達${city}，今天的旅程從這裡開始。`;
+  const weather = (input.weatherSummary || '').trim();
+  const weatherLine = weather ? `${input.localTimeLabel || '現在'}，這裡${weather}。` : '清晨的街道正慢慢亮起來。';
+  const voiceText = `${greeting}。早安，Sleep Airline 已抵達今天的目的地——${city}。${weatherLine}晨光落在${city}有地方特色的建築與街道上。歡迎抵達${city}，今天的旅程從這裡開始。`;
+  const sky = weather || 'soft morning light';
   return {
     destination: { country, city },
     localGreeting: greeting,
     voiceText,
-    localFeature: `${city}清晨慢慢亮起來的街道`,
-    imagePrompt: `Early morning everyday street in ${city}, ${country}, soft natural light, calm realistic view through an airplane window, ordinary local buildings and street, welcoming and unhurried, no crowds, no text`,
-    imageKeywords: [`${city} morning`, 'everyday street', 'soft morning light', 'calm arrival'],
+    localFeature: `${city}有地方特色的建築與街道`,
+    imagePrompt: `View through an airplane window after landing in ${city}, ${country}. ${sky}. The sky, light and ground must match this weather. The dominant subject is the recognizable local cultural character of ${city}: distinctive architecture, materials, street scale, and everyday cultural details that belong to this exact place. Calm realistic morning, welcoming, no crowds, no text`,
+    imageKeywords: [`${city} morning`, `${city} local architecture`, 'cultural street', 'soft morning light'],
     safetyCheck: {
       containsNegativeEmotionalLanguage: false,
       containsPressureLanguage: false,
@@ -73,11 +79,11 @@ function parseMorning(raw: string, input: MorningContentInput): MorningContent |
     voiceText = `${localGreeting}。${voiceText}`;
   }
   const zh = chineseCount(voiceText);
-  if (zh < 24 || zh > 140 || !city || !voiceText.includes(city) || UNSAFE_VOICE.test(voiceText)) return null;
+  if (zh < 24 || zh > 180 || !city || !voiceText.includes(city) || UNSAFE_VOICE.test(voiceText)) return null;
   const localFeature = clean(data.localFeature);
   let imagePrompt = clean(data.imagePrompt);
   if (!imagePrompt || !/morning|清晨|早晨|dawn/i.test(imagePrompt)) {
-    imagePrompt = `Early morning in ${city}, ${country}. ${imagePrompt || localFeature}. Soft natural light, calm everyday scene, realistic, no text`;
+    imagePrompt = `Early morning in ${city}, ${country}. ${imagePrompt || localFeature}. Distinctive local cultural architecture and street character, soft natural light, realistic, no text`;
   }
   const keywords = Array.isArray(data.imageKeywords)
     ? data.imageKeywords.map((item) => clean(item)).filter(Boolean).slice(0, 6)
@@ -88,7 +94,7 @@ function parseMorning(raw: string, input: MorningContentInput): MorningContent |
     voiceText,
     localFeature: localFeature || `${city}的清晨風景`,
     imagePrompt,
-    imageKeywords: keywords.length ? keywords : [`${city} morning`, 'soft light', 'everyday scene'],
+    imageKeywords: keywords.length ? keywords : [`${city} morning`, 'local cultural architecture', 'soft light'],
     safetyCheck: {
       containsNegativeEmotionalLanguage: false,
       containsPressureLanguage: false,
@@ -108,12 +114,13 @@ const SYSTEM_PROMPT = `你是 Sleep Airline 的早晨抵達內容系統。對象
 voiceText 主體必須是繁體中文口語，約 40–80 個中文字，念出來大約 15–30 秒。
 結構：
 A. 抵達：早安，Sleep Airline 已抵達今天的目的地——{城市}。
-B. 一個具體、溫和的當地清晨畫面（街道、光、建築、早餐、交通、市場、地貌擇一）。
-C. 一個廣泛成立、不爭議的當地日常細節。不確定就改寫環境，不要發明傳統或歷史。
+B. 一個看得到的當地文化特色：這個城市特有的建築、屋頂、材料、街道尺度、市場、飲食、交通或地貌，擇一具體說出。
+C. 同一個特色再補一個廣泛成立的日常細節。不確定就寫建築與街道氣氛，不要發明傳統、節慶或歷史。
 D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
 開頭可以先放當地語言的早安（localGreeting），後面全部用繁體中文，不要翻譯那句早安，也不要改成英文廣播。
+若有提供天氣，voiceText 必須用一句話自然說出溫度與晴雨，例如「現在氣溫 18 度，天空大致晴朗」。
 內容必須能對上這個城市，不能是任何城市都適用的空話。
-imagePrompt 用英文，必須是 voiceText 裡同一個地點、同一個清晨細節、同一種氣氛。寫日常風景，不要改成該國最有名的地標，除非語音正好在講它。
+imagePrompt 用英文，必須是 voiceText 裡同一個地點、同一個文化特色、同一種天氣與氣氛。天空、光線、地面要和語音說的天氣一致。這個文化特色要成為畫面主體，讓人看得出是這個城市，不要畫成任何地方都適用的郊區住宅。可以出現屬於這個城市的代表性建築或地貌，但必須就是語音講到的那一個，禁止換成別的城市或該國另一個更有名的地標。
 早晨、柔和自然光、平靜、寫實、低刺激。不要黑暗、空蕩到令人不安、危險或擁擠。
 
 只回 JSON：
@@ -136,8 +143,10 @@ async function requestMorning(input: MorningContentInput): Promise<MorningConten
         content: JSON.stringify({
           country,
           city,
-          language: 'Traditional Chinese',
+          language: '繁體中文',
           localGreeting: greeting || undefined,
+          weatherSummary: (input.weatherSummary || '').trim() || undefined,
+          localTimeLabel: (input.localTimeLabel || '').trim() || undefined,
         }),
       },
     ],

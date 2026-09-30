@@ -208,7 +208,7 @@ ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 ` : ''}
 Writing:
 - English, ${isTakeoff ? '75–95' : '90–130'} words, hard cap ${isTakeoff ? '105' : '160'}
-- ${isTakeoff ? 'Takeoff: 3–4 sentences — ① welcome + captain + departure + heading ② one poetic sleep/wake beat ③ at most one squad beat ④ soft goodnight' : 'One idea per sentence'}
+- ${isTakeoff ? 'Takeoff: 3–4 sentences — ① welcome + captain + departure + heading, with a different night image each time ② exactly one short sleep cue: one action only (close the eyes, drop the shoulders, or leave the day on the ground) — never a meditation, breath count, or step list ③ at most one squad beat ④ soft goodnight' : 'One idea per sentence'}
 - Cut stock phrases like “thank you for flying with us”
 - Never output a blunt slogan; write as a captain PA with imagery
 - Social info: one rewritten sentence max; never paste [squad social] verbatim
@@ -249,7 +249,7 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 ` : ''}
 寫作：
 - 繁體中文，${isTakeoff ? '75–95' : '90–130'} 字，最多不超過 ${isTakeoff ? '105' : '160'} 字
-- ${isTakeoff ? '起飛廣播固定 3–4 句：①歡迎搭乘 Sleep Airline＋機長身分＋出發地＋航向 ②一句夜航入睡/醒來抵達的詩意提醒 ③同組社交最多一句 ④輕聲祝眠' : '一句一重點'}
+- ${isTakeoff ? '起飛廣播 3–4 句：①歡迎搭乘 Sleep Airline＋機長身分＋出發地＋航向，每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ②剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ③同組社交最多一句 ④輕聲祝眠' : '一句一重點'}
 - 刪掉「有任何需求」「感謝選搭本航空」「祝您旅途愉快」「期待美好瞬間」等套話
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
@@ -292,6 +292,8 @@ ${input.localContext ? `\n[local context · departure]\n${buildLocalBlock(input.
 ${socialLine}
 
 Write a fluent 3–4 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
+Vary the night image; do not reuse “the night will keep our destination”.
+Include exactly one short sleep cue — one action only.
 If squad social exists: one past/progress sentence only — no teammate landing countdown.`
     : `【起飛廣播】
 乘客：${pax}
@@ -303,6 +305,7 @@ ${input.localContext ? `\n【當地資訊 · 出發地】\n${buildLocalBlock(inp
 ${socialLine}
 
 請依「3–4 句」結構寫一段流暢口語廣播，第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
+每次換一種夜色畫面。睡眠只給一個很短的動作，不要展開。
 同組社交若有：用一句過去式／進行式帶過，禁止隊友降落倒數。`;
 
   const duration = formatDuration(input.flightDurationMinutes, locale);
@@ -348,7 +351,7 @@ ${buildSocialBlock(input.socialCue, locale)}
       { role: 'user', content: isTakeoff ? takeoffUser : landingUser },
     ],
     max_tokens: isTakeoff ? 220 : 280,
-    temperature: isTakeoff ? 0.42 : 0.55,
+    temperature: isTakeoff ? 0.7 : 0.55,
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
@@ -409,7 +412,8 @@ export function fallbackCaptainBroadcast(
       const social = socialCueText?.trim() && !/alone|only you/i.test(socialCueText)
         ? ` ${socialCueText.replace(/[.!?\s]+$/g, '')}.`
         : '';
-      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}Rest easy — the night will keep our destination until you wake.${social} Sleep well.`;
+      const sleepCue = ['Close your eyes for a moment.', 'Let your shoulders drop.', 'Leave today on the ground.'][(departureLabel.length + direction.length) % 3];
+      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${social} Sleep well.`;
     }
     const dur = formatDuration(durationMinutes, locale);
     const greet = localContext?.morningGreeting ? `${localContext.morningGreeting}! ` : '';
@@ -427,7 +431,8 @@ export function fallbackCaptainBroadcast(
     const social = socialCueText?.trim() && !/獨自飛行|只有你一人/.test(socialCueText)
       ? ` ${socialCueText.replace(/[。！？\s]+$/g, '')}。`
       : '';
-    return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}請安心入睡，窗外的夜色會替我們保管目的地。${social}祝各位好眠。`;
+    const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][(departureLabel.length + direction.length) % 3];
+    return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}${sleepCue}${social}祝各位好眠。`;
   }
   const greet = (localContext?.morningGreeting || '早安').replace(/[。！!]+$/g, '');
   return `${greet}。早安，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。清晨的街道正慢慢亮起來，晨光落在這裡的日常風景上。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;

@@ -173,14 +173,15 @@ function paintLeg() {
   if (!from || !to || !strip) return;
   const place = state.destination?.name || '';
   const headingOn = !$('glass-compass')?.hidden;
-  const standby = state.stage === 'cruise';
+  const cruise = state.stage === 'cruise';
+  const landed = state.stage === 'landed';
   from.textContent = state.origin?.name || '';
   to.textContent = place;
-  const show = standby && !!place && !headingOn;
+  const show = (cruise || landed) && !!place && !headingOn;
   strip.classList.toggle('is-route', show);
   strip.hidden = !show;
-  strip.classList.toggle('is-flying', show);
-  strip.classList.remove('is-landed');
+  strip.classList.toggle('is-flying', show && cruise);
+  strip.classList.toggle('is-landed', show && landed);
 }
 function applyStoredDirection(routeDirection) {
   const index = directions.findIndex((d) => d.key === routeDirection);
@@ -601,7 +602,8 @@ async function doTakeoff() {
   hideGlassPanel('glass-compass');
   window.BroadcastAudio?.primeFromUserGesture?.();
   $('window-caption').textContent = '舷窗已關閉 · 準備起飛';
-  const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。請輕輕閉上眼睛，把日常留在地面，祝你有一段舒服的旅程。`;
+  const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][Math.floor(Math.random() * 3)];
+  const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。${sleepCue}祝你有一段舒服的旅程。`;
   // 塔台 → captain.mp3 前 7 秒；與 API 並行，語音必須等此鏈結束
   const leadIn = state.sound && window.BroadcastAudio?.playTakeoffLeadIn
     ? BroadcastAudio.playTakeoffLeadIn({ captainVolume: 0.45 }).catch(() => false)
@@ -884,6 +886,7 @@ function revealArrivalImage(url, late = false) {
 }
 async function doLand() {
   if (state.busy || state.stage !== 'cruise') return;
+  if (state.sound) window.BroadcastAudio?.speakFromGesture?.('各位旅客，我們即將降落。');
   state.busy = true;
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
@@ -910,7 +913,8 @@ async function doLand() {
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
   try {
-    let text, speech, sceneryJob = null;
+    let sceneryJob = null;
+    let voiceJob = null;
     if (state.mode === 'live') {
       ensureGuestProfile();
       let data = null;
@@ -924,9 +928,9 @@ async function doLand() {
       if (data) {
         state.lastFlight = data.flight;
         state.destination = locationFromFlight(data.flight, 'arrival');
-        text = data.flight.captainBroadcast;
-        speech = data.speechAudioBase64;
-        // No OpenAI: skip generation entirely — visuals continue with ARRIVAL_FALLBACK.
+        voiceJob = state.openaiReady
+          ? api('POST', '/api/arrival-voice', { flightId: data.flight.flightId, broadcastStyle: 'formal_captain' }, 120000).catch(() => null)
+          : Promise.resolve(null);
         sceneryJob = !state.openaiReady
           ? Promise.resolve(null)
           : data.landingScenery?.imageUrl
@@ -934,12 +938,10 @@ async function doLand() {
             : requestScenery(data.flight.flightId);
       } else {
         state.destination ||= destinationFor(state.direction);
-        text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
         sceneryJob = Promise.resolve(null);
       }
     } else {
       state.destination ||= destinationFor(state.direction);
-      text = `各位旅客，甦醒航班即將降落${state.destination.name}。你從${state.origin.name}出發，穿過雲層與時間，現在可以慢慢打開窗戶，看看新的風景。歡迎抵達。`;
       sceneryJob = Promise.resolve(null);
     }
     $('to-city').textContent = state.destination.name;
@@ -951,11 +953,7 @@ async function doLand() {
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    // 音樂先淡入並播滿 8 秒，再接 captain.mp3，語音等前奏結束。畫面不等這段。
-    void (async () => {
-      await captainChain;
-      if (state.sound && text) await playBroadcast(text, speech, { restoreBed: true, skipCaptainIntro: true });
-    })().catch(() => {});
+    void captainChain.catch(() => {});
     const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
     const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
@@ -1017,10 +1015,22 @@ async function doLand() {
       await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 900 });
     } else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
 
+    const arrivalVoice = voiceJob ? await voiceJob : null;
+    if (!state.sceneryUrl && state.lastFlight?.flightId) {
+      try {
+        const fresh = await api('GET', `/api/scenery?flightId=${encodeURIComponent(state.lastFlight.flightId)}`, undefined, 8000);
+        if (fresh?.scenery?.imageUrl) state.sceneryUrl = fresh.scenery.imageUrl;
+      } catch { /* 圖還沒好就用備用風景 */ }
+    }
+    finalImage = state.sceneryUrl || ARRIVAL_FALLBACK;
+    if (!await preloadImage(finalImage)) {
+      state.sceneryUrl = null;
+      finalImage = ARRIVAL_FALLBACK;
+    }
     const image = $('arrival-image');
     image.classList.add('developing');
     image.classList.remove('is-inflight');
-    image.src = state.sceneryUrl || finalImage;
+    image.src = finalImage;
     await new Promise((resolve) => {
       if (image.complete && image.naturalWidth > 0) { resolve(); return; }
       image.onload = resolve;
@@ -1033,6 +1043,13 @@ async function doLand() {
     });
     pinLandingFrame(landingVideo);
     setScene('arrival');
+    state.stage = 'landed';
+    render();
+    const spoken = arrivalVoice?.text
+      || `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
+    if (state.sound) {
+      void playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, { skipCaptainIntro: true, restoreBed: true });
+    }
     stopLandingVideos();
     pinLandingFrame(landingVideo);
     const weather = await weatherJob;

@@ -18,6 +18,8 @@ import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-con
 import { resolveGroupSocialCue } from './src/lib/flight/social';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
 import { generateMorningArrival } from './src/lib/ai/morning-content';
+import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
+import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech } from './src/lib/ai/speech';
 import { generateSocialTakeaway, fallbackSocialTakeaway } from './src/lib/ai/social-takeaway';
@@ -641,13 +643,6 @@ app.post('/api/flight/land', async (req, res) => {
     });
 
     const useMorningVoice = locale !== 'en';
-    const morningPromise = useMorningVoice
-      ? generateMorningArrival({
-          country: arrival.country || arrPlace.countryName,
-          city: arrival.city || arrPlace.cityName,
-          localGreeting: arrLocal?.morningGreeting,
-        })
-      : null;
 
     const broadcastFallback = () => fallbackCaptainBroadcast(
       'landing',
@@ -661,9 +656,8 @@ app.post('/api/flight/land', async (req, res) => {
       locale === 'en' ? 'en' : 'zh'
     );
 
-    const morning = morningPromise ? await morningPromise : null;
-    const captainBroadcast = morning
-      ? morning.voiceText
+    const captainBroadcast = useMorningVoice
+      ? ''
       : await generateBroadcastWithBudget(
           {
             phase: 'landing',
@@ -698,29 +692,31 @@ app.post('/api/flight/land', async (req, res) => {
         socialCueText: socialCue.cueText,
         relatedPassenger: socialCue.relatedPassenger ?? '',
       }),
-      generateSpeechWithBudget(captainBroadcast, broadcastStyle as BroadcastStyle),
+      useMorningVoice ? Promise.resolve(null) : generateSpeechWithBudget(captainBroadcast, broadcastStyle as BroadcastStyle),
       takeawayPromise,
     ]);
 
     removeLandingRemindersForFlight(activeFlight.passengerId, activeFlight.flightId)
       .catch(logReminderCleanup);
 
-    // 降落確認後即在伺服器生圖並寫入 Notion：乘客關掉頁面也會完成（前端只輪詢結果）
-    runInBackground(`scenery ${activeFlight.flightId}`, async () => {
-      const result = await generateSceneryForLanding({
-        flightId: activeFlight.flightId,
-        passengerId: activeFlight.passengerId,
-        passengerName: activeFlight.passengerName,
-        groupId: passenger.groupId,
-        arrivalLocation: arrival.displayName,
-        landingTime,
-        timezone: arrival.timezone,
-        alignedPrompt: morning?.imagePrompt,
+    // 中文早晨語音與對齊的風景改由 /api/arrival-voice 在下降過程中生成。
+    // 英文維持原本降落當下背景生圖。
+    if (!useMorningVoice) {
+      runInBackground(`scenery ${activeFlight.flightId}`, async () => {
+        const result = await generateSceneryForLanding({
+          flightId: activeFlight.flightId,
+          passengerId: activeFlight.passengerId,
+          passengerName: activeFlight.passengerName,
+          groupId: passenger.groupId,
+          arrivalLocation: arrival.displayName,
+          landingTime,
+          timezone: arrival.timezone,
+        });
+        if (result.error) {
+          console.error(`[scenery] ${activeFlight.flightId} 降落背景生圖失敗：${result.error}`);
+        }
       });
-      if (result.error) {
-        console.error(`[scenery] ${activeFlight.flightId} 降落背景生圖失敗：${result.error}`);
-      }
-    });
+    }
 
     res.json({
       flight: {
@@ -744,6 +740,56 @@ app.post('/api/flight/land', async (req, res) => {
       speechAudioBase64,
       socialTakeaway,
     });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
+  }
+});
+
+// 下降過程中生成：當地早晨語音、對齊的風景，以及同一段話的語音檔。
+app.post('/api/arrival-voice', async (req, res) => {
+  try {
+    const flightId = String(req.body?.flightId || '');
+    const broadcastStyle = (req.body?.broadcastStyle || 'formal_captain') as BroadcastStyle;
+    if (!flightId) { res.status(400).json({ error: '請提供航班 ID。' }); return; }
+    const flight = await getFlightByFlightId(flightId);
+    if (!flight?.arrivalLocation) { res.status(404).json({ error: '找不到已降落的航班。' }); return; }
+
+    const parts = flight.arrivalLocation.split(',').map((s) => s.trim()).filter(Boolean);
+    const city = parts[0] || flight.arrivalLocation;
+    const country = parts.length >= 2 ? parts[parts.length - 1] : city;
+    const known = CITIES.find((item) => item.displayName === flight.arrivalLocation);
+    const local = flight.arrivalLatitude != null && flight.arrivalLongitude != null
+      ? await fetchLocalContext({
+          cityName: known?.city || city,
+          countryName: known?.country || country,
+          countryIso: known?.countryIso || 'TW',
+          latitude: flight.arrivalLatitude,
+          longitude: flight.arrivalLongitude,
+        }).catch(() => null)
+      : null;
+
+    const morning = await generateMorningArrival({
+      country: known?.country || country,
+      city: known?.city || city,
+      localGreeting: local?.morningGreeting,
+      weatherSummary: local?.weatherSummary,
+      localTimeLabel: local?.localTimeLabel,
+    });
+    const [speechAudioBase64] = await Promise.all([
+      generateSpeechWithBudget(morning.voiceText, broadcastStyle),
+      updateFlight(flight.notionId, { captainBroadcast: morning.voiceText }).catch(() => null),
+      generateSceneryForLanding({
+        flightId: flight.flightId,
+        passengerId: flight.passengerId,
+        passengerName: flight.passengerName,
+        groupId: flight.groupId,
+        arrivalLocation: flight.arrivalLocation,
+        landingTime: flight.landingTime,
+        timezone: known?.timezone,
+        alignedPrompt: morning.imagePrompt,
+      }),
+    ]);
+    res.json({ text: morning.voiceText, speechAudioBase64, imagePrompt: morning.imagePrompt });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
   }
