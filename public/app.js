@@ -579,13 +579,15 @@ function bearingBetween(a, b) {
   const x = Math.cos(radians(a.lat)) * Math.sin(radians(b.lat)) - Math.sin(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.cos(dLon);
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
-async function playBroadcast(text, speechBase64, { restoreBed = false, skipCaptainIntro = false } = {}) {
+async function playBroadcast(text, speechBase64, {
+  restoreBed = false, skipCaptainIntro = false, immediate = false, prepared = null,
+} = {}) {
   setCeremony('CAPTAIN SPEAKING', text);
   try {
     if (state.sound && window.BroadcastAudio) {
       await Promise.race([
         BroadcastAudio.playCaptainBroadcast(text, 'formal_captain', {
-          speechBase64, restoreBed, skipCaptainIntro,
+          speechBase64, restoreBed, skipCaptainIntro, immediate, prepared,
         }),
         delay(180000).then(() => BroadcastAudio.stopPlayback()),
       ]);
@@ -604,9 +606,11 @@ async function doTakeoff() {
   $('window-caption').textContent = '舷窗已關閉 · 準備起飛';
   const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][Math.floor(Math.random() * 3)];
   const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。${sleepCue}祝你有一段舒服的旅程。`;
-  // 塔台 → captain.mp3 前 7 秒；與 API 並行，語音必須等此鏈結束
+  // 塔台聲循環到廣播文字＋語音備妥 → captain.mp3 → captain 一結束立刻接語音
+  let markSpeechReady = () => {};
+  const speechReady = new Promise((resolve) => { markSpeechReady = resolve; });
   const leadIn = state.sound && window.BroadcastAudio?.playTakeoffLeadIn
-    ? BroadcastAudio.playTakeoffLeadIn({ captainVolume: 0.45 }).catch(() => false)
+    ? BroadcastAudio.playTakeoffLeadIn({ captainVolume: 0.45, untilReady: speechReady }).catch(() => false)
     : Promise.resolve(false);
   try {
     let text, speech;
@@ -627,11 +631,18 @@ async function doTakeoff() {
       state.takeoffAt = Date.now();
       text = localLine;
     }
+    const useOpenAIVoice = !!(state.sound && text && (speech || state.openaiReady) && window.BroadcastAudio?.prepareTakeoffSpeech);
+    const prepared = useOpenAIVoice
+      ? await BroadcastAudio.prepareTakeoffSpeech(text, speech).catch(() => null)
+      : null;
+    markSpeechReady(true);
+    const decoded = prepared ? BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared) : null;
     await leadIn;
+    if (decoded) await decoded;
     if (state.sound && text) {
-      if (speech || state.openaiReady) {
-        // 已播過 captain 前奏；有 OpenAI 語音走廣播路徑，勿再疊本地 TTS
-        await playBroadcast(text, speech, { skipCaptainIntro: true });
+      if (useOpenAIVoice) {
+        // 已播過 captain 前奏；語音已備妥並解碼，captain 結束立刻接上
+        await playBroadcast(text, speech, { skipCaptainIntro: true, immediate: true, prepared });
       } else {
         window.BroadcastAudio?.speakFromGesture?.(text);
         await BroadcastAudio.waitForSpeechComplete?.({ maxMs: 120000, quietMs: 350 });
@@ -648,6 +659,7 @@ async function doTakeoff() {
     hideCeremony();
     if (state.mode === 'live') { void fetchBoard().catch(() => {}); }
   } catch (error) {
+    markSpeechReady(false);
     window.BroadcastAudio?.stopTowerSignalLoop?.();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
     await BroadcastAudio?.stopCaptainIntro?.();
@@ -884,9 +896,68 @@ function revealArrivalImage(url, late = false) {
   };
   preload.src = url;
 }
+const APPROACH_VOICE_KEY = 'sleepAirlineS3ApproachVoice';
+let approachVoiceAudio = null;
+
+function attachApproachVoice(base64) {
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.playsInline = true;
+  audio.setAttribute('playsinline', '');
+  audio.setAttribute('webkit-playsinline', '');
+  audio.src = `data:audio/mpeg;base64,${base64}`;
+  try { audio.load(); } catch { /* noop */ }
+  approachVoiceAudio = audio;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** 「各位旅客，我們即將降落。」預先生成的機長語音：localStorage 優先，沒有才向後端取一次 */
+function preloadApproachVoice() {
+  let cached = null;
+  try { cached = localStorage.getItem(APPROACH_VOICE_KEY); } catch { cached = null; }
+  if (cached) {
+    attachApproachVoice(cached);
+    return;
+  }
+  if (FRONTEND_PREVIEW_ONLY || !state.openaiReady) return;
+  void fetch('/api/approach-voice')
+    .then((res) => (res.ok ? res.blob() : null))
+    .then(async (blob) => {
+      if (!blob?.size || !blob.type.startsWith('audio/')) return;
+      const base64 = await blobToBase64(blob);
+      if (!base64) return;
+      try { localStorage.setItem(APPROACH_VOICE_KEY, base64); } catch { /* quota */ }
+      attachApproachVoice(base64);
+    })
+    .catch(() => {});
+}
+
+/** 必須在開窗手勢當下同步呼叫（iOS）；尚未載入就安靜略過，不用機器人朗讀 */
+function playApproachVoiceSync() {
+  const audio = approachVoiceAudio;
+  if (!audio) return false;
+  try {
+    audio.currentTime = 0;
+    audio.volume = 1;
+    const played = audio.play();
+    if (played && typeof played.catch === 'function') played.catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function doLand() {
   if (state.busy || state.stage !== 'cruise') return;
-  if (state.sound) window.BroadcastAudio?.speakFromGesture?.('各位旅客，我們即將降落。');
+  if (state.sound) playApproachVoiceSync();
   state.busy = true;
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
@@ -1438,6 +1509,7 @@ async function init() {
       $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
     } catch { /* 已經先把窗戶打開 */ }
   }
+  preloadApproachVoice();
   if (incomingPair?.consent && state.mode === 'live' && state.profile) {
     try {
       const result = await api('POST', '/api/passenger', {

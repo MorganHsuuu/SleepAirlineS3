@@ -973,6 +973,32 @@ app.post('/api/broadcast/speech', async (req, res) => {
   }
 });
 
+// ── GET /api/approach-voice ───────────────────────────────────────────────────
+// 開窗降落那句短廣播：生成一次後留在記憶體，前端預載後可在手勢當下同步播放
+
+const APPROACH_VOICE_TEXT = '各位旅客，我們即將降落。';
+let approachVoiceCache: Buffer | null = null;
+let approachVoiceJob: Promise<Buffer> | null = null;
+
+app.get('/api/approach-voice', async (_req, res) => {
+  if (!openAiApiKey()) {
+    res.status(404).json({ error: 'OPENAI_API_KEY 尚未設定。' });
+    return;
+  }
+  try {
+    if (!approachVoiceCache) {
+      approachVoiceJob ||= generateBroadcastSpeech(APPROACH_VOICE_TEXT, 'formal_captain');
+      approachVoiceCache = await approachVoiceJob;
+    }
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(approachVoiceCache);
+  } catch (err) {
+    approachVoiceJob = null;
+    res.status(500).json({ error: err instanceof Error ? err.message : '語音生成失敗' });
+  }
+});
+
 // ── POST /api/scenery/backfill ────────────────────────────────────────────────
 
 app.post('/api/scenery/backfill', async (req, res) => {

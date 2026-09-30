@@ -50,7 +50,7 @@ function fallbackMorning(input: MorningContentInput): MorningContent {
     localGreeting: greeting,
     voiceText,
     localFeature: `${city}有地方特色的建築與街道`,
-    imagePrompt: `View through an airplane window after landing in ${city}, ${country}. ${sky}. The sky, light and ground must match this weather. The dominant subject is the recognizable local cultural character of ${city}: distinctive architecture, materials, street scale, and everyday cultural details that belong to this exact place. Calm realistic morning, welcoming, no crowds, no text`,
+    imagePrompt: `Beautiful scenery of ${city}, ${country}, with no airplane, window frame, wing or cabin. ${sky}. The sky, light and ground must match this weather. The dominant subject is the recognizable local cultural character of ${city}: distinctive architecture, materials, street scale, and everyday cultural details that belong to this exact place. Calm realistic morning, welcoming, no crowds, no text`,
     imageKeywords: [`${city} morning`, `${city} local architecture`, 'cultural street', 'soft morning light'],
     safetyCheck: {
       containsNegativeEmotionalLanguage: false,
@@ -82,6 +82,9 @@ function parseMorning(raw: string, input: MorningContentInput): MorningContent |
   if (zh < 24 || zh > 180 || !city || !voiceText.includes(city) || UNSAFE_VOICE.test(voiceText)) return null;
   const localFeature = clean(data.localFeature);
   let imagePrompt = clean(data.imagePrompt);
+  if (/airplane|aircraft|plane window|window frame|porthole|cabin|\bwings?\b|舷窗|機艙|機翼|窗/i.test(imagePrompt)) {
+    imagePrompt = localFeature;
+  }
   if (!imagePrompt || !/morning|清晨|早晨|dawn/i.test(imagePrompt)) {
     imagePrompt = `Early morning in ${city}, ${country}. ${imagePrompt || localFeature}. Distinctive local cultural architecture and street character, soft natural light, realistic, no text`;
   }
@@ -121,6 +124,7 @@ D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程
 若有提供天氣，voiceText 必須用一句話自然說出溫度與晴雨，例如「現在氣溫 18 度，天空大致晴朗」。
 內容必須能對上這個城市，不能是任何城市都適用的空話。
 imagePrompt 用英文，必須是 voiceText 裡同一個地點、同一個文化特色、同一種天氣與氣氛。天空、光線、地面要和語音說的天氣一致。這個文化特色要成為畫面主體，讓人看得出是這個城市，不要畫成任何地方都適用的郊區住宅。可以出現屬於這個城市的代表性建築或地貌，但必須就是語音講到的那一個，禁止換成別的城市或該國另一個更有名的地標。
+imagePrompt 只描述這個地方本身的美麗風景：禁止飛機、飛機窗戶、窗框、舷窗、機翼、機艙，也不要從窗內往外看的構圖；畫面中不得有任何文字。
 早晨、柔和自然光、平靜、寫實、低刺激。不要黑暗、空蕩到令人不安、危險或擁擠。
 
 只回 JSON：

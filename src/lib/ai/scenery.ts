@@ -134,7 +134,7 @@ export function buildSceneryPrompt(
   const iconicHint = iconicSubjectHint(city, country, displayName);
 
   return [
-    `Create a premium dimensional travel postcard of ${place}, seen during a gentle airplane descent.`,
+    `Create a premium dimensional travel postcard of ${place}: pure beautiful scenery of the place itself.`,
     `The destination must be instantly recognizable without relying on text.`,
     timeDirection,
     `Use a polished handcrafted 3D relief / miniature-diorama aesthetic: tactile depth, refined forms,`,
@@ -156,14 +156,14 @@ export function buildSceneryPrompt(
     `Never substitute East-Asian motifs unless ${city}, ${country} genuinely calls for them.`,
     `For nature-led destinations, prioritize the true landforms and ecosystem and do not invent a city.`,
     `Keep wildlife, flora, season and habitat scientifically plausible. Do not mix animals or plants from another region.`,
-    `A very subtle airplane-window reflection may appear at the outer edge; keep the scenery large and unobstructed.`,
+    `Keep the scenery large and unobstructed. No airplane, no airplane window or window frame, no wing, no cabin interior, no reflections.`,
     `Absolutely no text of any kind anywhere in the image: no signs, billboards, banners,`,
     `storefront lettering, street markings, no letters, numbers or writing in any language.`,
     `No invented landmarks, no close-up people, no watermark, no logos.`,
   ].filter(Boolean).join(' ');
 }
 
-/** 1024x1024 生成明顯快於 1536x1024；舷窗以 object-fit: cover 裁切，方圖即可。 */
+/** 1024x1024 生成明顯快於 1536x1024；前端以 object-fit: cover 裁切，方圖即可。 */
 export const SCENERY_IMAGE_SIZE = '1024x1024';
 
 /**
@@ -200,7 +200,8 @@ export async function generateLandingScenery(
   const imagePrompt = aligned
     ? [
         aligned,
-        `The scene is the view just outside an airplane window after landing in ${place}.`,
+        `The scene is pure, beautiful scenery of ${place} itself.`,
+        `No airplane, no airplane window or window frame, no wing, no cabin interior, no reflections.`,
         `Keep the same place, the same cultural detail, and the same weather as the narration.`,
         `Make that local cultural character the dominant subject: architecture, materials, street life, food, transport, or landscape that belongs to this exact place.`,
         `Do not replace it with a generic suburb or with a landmark from a different city.`,

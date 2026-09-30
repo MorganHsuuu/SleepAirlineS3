@@ -188,7 +188,9 @@ Identity (critical):
 - Address them as “passengers” or “${pax}”; never call yourself by the passenger name
 - Use the given name directly; do not add Mr/Ms/Mrs
 - Squad lines are about FRIENDS only — never say the addressee has already taken off
-- If squad social is solo / first of night: one line that they get the sky to themselves; do not restate their own takeoff
+${isTakeoff
+    ? '- Takeoff: if squad social is solo / first of night, OMIT the squad sentence entirely. Never say alone, only you, the sky to yourself, or similar. Only real teammate facts (someone already departed / landed) may become one sentence'
+    : '- If squad social is solo / first of night: one line that they get the sky to themselves; do not restate their own takeoff'}
 
 Geography (critical):
 - Use the broadcast place labels; do not recite hard romanization
@@ -227,7 +229,9 @@ ${STYLE_DESCRIPTIONS.zh[style]}
 - 用「各位乘客」或「${pax}」稱呼對方；不要稱自己為乘客姓名
 - 稱呼乘客時直接使用名字，禁止附加「先生」「女士」「小姐」或「先生／女士」
 - 社交句只講隊友，禁止說正在聽廣播的乘客「已經起飛」
-- 若【同組社交】是獨自／今晚第一班：改說獨自享受這片天空，不要複誦本班乘客姓名＋已起飛
+${isTakeoff
+    ? '- 起飛廣播：若【同組社交】是獨自（solo）／今晚第一班（first_of_night），整句社交完全省略；禁止出現「獨享」「獨自」「只有你」「夜空交給你」「天空交給你」等說法。只有真實隊友動態（已起飛、已降落）才可寫一句'
+    : '- 若【同組社交】是獨自／今晚第一班：改說獨自享受這片天空，不要複誦本班乘客姓名＋已起飛'}
 
 地理（非常重要）：
 - 使用【廣播用地名】；不要照念難懂的羅馬字、音標、撇號地名
@@ -275,10 +279,11 @@ export async function generateCaptainBroadcast(input: BroadcastInput): Promise<s
 
   const systemPrompt = buildSystemPrompt(locale, input.style, isTakeoff, pax, hasLocal);
 
-  const socialLine = input.socialCue.cueType === 'solo'
+  const noTeammateFacts = input.socialCue.cueType === 'solo' || input.socialCue.cueType === 'first_of_night';
+  const socialLine = noTeammateFacts
     ? (locale === 'en'
-      ? '(No other squad flights — one line that they have the sky to themselves tonight; do not say this passenger already took off.)'
-      : '（同組暫無其他航班：一句「今晚這片天空先交給你獨享」，禁止說乘客本人已經起飛）')
+      ? '(No teammate facts tonight — OMIT the squad sentence entirely. Do not mention being alone, only you, or having the sky to yourself.)'
+      : '（今晚沒有隊友動態：整句社交完全省略，不要寫「獨享」「獨自」「只有你」「夜空交給你」）')
     : buildSocialBlock(input.socialCue, locale);
 
   const takeoffUser = locale === 'en'
@@ -294,7 +299,9 @@ ${socialLine}
 Write a fluent 3–4 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
 Vary the night image; do not reuse “the night will keep our destination”.
 Include exactly one short sleep cue — one action only.
-If squad social exists: one past/progress sentence only — no teammate landing countdown.`
+${noTeammateFacts
+      ? 'No squad sentence at all this time.'
+      : 'Squad: one past/progress sentence only about the teammate — no teammate landing countdown.'}`
     : `【起飛廣播】
 乘客：${pax}
 出發地原始資料：${input.departureLocation}
@@ -306,7 +313,9 @@ ${socialLine}
 
 請依「3–4 句」結構寫一段流暢口語廣播，第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
 每次換一種夜色畫面。睡眠只給一個很短的動作，不要展開。
-同組社交若有：用一句過去式／進行式帶過，禁止隊友降落倒數。`;
+${noTeammateFacts
+      ? '這次不寫任何同組社交句。'
+      : '同組社交：用一句過去式／進行式帶過隊友動態，禁止隊友降落倒數。'}`;
 
   const duration = formatDuration(input.flightDurationMinutes, locale);
   const landingUser = locale === 'en'
@@ -355,7 +364,17 @@ ${buildSocialBlock(input.socialCue, locale)}
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
-  return ensureWelcomeAboardPhrase(raw, locale);
+  return ensureWelcomeAboardPhrase(isTakeoff ? stripSoloSkyLines(raw) : raw, locale);
+}
+
+const SOLO_SKY_PATTERN = /獨享|獨自|只有你|(?:夜空|天空)[^。！？]{0,4}交給你|\balone\b|only you|(?:sky|night) to yourself/i;
+
+/** 起飛不講「獨享夜空」：模型仍寫出時整句移除 */
+function stripSoloSkyLines(text: string): string {
+  const sentences = text.match(/[^。！？.!?]+[。！？.!?]*\s*/g);
+  if (!sentences) return text;
+  const kept = sentences.filter((s) => !SOLO_SKY_PATTERN.test(s));
+  return kept.length ? kept.join('').trim() : text;
 }
 
 /** 起飛／降落廣播必須含歡迎語；模型若省略則補上 */
@@ -409,7 +428,7 @@ export function fallbackCaptainBroadcast(
       const wx = localContext?.weatherSummary
         ? `${localContext.localTimeLabel ?? 'Right now'} ${localContext.weatherSummary}. `
         : '';
-      const social = socialCueText?.trim() && !/alone|only you/i.test(socialCueText)
+      const social = socialCueText?.trim() && !/alone|only you|to yourself|to themselves|獨享|獨自|只有你/i.test(socialCueText)
         ? ` ${socialCueText.replace(/[.!?\s]+$/g, '')}.`
         : '';
       const sleepCue = ['Close your eyes for a moment.', 'Let your shoulders drop.', 'Leave today on the ground.'][(departureLabel.length + direction.length) % 3];
@@ -428,7 +447,7 @@ export function fallbackCaptainBroadcast(
     const wx = localContext?.weatherSummary
       ? `${localContext.localTimeLabel ?? '此刻'}${localContext.weatherSummary}，`
       : '';
-    const social = socialCueText?.trim() && !/獨自飛行|只有你一人/.test(socialCueText)
+    const social = socialCueText?.trim() && !/獨享|獨自|只有你|天空先交給你|夜空交給你/.test(socialCueText)
       ? ` ${socialCueText.replace(/[。！？\s]+$/g, '')}。`
       : '';
     const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][(departureLabel.length + direction.length) % 3];

@@ -366,6 +366,7 @@ function startTowerSignalLoop(intervalMs = 5200) {
 
 function stopTowerSignalLoop() {
   towerSignalActive = false;
+  takeoffLeadInActive = false;
   if (towerSignalTimer) {
     clearTimeout(towerSignalTimer);
     towerSignalTimer = null;
@@ -417,7 +418,7 @@ async function fadeLandingBedVolume(target, ms = CEREMONY_CROSSFADE_MS) {
   }
 }
 
-async function playCaptainIntro({ fadeInMs = 0, volume } = {}) {
+async function playCaptainIntro({ fadeInMs = 0, volume, handoff = false } = {}) {
   const cfg = { ...CAPTAIN_SFX, ...window.SLEEP_AIRLINE_CAPTAIN_SFX };
   if (!cfg.url) return false;
   const sec = Math.max(0.5, Math.min(30, Number(cfg.seconds) || 7));
@@ -430,14 +431,37 @@ async function playCaptainIntro({ fadeInMs = 0, volume } = {}) {
     loop: false,
     fadeInMs,
   });
-  await fadeOutCeremonyTag('captain', Math.min(450, fadeInMs || 450));
+  // handoff：片段結束即 resolve，讓語音無縫接上
+  if (!handoff) await fadeOutCeremonyTag('captain', Math.min(450, fadeInMs || 450));
   return ok;
 }
 
-/** 起飛鉛音：塔台 bibibi+PA → captain.mp3 前 7 秒（語音須等此鏈結束） */
-async function playTakeoffLeadIn({ captainVolume = 0.45 } = {}) {
-  await playTowerSignal();
-  return playCaptainIntro({ fadeInMs: 0, volume: captainVolume });
+const TOWER_CYCLE_GAP_MS = 2400;
+let takeoffLeadInActive = false;
+
+/**
+ * 起飛鉛音：塔台 bibibi+PA 循環到 untilReady resolve（廣播文字＋語音備妥），
+ * 當前這輪播完後才接 captain.mp3；untilReady resolve false 表示取消，不播 captain。
+ */
+async function playTakeoffLeadIn({ captainVolume = 0.45, untilReady } = {}) {
+  let ready = !untilReady;
+  let proceed = true;
+  const readyP = Promise.resolve(untilReady).then(
+    (v) => { ready = true; proceed = v !== false; },
+    () => { ready = true; proceed = false; },
+  );
+  stopTowerSignalLoop();
+  takeoffLeadInActive = true;
+  while (takeoffLeadInActive) {
+    await playTowerSignal();
+    if (ready || !takeoffLeadInActive) break;
+    await Promise.race([readyP, delay(TOWER_CYCLE_GAP_MS)]);
+    if (ready) break;
+  }
+  const cancelled = !takeoffLeadInActive;
+  takeoffLeadInActive = false;
+  if (cancelled || !proceed) return false;
+  return playCaptainIntro({ fadeInMs: 0, volume: captainVolume, handoff: true });
 }
 
 /** captain.mp3 起播時：wakeup 同步漸弱至無聲 */
@@ -1078,16 +1102,41 @@ async function prepareCaptainSpeech(text, style) {
   return null;
 }
 
-async function playPreparedSpeech(prepared) {
+/** 趁 captain.mp3 播放時先解碼語音，captain 一結束即可起播 */
+async function decodePreparedSpeech(prepared) {
+  if (!prepared || prepared.kind !== 'openai' || prepared.buffer || !prepared.blob) return prepared;
+  try {
+    prepared.buffer = await decodeBlobToBuffer(prepared.blob);
+  } catch { /* 播放時再解碼／HTML Audio 後備 */ }
+  return prepared;
+}
+
+/** 起飛用：有 base64 直接轉 blob；否則等 OpenAI（塔台聲會持續），失敗才標記瀏覽器 TTS */
+async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain') {
+  if (speechBase64) {
+    try {
+      const ready = await loadPreparedSpeechAudio(base64ToMp3Blob(speechBase64), text);
+      if (ready) return ready;
+    } catch { /* fallback below */ }
+  }
+  return prepareCaptainSpeech(text, style);
+}
+
+async function playPreparedSpeech(prepared, { immediate = false } = {}) {
   if (!prepared) return false;
   if (prepared.kind === 'browser') return speakText(prepared.text);
   stopCeremonyWebAudio('captain');
   await ensureAudioCtx();
+  // padSec：開頭留白，避免「歡迎」被 captain 交叉／裝置緩衝吃掉；immediate 為起飛無縫交接
+  const speechOpts = { volume: 1.35, tag: 'speech', fadeInMs: 0, padSec: immediate ? 0 : 0.48 };
+  if (prepared.buffer && await playWebAudioBuffer(prepared.buffer, speechOpts)) {
+    if (prepared.url) URL.revokeObjectURL(prepared.url);
+    return true;
+  }
   const blob = prepared.blob
     || (prepared.url ? await fetch(prepared.url).then((r) => r.blob()).catch(() => null) : null);
-  if (blob) {
-    // padSec：開頭留白，避免「歡迎」被 captain 交叉／裝置緩衝吃掉
-    const ok = await playMp3Blob(blob, { volume: 1.35, tag: 'speech', fadeInMs: 0, padSec: 0.48 });
+  if (blob && !prepared.buffer) {
+    const ok = await playMp3Blob(blob, speechOpts);
     if (ok) {
       if (prepared.url) URL.revokeObjectURL(prepared.url);
       return true;
@@ -1099,7 +1148,7 @@ async function playPreparedSpeech(prepared) {
   markInlineAudio(audio);
   audio.volume = 1;
   currentAudio = audio;
-  await delay(420);
+  if (!immediate) await delay(420);
   const ok = await playAudioElement(audio);
   if (!ok) {
     URL.revokeObjectURL(url);
@@ -1166,32 +1215,45 @@ async function playCaptainBroadcast(text, style, {
   speechBase64,
   restoreBed = true,
   skipCaptainIntro = false,
+  immediate = false,
+  prepared: preparedIn = null,
 } = {}) {
   if (!text?.trim()) return false;
   const alreadySpeaking = !!(window.speechSynthesis?.speaking || window.speechSynthesis?.pending);
   stopPlayback({ keepSpeech: alreadySpeaking });
-  if (alreadySpeaking && !speechBase64) {
+  if (alreadySpeaking && !speechBase64 && !preparedIn) {
     speakFromGesture(text);
     return waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
   }
   try {
+    if (immediate && preparedIn) {
+      // 起飛交接：captain.mp3 剛結束，不等 unlock／淡出／緩衝延遲
+      stopCaptainIntro();
+      void muteCeremonyBedForSpeech();
+      const ok = await playPreparedSpeech(preparedIn, { immediate: true });
+      await waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
+      return ok;
+    }
     await unlockMedia();
     await ensureAudioCtx();
-    const prepPromise = prepareCaptainSpeechForPlay(text, style, speechBase64);
+    const prepPromise = preparedIn
+      ? Promise.resolve(preparedIn)
+      : prepareCaptainSpeechForPlay(text, style, speechBase64);
     if (skipCaptainIntro) {
       stopCaptainIntro();
       resetKeepAliveToSilent();
     } else {
       await crossfadeLandingToCaptainIntro();
     }
-    await muteCeremonyBedForSpeech();
+    if (immediate) void muteCeremonyBedForSpeech();
+    else await muteCeremonyBedForSpeech();
     const prepared = await prepPromise;
     await unlockMedia();
     await ensureAudioCtx();
     // 短間隔，讓裝置緩衝就緒，減少首字「歡迎」被吃
-    await delay(280);
+    if (!immediate) await delay(280);
     if (!prepared) return await speakText(text);
-    const ok = await playPreparedSpeech(prepared);
+    const ok = await playPreparedSpeech(prepared, { immediate });
     // 再等語音真正靜下來，避免 Promise 提前 resolve 就切 landing.mp4
     await waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
     await delay(280);
@@ -1308,6 +1370,8 @@ window.BroadcastAudio = {
   playTakeoffLeadIn,
   stopCaptainIntro,
   prepareCaptainSpeech,
+  prepareTakeoffSpeech,
+  decodePreparedSpeech,
   playTowerSignal,
   startTowerSignalLoop,
   stopTowerSignalLoop,
