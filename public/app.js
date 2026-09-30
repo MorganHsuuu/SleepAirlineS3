@@ -173,14 +173,14 @@ function paintLeg() {
   if (!from || !to || !strip) return;
   const place = state.destination?.name || '';
   const headingOn = !$('glass-compass')?.hidden;
+  const standby = state.stage === 'cruise';
   from.textContent = state.origin?.name || '';
   to.textContent = place;
-  const show = !!place && !headingOn;
-  const flying = show && (state.stage === 'takeoff' || state.stage === 'cruise' || state.stage === 'landing');
+  const show = standby && !!place && !headingOn;
   strip.classList.toggle('is-route', show);
   strip.hidden = !show;
-  strip.classList.toggle('is-flying', flying);
-  strip.classList.toggle('is-landed', show && state.stage === 'landed');
+  strip.classList.toggle('is-flying', show);
+  strip.classList.remove('is-landed');
 }
 function applyStoredDirection(routeDirection) {
   const index = directions.findIndex((d) => d.key === routeDirection);
@@ -250,6 +250,7 @@ function render() {
   $('to-city').textContent = state.destination?.name || '未知的遠方';
   $('to-code').textContent = state.destination?.code || '???';
   paintLeg();
+  syncPairCard();
   const labels = {
     ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],
     takeoff: ['正在起飛', '機長廣播中。窗外的故事即將開始。', 'TAKEOFF', '起飛中', 'DEPARTING'],
@@ -313,6 +314,64 @@ function applyPassengerOrigin(passenger) {
   };
   $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
 }
+function pairProfile() {
+  ensureGuestProfile();
+  const passengerId = $('input-pid')?.value.trim() || state.profile.passengerId;
+  const name = $('input-name')?.value.trim() || state.profile.name;
+  const rawGroup = $('input-group')?.value.trim() || state.profile.groupId;
+  const groupId = /^[0-9]{4}$/.test(rawGroup) ? rawGroup : (state.profile.groupId || '0001');
+  return { passengerId, name, groupId };
+}
+function pairUrl(profile) {
+  const url = new URL(location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('pair', '1');
+  url.searchParams.set('pid', profile.passengerId);
+  url.searchParams.set('name', profile.name);
+  url.searchParams.set('group', profile.groupId);
+  if ($('research-consent')?.checked) url.searchParams.set('consent', '1');
+  return url.toString();
+}
+let pairText = '';
+function syncPairCard() {
+  const profile = pairProfile();
+  const text = pairUrl(profile);
+  const paired = localStorage.getItem('sleepAirlineS3Paired') === profile.passengerId;
+  const show = !paired && state.stage === 'ready';
+  const card = $('pair-pass');
+  if (card) {
+    card.hidden = !show;
+    card.classList.toggle('is-out', show);
+  }
+  const idNode = $('pair-id');
+  if (idNode) idNode.textContent = `${profile.name} · ${profile.passengerId}`;
+  if (text === pairText || !window.QRCode) return;
+  pairText = text;
+  document.querySelectorAll('canvas.pair-qr').forEach((canvas) => {
+    window.QRCode.toCanvas(canvas, text, {
+      width: 148,
+      margin: 1,
+      color: { dark: '#163238', light: '#f6f4ee' },
+    }, () => {});
+  });
+}
+function readPairQuery() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('pair') !== '1') return null;
+  const passengerId = params.get('pid')?.trim() || '';
+  const name = params.get('name')?.trim() || '';
+  const rawGroup = params.get('group')?.trim() || '';
+  const groupId = /^[0-9]{4}$/.test(rawGroup) ? rawGroup : '0001';
+  if (!passengerId || !name) return null;
+  return { passengerId, name, groupId, consent: params.get('consent') === '1' };
+}
+function clearPairQuery() {
+  const url = new URL(location.href);
+  ['pair', 'pid', 'name', 'group', 'consent'].forEach((key) => url.searchParams.delete(key));
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  history.replaceState({}, '', next || '/');
+}
 function ensureGuestProfile() {
   if (state.profile?.passengerId && state.profile?.name && state.profile?.groupId) return;
   let guest = null;
@@ -355,7 +414,9 @@ async function doLogin(event) {
     }
     localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
     localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
+    localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
     $('profile-dialog').close();
+    syncPairCard();
     $('profile-hint').textContent = '';
     render();
     if (state.stage === 'ready') showToast(`歡迎登機，${name}。`);
@@ -431,25 +492,60 @@ async function applyStoredScenery(flight) {
     setScene('arrival');
   } catch { /* keep the standby arrival photo */ }
 }
+function flightKey(flight) {
+  return flight?.flightId || '';
+}
+function rememberFlightView() {
+  const flight = state.stage === 'cruise' ? state.activeFlight : state.lastFlight;
+  if (!flight || (state.stage !== 'cruise' && state.stage !== 'landed')) return;
+  try {
+    localStorage.setItem('sleepAirlineS3View', JSON.stringify({
+      stage: state.stage,
+      sceneryUrl: state.sceneryUrl,
+      flight,
+    }));
+  } catch { /* storage full or private mode */ }
+}
+function paintCachedFlight() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('sleepAirlineS3View') || 'null'); } catch { saved = null; }
+  if (!saved?.flight) return false;
+  if (saved.stage === 'cruise') adoptInFlight(saved.flight);
+  else if (saved.stage === 'landed') {
+    adoptLanded(saved.flight);
+    if (saved.sceneryUrl) {
+      state.sceneryUrl = saved.sceneryUrl;
+      const image = $('arrival-image');
+      image.src = saved.sceneryUrl;
+      setScene('arrival');
+    }
+  } else return false;
+  return true;
+}
 async function restoreNotionFlight(passengerResult) {
-  const progress = await refreshProgress();
-  if (progress?.activeFlight) {
-    await Promise.race([whenImageReady($('cloud-image')), delay(1800)]);
+  let active = passengerResult?.activeFlight || null;
+  if (!active && passengerResult && passengerResult.activeFlight === undefined) {
+    const progress = await refreshProgress();
+    active = progress?.activeFlight || null;
+  }
+  if (active) {
+    if (flightKey(state.activeFlight) !== flightKey(active)) adoptInFlight(active);
+    rememberFlightView();
     const headingName = directions[state.direction]?.name || '';
     showToast(headingName ? `航班仍在飛行，航向${headingName}` : '航班仍在飛行');
     return;
   }
   const landed = passengerResult?.lastLandedFlight;
   if (landed?.arrivalLocation) {
-    adoptLanded(landed);
+    if (flightKey(state.lastFlight) !== flightKey(landed)) adoptLanded(landed);
+    rememberFlightView();
     const place = state.destination;
-    const [weather] = await Promise.all([
-      loadWeather(place).catch(() => null),
-      applyStoredScenery(landed),
-    ]);
-    if (weather && state.stage === 'landed' && state.destination?.name === place?.name) {
-      void showWeatherCard(place, weather, { kicker: '上次降落' });
-    }
+    void applyStoredScenery(landed).then(() => rememberFlightView());
+    void loadWeather(place).then((weather) => {
+      if (weather && state.stage === 'landed' && state.destination?.name === place?.name) {
+        void showWeatherCard(place, weather, { kicker: '上次降落' });
+      }
+    }).catch(() => {});
     return;
   }
   applyPassengerOrigin(passengerResult?.passenger);
@@ -1255,6 +1351,18 @@ function bindDial() {
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
 async function init() {
+  const incomingPair = readPairQuery();
+  if (incomingPair) {
+    const profile = {
+      passengerId: incomingPair.passengerId,
+      name: incomingPair.name,
+      groupId: incomingPair.groupId,
+    };
+    localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(profile));
+    localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(profile));
+    localStorage.removeItem('sleepAirlineS3View');
+    clearPairQuery();
+  }
   try {
     const profile = JSON.parse(localStorage.getItem('sleepAirlineS3Profile') || 'null');
     if (profile?.passengerId && profile?.name && profile?.groupId) {
@@ -1270,14 +1378,7 @@ async function init() {
   if (!$('input-group').value) $('input-group').value = state.profile.groupId;
   if ($('research-consent')) $('research-consent').checked = true;
   if (!FRONTEND_PREVIEW_ONLY) {
-    try {
-      try {
-        countryIsoMap = await (await fetch('country-iso.json')).json();
-      } catch { countryIsoMap = {}; }
-      const config = await api('GET', '/api/config', undefined, 5000);
-      state.openaiReady = Boolean(config.openaiReady);
-      state.mode = config.dataMode === 'live' && (config.notionReady || config.notionConfigured) ? 'live' : 'preview';
-    } catch { state.mode = 'preview'; }
+    void fetch('country-iso.json').then((res) => res.json()).then((data) => { countryIsoMap = data; }).catch(() => { countryIsoMap = {}; });
   }
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
   applyWindowOnly(true);
@@ -1288,6 +1389,10 @@ async function init() {
   $('profile-open').addEventListener('click', () => $('profile-dialog').showModal());
   $('profile-close').addEventListener('click', () => $('profile-dialog').close());
   $('login-form').addEventListener('submit', doLogin);
+  ['input-pid', 'input-name', 'input-group'].forEach((id) => {
+    $(id)?.addEventListener('input', () => { pairText = ''; syncPairCard(); });
+  });
+  $('research-consent')?.addEventListener('change', () => { pairText = ''; syncPairCard(); });
   $('btn-takeoff').addEventListener('click', doTakeoff);
   $('btn-land').addEventListener('click', doLand);
   $('btn-restart').addEventListener('click', restart);
@@ -1305,20 +1410,47 @@ async function init() {
   });
   bindDial();
   bindShadeGesture();
-  if (state.mode === 'live' && state.profile) {
+  paintCachedFlight();
+  render();
+  revealApp();
+  if (!FRONTEND_PREVIEW_ONLY) {
+    try {
+      const config = await api('GET', '/api/config', undefined, 5000);
+      state.openaiReady = Boolean(config.openaiReady);
+      state.mode = config.dataMode === 'live' && (config.notionReady || config.notionConfigured) ? 'live' : 'preview';
+      $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
+    } catch { /* 已經先把窗戶打開 */ }
+  }
+  if (incomingPair?.consent && state.mode === 'live' && state.profile) {
     try {
       const result = await api('POST', '/api/passenger', {
         ...state.profile,
         researchConsent: true,
         researchConsentAt: new Date().toISOString(),
-      });
+      }, 12000);
+      localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
+      syncPairCard();
+      showToast('登機資料已寫入你的 Notion。');
+      await restoreNotionFlight(result);
+    } catch (error) {
+      showToast(`配對未寫入：${error.message}`);
+    }
+  } else if (incomingPair) {
+    localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
+    syncPairCard();
+    showToast(incomingPair.consent ? '這台已配對。連線後會寫入 Notion。' : '請先同意研究資料，再掃描配對。');
+  }
+  if (state.mode === 'live' && state.profile && !incomingPair) {
+    try {
+      const result = await api('POST', '/api/passenger', {
+        ...state.profile,
+        researchConsent: true,
+        researchConsentAt: new Date().toISOString(),
+        stampConsent: false,
+      }, 12000);
       await restoreNotionFlight(result);
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
-  const opening = document.querySelector('.scene-image.visible');
-  if (opening && !opening.complete) await Promise.race([whenImageReady(opening), delay(1800)]);
-  render();
-  revealApp();
 }
 void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });

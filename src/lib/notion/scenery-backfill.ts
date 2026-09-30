@@ -27,6 +27,7 @@ export interface SceneryFlightInfo {
   arrivalLocation: string;
   landingTime?: string | null;
   timezone?: string | null;
+  alignedPrompt?: string | null;
 }
 
 /** 同一航班進行中的生圖工作：降落背景生圖與前端補生撞在一起時共用同一個 Promise */
@@ -100,6 +101,7 @@ async function generateAndSaveScenery(
   const sceneryGen = await generateLandingScenery(city, country, info.arrivalLocation, flightId, {
     landingTime: info.landingTime,
     timezone: info.timezone ?? destination?.timezone,
+    alignedPrompt: info.alignedPrompt,
   });
   if (!sceneryGen) {
     console.error(`[scenery] ${flightId} 生圖失敗（${Date.now() - startedAt}ms）— 檢查 OPENAI_API_KEY / OPENAI_IMAGE_MODEL`);

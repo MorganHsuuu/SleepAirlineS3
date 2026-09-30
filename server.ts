@@ -17,6 +17,7 @@ import { findArrivalDestination } from './src/lib/flight/direction';
 import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-context';
 import { resolveGroupSocialCue } from './src/lib/flight/social';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
+import { generateMorningArrival } from './src/lib/ai/morning-content';
 import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech } from './src/lib/ai/speech';
 import { generateSocialTakeaway, fallbackSocialTakeaway } from './src/lib/ai/social-takeaway';
@@ -289,22 +290,26 @@ app.post('/api/passenger', async (req, res) => {
       }
     }
 
-    const consentAt = typeof req.body.researchConsentAt === 'string'
-      ? req.body.researchConsentAt
-      : new Date().toISOString();
-    const stampPageId = result.sourcePage && typeof (result.sourcePage as { id?: string }).id === 'string'
-      ? (result.sourcePage as { id: string }).id
-      : result.passenger.notionId;
-    await stampResearchConsent(stampPageId, consentAt).catch(() => {});
+    // 開頁恢復不要每次重寫同意；只有乘客主動登錄才蓋章。
+    if (req.body.stampConsent !== false) {
+      const consentAt = typeof req.body.researchConsentAt === 'string'
+        ? req.body.researchConsentAt
+        : new Date().toISOString();
+      const stampPageId = result.sourcePage && typeof (result.sourcePage as { id?: string }).id === 'string'
+        ? (result.sourcePage as { id: string }).id
+        : result.passenger.notionId;
+      await stampResearchConsent(stampPageId, consentAt).catch(() => {});
+    }
 
-    // 重用 getOrCreatePassenger 已查到的 landed 列，避免再打一次 Notion
+    // 重用 getOrCreatePassenger 已查到的列，避免再開頁再打一次 Notion
+    let activeFlight = null;
     let lastLandedFlight = null;
-    if (result.passenger.status !== 'in_flight') {
-      if (result.sourceKind === 'landed' && result.sourcePage) {
-        lastLandedFlight = parseFlight(result.sourcePage);
-      } else {
-        lastLandedFlight = await getLastLandedFlight(passengerId);
-      }
+    if (result.sourceKind === 'in_flight' && result.sourcePage) {
+      activeFlight = parseFlight(result.sourcePage);
+    } else if (result.sourceKind === 'landed' && result.sourcePage) {
+      lastLandedFlight = parseFlight(result.sourcePage);
+    } else if (result.passenger.status !== 'in_flight') {
+      lastLandedFlight = await getLastLandedFlight(passengerId);
     }
 
     // 風景圖改由前端背景載入，不擋登入回應
@@ -314,6 +319,7 @@ app.post('/api/passenger', async (req, res) => {
         idPhotoUrl: result.passenger.idPhotoUrl || lastLandedFlight?.idPhotoUrl || null,
       },
       created: result.created,
+      activeFlight,
       lastLandedFlight,
       landingScenery: null,
     });
@@ -634,6 +640,15 @@ app.post('/api/flight/land', async (req, res) => {
       estimatedDistanceKm: Math.round(distanceKm),
     });
 
+    const useMorningVoice = locale !== 'en';
+    const morningPromise = useMorningVoice
+      ? generateMorningArrival({
+          country: arrival.country || arrPlace.countryName,
+          city: arrival.city || arrPlace.cityName,
+          localGreeting: arrLocal?.morningGreeting,
+        })
+      : null;
+
     const broadcastFallback = () => fallbackCaptainBroadcast(
       'landing',
       passenger.name,
@@ -646,24 +661,27 @@ app.post('/api/flight/land', async (req, res) => {
       locale === 'en' ? 'en' : 'zh'
     );
 
-    const captainBroadcast = await generateBroadcastWithBudget(
-      {
-        phase: 'landing',
-        passengerName: passenger.name,
-        departureLocation: activeFlight.departureLocation,
-        arrivalLocation: arrival.displayName,
-        narrativeRegion: region,
-        flightDurationMinutes: durationMinutes,
-        flightProgress: 100,
-        estimatedDistanceKm: distanceKm,
-        routeDirection: activeFlight.routeDirection,
-        socialCue,
-        style: broadcastStyle as BroadcastStyle,
-        localContext: arrLocal,
-        locale: locale === 'en' ? 'en' : 'zh',
-      },
-      broadcastFallback
-    );
+    const morning = morningPromise ? await morningPromise : null;
+    const captainBroadcast = morning
+      ? morning.voiceText
+      : await generateBroadcastWithBudget(
+          {
+            phase: 'landing',
+            passengerName: passenger.name,
+            departureLocation: activeFlight.departureLocation,
+            arrivalLocation: arrival.displayName,
+            narrativeRegion: region,
+            flightDurationMinutes: durationMinutes,
+            flightProgress: 100,
+            estimatedDistanceKm: distanceKm,
+            routeDirection: activeFlight.routeDirection,
+            socialCue,
+            style: broadcastStyle as BroadcastStyle,
+            localContext: arrLocal,
+            locale: 'en',
+          },
+          broadcastFallback
+        );
 
     const [_, speechAudioBase64, socialTakeaway] = await Promise.all([
       updateFlight(activeFlight.notionId, {
@@ -697,6 +715,7 @@ app.post('/api/flight/land', async (req, res) => {
         arrivalLocation: arrival.displayName,
         landingTime,
         timezone: arrival.timezone,
+        alignedPrompt: morning?.imagePrompt,
       });
       if (result.error) {
         console.error(`[scenery] ${activeFlight.flightId} 降落背景生圖失敗：${result.error}`);

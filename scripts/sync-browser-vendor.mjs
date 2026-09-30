@@ -11,3 +11,18 @@ await copyFile(
   join(targetDir, 'html2canvas.min.js'),
 );
 console.log('✓ synced browser share-card renderer');
+
+try {
+  const esbuild = await import('esbuild');
+  await esbuild.build({
+    entryPoints: [join(root, 'node_modules', 'qrcode', 'lib', 'browser.js')],
+    bundle: true,
+    format: 'iife',
+    globalName: 'QRCode',
+    platform: 'browser',
+    outfile: join(targetDir, 'qrcode.js'),
+  });
+  console.log('✓ synced browser QR code');
+} catch (error) {
+  console.warn('QR code bundle skipped:', error instanceof Error ? error.message : error);
+}

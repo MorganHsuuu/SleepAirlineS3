@@ -14,6 +14,8 @@ export const DEFAULT_SCENERY_IMAGE_QUALITY = 'low';
 export interface SceneryPromptContext {
   landingTime?: string | null;
   timezone?: string | null;
+  /** 與早晨語音同一場景。有值時不再改成地標明信片。 */
+  alignedPrompt?: string | null;
 }
 
 export interface SceneryLocalMoment {
@@ -193,7 +195,19 @@ export async function generateLandingScenery(
   const apiKey = openAiApiKey();
   if (!apiKey) return null;
 
-  const imagePrompt = buildSceneryPrompt(city, country, displayName, context);
+  const aligned = context.alignedPrompt?.trim();
+  const place = displayName || `${city}, ${country}`;
+  const imagePrompt = aligned
+    ? [
+        aligned,
+        `The scene is the view just outside an airplane window after landing in ${place}.`,
+        `Keep the same place, the same morning detail, and the same calm atmosphere as the narration.`,
+        `Everyday destination scene, soft natural light, realistic, welcoming, low visual stimulation.`,
+        `Do not swap in a famous landmark unless the prompt above already names that exact place.`,
+        `Absolutely no text, letters, numbers, signs, logos, or watermarks.`,
+        `No close-up faces. No dark, gloomy, empty, or threatening mood.`,
+      ].join(' ')
+    : buildSceneryPrompt(city, country, displayName, context);
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_IMAGE_MODEL ?? DEFAULT_SCENERY_IMAGE_MODEL;
   const useGptImage = isGptImageModel(model);

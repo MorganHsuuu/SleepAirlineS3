@@ -429,12 +429,6 @@ export function fallbackCaptainBroadcast(
       : '';
     return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}請安心入睡，窗外的夜色會替我們保管目的地。${social}祝各位好眠。`;
   }
-  const dur = formatDuration(durationMinutes, locale);
-  const greet = localContext?.morningGreeting ? `${localContext.morningGreeting}！` : '';
-  const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}，` : '本地時間清晨，';
-  const wxBit = localContext?.weatherSummary ? `窗外${localContext.weatherSummary}。` : '';
-  const cultureBit = localContext?.culture
-    ? localContext.culture.split('；')[0]?.split('。')[0] + '。'
-    : '走出艙門，向當地人微笑問好吧。';
-  return `${greet}歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班已平安降落 ${arrivalLabel}，${timeBit}${wxBit}${pax} 自 ${departureLabel} 出發，共飛行 ${dur || '一段'}。${cultureBit} ${socialCueText}`;
+  const greet = (localContext?.morningGreeting || '早安').replace(/[。！!]+$/g, '');
+  return `${greet}。早安，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。清晨的街道正慢慢亮起來，晨光落在這裡的日常風景上。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }
