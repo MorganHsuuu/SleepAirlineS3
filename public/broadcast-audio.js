@@ -1364,10 +1364,34 @@ document.addEventListener('visibilitychange', resumeAudioOnForeground);
 window.addEventListener('pageshow', resumeAudioOnForeground);
 window.addEventListener('focus', resumeAudioOnForeground);
 
+let approachBuffer = null;
+
+async function primeApproachClip(base64) {
+  if (!base64) return false;
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const ctx = await ensureAudioCtx();
+    if (!ctx) return false;
+    approachBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+    return !!approachBuffer;
+  } catch {
+    return false;
+  }
+}
+
+function playApproachClip() {
+  if (!approachBuffer) return Promise.resolve(false);
+  return playWebAudioBuffer(approachBuffer, { volume: 1, tag: 'speech', fadeInMs: 0, padSec: 0 });
+}
+
 window.BroadcastAudio = {
   playCaptainBroadcast,
   playCaptainIntro,
   playTakeoffLeadIn,
+  primeApproachClip,
+  playApproachClip,
   stopCaptainIntro,
   prepareCaptainSpeech,
   prepareTakeoffSpeech,

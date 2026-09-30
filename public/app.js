@@ -908,6 +908,7 @@ function attachApproachVoice(base64) {
   audio.src = `data:audio/mpeg;base64,${base64}`;
   try { audio.load(); } catch { /* noop */ }
   approachVoiceAudio = audio;
+  void window.BroadcastAudio?.primeApproachClip?.(base64);
 }
 
 function blobToBase64(blob) {
@@ -957,20 +958,23 @@ function playApproachVoiceSync() {
 
 async function doLand() {
   if (state.busy || state.stage !== 'cruise') return;
-  if (state.sound) playApproachVoiceSync();
   state.busy = true;
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
   window.BroadcastAudio?.primeFromUserGesture?.();
-  if (state.sound && !window.BroadcastAudio?.wakeupIsPlaying?.()) {
-    window.BroadcastAudio?.startWakeupBed?.(`media/${nextWakeup()}`, 0.16, 2800);
-  }
-  const captainChain = (async () => {
-    await delay(8000);
-    if (!state.sound) return false;
-    if (state.stage !== 'landing' && state.stage !== 'landed') return false;
-    void window.BroadcastAudio?.duckCeremonyBed?.();
-    return window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 800, volume: 0.45 }).catch(() => false);
+  const warmedBed = document.getElementById('ceremony-bed');
+  const wakeupUrl = warmedBed?.dataset?.src || '';
+  if (state.sound && warmedBed) warmedBed.volume = 0;
+  void (async () => {
+    if (!state.sound) return;
+    await delay(1000);
+    if (state.stage !== 'landing' && state.stage !== 'landed') return;
+    await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.9, handoff: true }).catch(() => false);
+    if (state.stage !== 'landing' && state.stage !== 'landed') return;
+    await window.BroadcastAudio?.playApproachClip?.().catch(() => false);
+    if (state.stage !== 'landing' && state.stage !== 'landed') return;
+    const url = wakeupUrl || `media/${nextWakeup()}`;
+    window.BroadcastAudio?.startWakeupBed?.(url, 0.16, 800);
   })();
   primeLandingVideos();
   state.destination ||= destinationFor(state.direction);
@@ -1024,7 +1028,6 @@ async function doLand() {
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    void captainChain.catch(() => {});
     const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
     const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
@@ -1332,7 +1335,6 @@ function bindShadeGesture() {
     if (state.stage === 'cruise' && lip < height * 0.22) {
       setShade('open');
       window.BroadcastAudio?.primeFromUserGesture?.();
-      if (state.sound) window.BroadcastAudio?.startWakeupBed?.(armedWakeup || `media/${nextWakeup()}`, 0.16, 2800);
       armedWakeup = '';
       void doLand();
       return;
