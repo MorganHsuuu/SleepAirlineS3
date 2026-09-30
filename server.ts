@@ -687,7 +687,7 @@ app.post('/api/flight/land', async (req, res) => {
         arrivalLocation: arrival.displayName,
         arrivalLatitude: arrival.latitude,
         arrivalLongitude: arrival.longitude,
-        captainBroadcast,
+        ...(useMorningVoice ? {} : { captainBroadcast }),
         socialCueType: socialCue.cueType,
         socialCueText: socialCue.cueText,
         relatedPassenger: socialCue.relatedPassenger ?? '',
@@ -795,17 +795,38 @@ app.post('/api/arrival-voice', async (req, res) => {
   }
 });
 
+// 降落實際播出的機長廣播。起飛廣播在 /api/flight/takeoff 已寫入 Takeoff Broadcast。
+app.post('/api/flight/captain-broadcast', async (req, res) => {
+  try {
+    const passengerId = String(req.body?.passengerId || '');
+    const flightId = String(req.body?.flightId || '');
+    const captainBroadcast = typeof req.body?.captainBroadcast === 'string' ? req.body.captainBroadcast.trim() : '';
+    if (!passengerId || !flightId || !captainBroadcast) {
+      res.status(400).json({ error: '請提供乘客、航班與廣播文字。' }); return;
+    }
+    const flight = await getLastLandedFlight(passengerId);
+    if (!flight || flight.flightId !== flightId) {
+      res.status(404).json({ error: '找不到這趟已降落航班。' }); return;
+    }
+    await updateFlight(flight.notionId, { captainBroadcast: captainBroadcast.slice(0, 2000) });
+    res.json({ ok: true, flightId });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
+  }
+});
+
 // Optional self-report. The timed window interval remains separate from time actually slept.
 app.post('/api/flight/sleep-report', async (req, res) => {
   try {
-    const { passengerId, flightId, selfReportedSleepMinutes, sleepQuality } = req.body;
+    const { passengerId, flightId, selfReportedSleepMinutes, sleepQuality, moodAfter: moodAfterRaw } = req.body;
     const minutes = selfReportedSleepMinutes === '' || selfReportedSleepMinutes == null
       ? null : Number(selfReportedSleepMinutes);
     const quality = sleepQuality === '' || sleepQuality == null ? null : Number(sleepQuality);
+    const moodAfter = moodAfterRaw === '' || moodAfterRaw == null ? null : Number(moodAfterRaw);
     if (typeof passengerId !== 'string' || !passengerId || typeof flightId !== 'string' || !flightId) {
       res.status(400).json({ error: '請提供乘客與航班 ID。' }); return;
     }
-    if (minutes === null && quality === null) {
+    if (minutes === null && quality === null && moodAfter === null) {
       res.status(400).json({ error: '請至少填寫一項睡眠回報。' }); return;
     }
     if (minutes !== null && (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440)) {
@@ -814,6 +835,9 @@ app.post('/api/flight/sleep-report', async (req, res) => {
     if (quality !== null && (!Number.isInteger(quality) || quality < 1 || quality > 5)) {
       res.status(400).json({ error: '睡眠品質需介於 1 與 5。' }); return;
     }
+    if (moodAfter !== null && (!Number.isInteger(moodAfter) || moodAfter < 0 || moodAfter > 100)) {
+      res.status(400).json({ error: '睡醒心情需介於 0 與 100。' }); return;
+    }
     const flight = await getLastLandedFlight(passengerId);
     if (!flight || flight.flightId !== flightId) {
       res.status(404).json({ error: '找不到這趟已降落航班。' }); return;
@@ -821,6 +845,7 @@ app.post('/api/flight/sleep-report', async (req, res) => {
     await updateFlight(flight.notionId, {
       ...(minutes === null ? {} : { selfReportedSleepMinutes: minutes }),
       ...(quality === null ? {} : { sleepQuality: quality }),
+      ...(moodAfter === null ? {} : { moodAfter }),
     });
     res.json({ ok: true, flightId });
   } catch (err) {

@@ -253,7 +253,7 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 ` : ''}
 寫作：
 - 繁體中文，${isTakeoff ? '75–95' : '90–130'} 字，最多不超過 ${isTakeoff ? '105' : '160'} 字
-- ${isTakeoff ? '起飛廣播 3–4 句：①歡迎搭乘 Sleep Airline＋機長身分＋出發地＋航向，每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ②剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ③同組社交最多一句 ④輕聲祝眠' : '一句一重點'}
+- ${isTakeoff ? '起飛廣播 3–4 句：①歡迎搭乘 Sleep Airline＋機長身分，緊接著必須原句說出「我們從{廣播用地名的城市}出發，航向{方向}」，城市名不可省略、不可改成「這裡」或「當地」 ②每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ③剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ④同組社交最多一句，再輕聲祝眠' : '一句一重點'}
 - 刪掉「有任何需求」「感謝選搭本航空」「祝您旅途愉快」「期待美好瞬間」等套話
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
@@ -312,6 +312,7 @@ ${input.localContext ? `\n【當地資訊 · 出發地】\n${buildLocalBlock(inp
 ${socialLine}
 
 請依「3–4 句」結構寫一段流暢口語廣播，第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
+緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，航向${direction}」，這兩個詞都要出現，不可省略出發地。
 每次換一種夜色畫面。睡眠只給一個很短的動作，不要展開。
 ${noTeammateFacts
       ? '這次不寫任何同組社交句。'
@@ -364,12 +365,28 @@ ${buildSocialBlock(input.socialCue, locale)}
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
-  return ensureWelcomeAboardPhrase(isTakeoff ? stripSoloSkyLines(raw) : raw, locale);
+  const spoken = ensureWelcomeAboardPhrase(isTakeoff ? stripSoloSkyLines(raw) : raw, locale);
+  return isTakeoff ? ensureDepartureSpoken(spoken, departureLabel, direction, locale) : spoken;
 }
 
 const SOLO_SKY_PATTERN = /獨享|獨自|只有你|(?:夜空|天空)[^。！？]{0,4}交給你|\balone\b|only you|(?:sky|night) to yourself/i;
 
 /** 起飛不講「獨享夜空」：模型仍寫出時整句移除 */
+function ensureDepartureSpoken(text: string, departureLabel: string, direction: string, locale: UiLocale): string {
+  const city = departureLabel.split(',')[0].trim();
+  if (!city || text.includes(city)) return text;
+  if (locale === 'en') {
+    return text.replace(
+      /Welcome aboard Sleep Airline, this is your captain\.?\s*/i,
+      `Welcome aboard Sleep Airline, this is your captain. We are departing from ${city}, heading ${direction}. `
+    );
+  }
+  return text.replace(
+    /歡迎搭乘\s*Sleep\s*Airline，這裡是機長[。，]?\s*/i,
+    `歡迎搭乘 Sleep Airline，這裡是機長。我們從${city}出發，航向${direction}。`
+  );
+}
+
 function stripSoloSkyLines(text: string): string {
   const sentences = text.match(/[^。！？.!?]+[。！？.!?]*\s*/g);
   if (!sentences) return text;

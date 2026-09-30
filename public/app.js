@@ -173,14 +173,15 @@ function paintLeg() {
   if (!from || !to || !strip) return;
   const place = state.destination?.name || '';
   const headingOn = !$('glass-compass')?.hidden;
-  const cruise = state.stage === 'cruise';
+  const flying = state.stage === 'takeoff' || state.stage === 'cruise';
   const landed = state.stage === 'landed';
+  const heading = directions[state.direction]?.name || '';
   from.textContent = state.origin?.name || '';
-  to.textContent = place;
-  const show = (cruise || landed) && !!place && !headingOn;
+  to.textContent = landed && place ? place : heading;
+  const show = !headingOn && !!from.textContent && !!to.textContent && (flying || (landed && !!place));
   strip.classList.toggle('is-route', show);
   strip.hidden = !show;
-  strip.classList.toggle('is-flying', show && cruise);
+  strip.classList.toggle('is-flying', show && flying);
   strip.classList.toggle('is-landed', show && landed);
 }
 function applyStoredDirection(routeDirection) {
@@ -1124,6 +1125,13 @@ async function doLand() {
     if (state.sound) {
       void playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, { skipCaptainIntro: true, restoreBed: true });
     }
+    if (state.mode === 'live' && state.profile && state.lastFlight?.flightId && spoken) {
+      void api('POST', '/api/flight/captain-broadcast', {
+        passengerId: state.profile.passengerId,
+        flightId: state.lastFlight.flightId,
+        captainBroadcast: spoken,
+      }).catch(() => {});
+    }
     stopLandingVideos();
     pinLandingFrame(landingVideo);
     const weather = await weatherJob;
@@ -1133,7 +1141,14 @@ async function doLand() {
     await delay(900);
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
-    await offerSleepDial();
+    const moodAfter = await offerSleepDial();
+    if (moodAfter != null && state.mode === 'live' && state.profile && state.lastFlight?.flightId) {
+      void api('POST', '/api/flight/sleep-report', {
+        passengerId: state.profile.passengerId,
+        flightId: state.lastFlight.flightId,
+        moodAfter,
+      }).catch(() => {});
+    }
     await showWeatherCard(state.destination, weather);
     if (state.sound) void BroadcastAudio?.fadeOutLandingMusic?.({ ms: 4500 });
     state.nextOrigin = state.destination;
