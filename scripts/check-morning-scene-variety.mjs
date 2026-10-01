@@ -167,10 +167,10 @@ try {
       { city: 'New Taipei City', country: 'Taiwan' },
       0.3
     );
-    assert.match(newTaipei.localFeature, /真實城市風貌與地理環境/);
+    assert.match(newTaipei.localFeature, /自然地貌與天光/);
     assert.doesNotMatch(
       `${newTaipei.voiceText} ${newTaipei.imagePrompt}`,
-      /Yangmingshan|陽明山/i
+      /Yangmingshan|陽明山|真實城市風貌|街道尺度|建築材料/i
     );
 
     const taipei = await generateMorningArrival({ city: 'Taipei', country: 'Taiwan' }, 0.3);
@@ -184,10 +184,27 @@ try {
       { city: 'Exampleville', country: 'Exampleland' },
       0.55
     );
-    assert.match(result.localFeature, /真實城市風貌與地理環境/);
-    assert.match(result.voiceText, /真實城市風貌與地理環境/);
-    assert.match(result.imagePrompt, /real urban character and geographic setting/i);
-    assert.doesNotMatch(`${result.voiceText} ${result.imagePrompt}`, /料理|dish|landmark|地標/i);
+    assert.match(result.localFeature, /日常的餐桌風景/);
+    assert.match(result.voiceText, /日常的餐桌風景/);
+    assert.match(result.imagePrompt, /everyday local food scene/i);
+    assert.doesNotMatch(
+      `${result.voiceText} ${result.imagePrompt}`,
+      /真實城市風貌|街道尺度|建築材料|料理|dish|landmark|地標/i
+    );
+  });
+
+  await verifyGap('笠間使用具名神社而不是空泛地理句', async () => {
+    const result = await generateMorningArrival(
+      { city: 'Kasama', country: 'Japan' },
+      0
+    );
+    assert.match(result.voiceText, /笠間稲荷神社/);
+    assert.match(result.localFeature, /笠間稲荷神社/);
+    assert.match(result.imagePrompt, /Kasama Inari Shrine/i);
+    assert.doesNotMatch(
+      `${result.voiceText} ${result.imagePrompt}`,
+      /真實城市風貌|街道尺度|建築材料/
+    );
   });
 
   await verifyGap('夜間 fallback 不產生晨光衝突', async () => {

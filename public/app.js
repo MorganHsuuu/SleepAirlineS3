@@ -93,17 +93,39 @@ function setInflightStandby(inflight) {
   $('window-glass')?.classList.toggle('inflight-active', !!inflight);
   $('inflight-scene')?.classList.toggle('is-on', !!inflight && img.classList.contains('visible'));
 }
-function setScene(which) {
+function setScene(which, { holdInflight = false, holdLanding = false } = {}) {
   $('cloud-image').classList.toggle('visible', which === 'clouds' || which === 'descent');
   $('arrival-image').classList.toggle('visible', which === 'arrival');
   $('globe-canvas').classList.toggle('active', which === 'globe');
   $('descent-video').classList.toggle('active', which === 'descent');
   $('landing-video').classList.toggle('active', which === 'approach');
-  $('landing-cloud-scene')?.classList.toggle('is-on', which === 'cloud-approach');
+  $('landing-cloud-scene')?.classList.toggle('is-on', which === 'cloud-approach' || holdLanding);
   $('inflight-scene')?.classList.toggle(
     'is-on',
-    $('window-glass')?.classList.contains('inflight-active') && which === 'clouds',
+    holdInflight || ($('window-glass')?.classList.contains('inflight-active') && which === 'clouds'),
   );
+}
+function skyPeriodFromHour(hour, isDay) {
+  if (!isDay && (hour >= 21 || hour < 5)) return 'night';
+  if (hour < 8) return 'dawn';
+  if (hour < 17) return 'day';
+  if (hour < 21) return 'dusk';
+  return 'night';
+}
+async function applyDestinationSky(place) {
+  const glass = $('window-glass');
+  if (!glass || !Number.isFinite(place?.lat) || !Number.isFinite(place?.lon)) return;
+  try {
+    const data = await Promise.race([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,weather_code,is_day&timezone=auto`).then((res) => res.json()),
+      delay(4000).then(() => null),
+    ]);
+    const hour = parseInt(String(data?.current?.time || '').match(/T(\d{2}):/)?.[1] || '', 10);
+    const isDay = data?.current?.is_day !== 0;
+    glass.dataset.sky = Number.isFinite(hour) ? skyPeriodFromHour(hour, isDay) : 'day';
+  } catch {
+    glass.dataset.sky = 'day';
+  }
 }
 function shadeOpenLip() {
   const glass = $('window-glass');
@@ -688,6 +710,7 @@ async function doTakeoff() {
     setInflightStandby(true);
     setScene('clouds'); setShade('closed');
     state.stage = 'cruise'; render();
+    void applyDestinationSky(state.destination || destinationFor(state.direction));
     $('window-caption').textContent = '雲層上方 · 飛行中';
     hideCeremony();
     if (state.mode === 'live') { void fetchBoard().catch(() => {}); }
@@ -857,10 +880,15 @@ async function loadWeather(place) {
   const guess = climateGuess(place?.lat ?? 25);
   try {
     const data = await Promise.race([
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,weather_code`).then((res) => res.json()),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,weather_code,is_day&timezone=auto`).then((res) => res.json()),
       delay(4000).then(() => null),
     ]);
     if (!data?.current || !Number.isFinite(data.current.temperature_2m)) return guess;
+    const hour = parseInt(String(data.current.time || '').match(/T(\d{2}):/)?.[1] || '', 10);
+    const isDay = data.current.is_day !== 0;
+    if ($('window-glass') && Number.isFinite(hour)) {
+      $('window-glass').dataset.sky = skyPeriodFromHour(hour, isDay);
+    }
     return { temp: Math.round(data.current.temperature_2m), kind: weatherKind(data.current.weather_code) };
   } catch {
     return guess;
@@ -1067,6 +1095,7 @@ async function doLand() {
     $('glass-pin-from').textContent = state.origin.name;
     $('glass-pin-to').textContent = state.destination.name;
     paintLeg();
+    void applyDestinationSky(state.destination);
     const weatherJob = loadWeather(state.destination);
     setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
     $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
@@ -1079,11 +1108,14 @@ async function doLand() {
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
     $('window-glass').classList.add('arc-dive');
     $('glass-route').classList.add('is-leaving');
-    setScene('cloud-approach');
+    setScene('cloud-approach', { holdInflight: true });
     if (state.sound) {
       void window.BroadcastAudio?.duckCeremonyBed?.();
       void window.BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .42, fadeInMs: 1200 });
     }
+    await delay(700);
+    $('inflight-scene')?.classList.remove('is-on');
+    $('window-glass')?.classList.remove('inflight-active');
     await delay(380);
     $('window-caption').textContent = '穿越雲層 · 緩緩下降';
     await delay(1500);
@@ -1148,7 +1180,9 @@ async function doLand() {
         image.src = ARRIVAL_FALLBACK;
       };
     });
-    setScene('arrival');
+    setScene('arrival', { holdLanding: true });
+    await delay(1100);
+    $('landing-cloud-scene')?.classList.remove('is-on');
     state.stage = 'landed';
     render();
     const spoken = arrivalVoice?.text
@@ -1166,7 +1200,7 @@ async function doLand() {
     stopLandingVideos();
     const weather = await weatherJob;
     // Let the arrival photo ease out of developing blur before weather fades in.
-    await delay(2200);
+    await delay(1600);
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
     await delay(900);
     $('window-caption').textContent = '';
@@ -1330,10 +1364,7 @@ function bindShadeGesture() {
   let armedWakeup = '';
   const armAudio = () => {
     window.BroadcastAudio?.primeFromUserGesture?.();
-    if (state.stage === 'cruise' && state.sound && !armedWakeup) {
-      armedWakeup = `media/${nextWakeup()}`;
-      window.BroadcastAudio?.warmWakeupBed?.(armedWakeup);
-    }
+    window.BroadcastAudio?.armWakeupCarrier?.();
   };
   const shadePanel = panel();
   shadePanel.addEventListener('touchstart', (event) => {
@@ -1380,7 +1411,10 @@ function bindShadeGesture() {
     if (state.stage === 'cruise' && lip < height * 0.22) {
       setShade('open');
       window.BroadcastAudio?.primeFromUserGesture?.();
-      armedWakeup = '';
+      if (state.sound) {
+        armedWakeup = armedWakeup || `media/${nextWakeup()}`;
+        window.BroadcastAudio?.startWakeupBed?.(armedWakeup, 0);
+      }
       void doLand();
       return;
     }

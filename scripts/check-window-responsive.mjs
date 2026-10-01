@@ -18,40 +18,32 @@ const requiredRules = [
     /\.leg-place\.from\{[^}]*font-size:clamp\(10px,2\.75cqi,16px\)/,
   ],
   [
-    '飛行中的 FROM 與目的地保留正間距',
-    /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*margin:\.7cqi 0 0;/,
+    '飛行資訊以置中直向堆疊排在窗戶中下',
+    /\.leg-strip\.is-flying\{[^}]*width:max-content;max-width:78%/,
   ],
   [
-    '飛行資訊以對稱三欄將文字固定在玻璃中心',
-    /\.leg-strip\.is-flying\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:clamp\(42px,12\.5cqi,52px\) minmax\(0,1fr\) clamp\(42px,12\.5cqi,52px\)/,
+    '飛行中顯示指南針',
+    /\.leg-strip\.is-flying \.leg-mini-compass\{display:block\}/,
   ],
   [
-    '國旗不參與指南針與目的地的欄寬計算',
-    /\.leg-strip\.is-flying \.leg-flag\{position:absolute;/,
+    '飛行中的 FROM 置中並可省略',
+    /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*text-align:center/,
   ],
   [
-    '飛行中的 FROM 可在安全寬度內省略',
-    /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*grid-column:2;grid-row:2;[^}]*width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis;text-align:center/,
+    '飛行方向文字置中',
+    /\.leg-strip\.is-flying \.leg-heading-copy\{[^}]*justify-content:center/,
   ],
   [
-    '飛行方向文字本身對準玻璃中心',
-    /\.leg-strip\.is-flying \.leg-heading-copy\{[^}]*justify-content:center;[^}]*justify-self:stretch/,
+    '降落資訊以置中直向堆疊',
+    /\.leg-strip\.is-landed\{[^}]*width:max-content;max-width:78%/,
   ],
   [
-    '降落資訊以對稱外欄將文字固定在玻璃中心',
-    /\.leg-strip\.is-landed\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,62cqi\) minmax\(0,1fr\)/,
+    '降落後的 FROM 置中並可省略',
+    /\.leg-strip\.is-landed \.leg-origin-label\{[^}]*text-align:center/,
   ],
   [
-    '降落目的地以國旗與文字兩欄排列',
-    /\.leg-strip\.is-landed \.leg-destination\{display:contents\}/,
-  ],
-  [
-    '降落後的 FROM 與目的地置中並可省略',
-    /\.leg-strip\.is-landed \.leg-origin-label\{[^}]*grid-column:2;grid-row:3;width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis;text-align:center/,
-  ],
-  [
-    '抵達目的地文字本身對準玻璃中心',
-    /\.leg-strip\.is-landed \.leg-heading-copy\{[^}]*justify-self:stretch;justify-content:center/,
+    '抵達目的地文字置中',
+    /\.leg-strip\.is-landed \.leg-heading-copy\{[^}]*justify-content:center/,
   ],
   [
     '窗內指南針文字有最小字級',
@@ -109,9 +101,14 @@ assert.match(
   '降落雲霧應使用生成的透明圖片',
 );
 assert.match(
+  css,
+  /\.leg-strip\{[^}]*left:50%;bottom:8%;[^}]*flex-direction:column;[^}]*align-items:center/,
+  '航線資訊應整組置中於窗戶中下',
+);
+assert.match(
   html,
   /<span class="leg-heading-text">\s*<span class="leg-flag" id="leg-flag"/,
-  '國旗應定位於目的地文字群旁，不得占用置中欄寬',
+  '國旗應放在目的地文字群旁',
 );
 assert.doesNotMatch(css, /\.landing-cloud-wisps\{[^}]*background:/);
 assert.match(
@@ -131,8 +128,8 @@ assert.match(
 );
 assert.match(
   css,
-  /\.leg-strip\.is-landed \.leg-flag\{position:absolute;right:calc\(100% \+ 1\.4cqi\);top:50%;translate:0 -50%/,
-  '國旗應緊鄰目的地文字左側',
+  /\.window-glass\[data-sky="night"\] \.inflight-scene/,
+  '飛行與降落天空應能依當地時段切換',
 );
 assert.match(
   css,

@@ -640,11 +640,17 @@ function startWakeupBed(url, volume = 0.14, fadeInMs = 0) {
   landingAudio = audio;
   landingVolume = volume;
   wakeupBedOpen = true;
-  bedCommitted = true;
-  const from = same && !audio.paused ? audio.volume : Math.max(0.02, volume * 0.12);
+  bedCommitted = volume > 0;
+  const from = same && !audio.paused
+    ? audio.volume
+    : (volume <= 0 ? 0 : Math.max(0.02, volume * 0.12));
   if (audio.paused || audio.volume < 0.015) audio.volume = from;
   const played = audio.play();
   if (played && typeof played.catch === 'function') played.catch(() => {});
+  if (volume <= 0) {
+    audio.volume = 0;
+    return true;
+  }
   if (fadeInMs > 0) void fadeAudioVolume(audio, audio.volume, volume, fadeInMs);
   else audio.volume = volume;
   return true;
@@ -877,6 +883,21 @@ function ensureBedAudio() {
 }
 
 let bedCommitted = false;
+
+/** 手指按下只解鎖載體，用無聲 WAV；真正的起床音樂要等窗戶全開。 */
+function armWakeupCarrier() {
+  primeFromUserGesture();
+  const audio = ensureBedAudio();
+  if (bedCommitted && wakeupBedOpen) return true;
+  if (!audio.paused && audio.dataset.src === SILENT_KEEPALIVE) return true;
+  try {
+    const played = tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
+    if (played && typeof played.catch === 'function') played.catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** 手指按下遮板時就開始播，音量先壓低。Safari 不承認之後的 pointerup。 */
 function warmWakeupBed(url) {
@@ -1584,6 +1605,7 @@ window.BroadcastAudio = {
   stopFlightSfx,
   playLandingMusic,
   startWakeupBed,
+  armWakeupCarrier,
   warmWakeupBed,
   stopWakeupWarmup,
   wakeupIsPlaying,

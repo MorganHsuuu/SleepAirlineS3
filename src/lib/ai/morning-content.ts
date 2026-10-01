@@ -194,18 +194,80 @@ const KNOWN_SCENE_SUBJECTS: Array<{
       },
     },
   },
+  {
+    aliases: ['kasama', '笠間', '笠間市'],
+    subjects: {
+      landmark: {
+        zh: '笠間稲荷神社',
+        en: 'Kasama Inari Shrine',
+        detailZh: '朱紅鳥居與神社建築立在陶器之鄉的山邊',
+        keywords: ['Kasama Inari Shrine', 'vermilion torii'],
+      },
+      nature: {
+        zh: '佐白山與神社山林',
+        en: 'Mount Sashiro and the wooded shrine hills',
+        detailZh: '山坡樹林環抱著笠間的神社與陶鄉',
+        keywords: ['Mount Sashiro', 'Kasama hills'],
+      },
+      food: {
+        zh: '笠間栗子',
+        en: 'Kasama chestnuts',
+        detailZh: '秋季栗子與陶鄉餐桌是笠間常見的飲食風景',
+        keywords: ['Kasama chestnuts', 'local food'],
+      },
+      'street-market': {
+        zh: '笠間藝術之森與陶窯街道',
+        en: 'Kasama Craft Hills and kiln streets',
+        detailZh: '陶窯、工房與散步道構成笠間的工藝街景',
+        keywords: ['Kasama Craft Hills', 'kiln street'],
+      },
+      'culture-life': {
+        zh: '笠間燒',
+        en: 'Kasama ware pottery',
+        detailZh: '陶輪、釉色與工房日常呈現當地的燒物文化',
+        keywords: ['Kasama ware', 'pottery studio'],
+      },
+    },
+  },
 ];
 
 function genericSceneSubject(
-  city: string
+  city: string,
+  theme: ArrivalSceneTheme
 ): SceneSubject {
-  return {
-    zh: `${city}真實城市風貌與地理環境`,
-    en: `the real urban character and geographic setting of ${city}`,
-    detailZh: '只以可查證的街道尺度、建築材料與地理環境呈現目的地',
-    keywords: [`${city} urban character`, 'authentic geography'],
-    isGeneric: true,
+  const table: Record<ArrivalSceneThemeId, Omit<SceneSubject, 'isGeneric'>> = {
+    landmark: {
+      zh: `${city}的代表性建築與城市輪廓`,
+      en: `the distinctive architecture and skyline of ${city}`,
+      detailZh: '建築層次與街道輪廓讓人一眼認出這座城市',
+      keywords: [`${city} architecture`, `${city} skyline`],
+    },
+    nature: {
+      zh: `${city}的自然地貌與天光`,
+      en: `the natural landscape around ${city}`,
+      detailZh: '山、水或開闊地貌構成當地的地理樣子',
+      keywords: [`${city} landscape`, 'natural scenery'],
+    },
+    food: {
+      zh: `${city}日常的餐桌風景`,
+      en: `an everyday local food scene in ${city}`,
+      detailZh: '街上常見的飲食攤與餐桌氣味',
+      keywords: [`${city} food`, 'local table'],
+    },
+    'street-market': {
+      zh: `${city}的街道與市集節奏`,
+      en: `the streets and market rhythm of ${city}`,
+      detailZh: '店面、行人與屋瓦構成當地日常街景',
+      keywords: [`${city} street`, 'market street'],
+    },
+    'culture-life': {
+      zh: `${city}日常的生活風景`,
+      en: `everyday cultural life in ${city}`,
+      detailZh: '交通、廟宇或生活場景呈現當地步調',
+      keywords: [`${city} daily life`, 'local culture'],
+    },
   };
+  return { ...table[theme.id], isGeneric: true };
 }
 
 function knownSceneSubjects(
@@ -241,7 +303,7 @@ function resolveSceneSubject(
   if (knownSubject) return knownSubject;
   const landmark = trustedLandmarkSubject(input);
   if (landmark) return landmark;
-  return genericSceneSubject(input.city.trim());
+  return genericSceneSubject(input.city.trim(), theme);
 }
 
 const UNSAFE_VOICE = /獨自|孤單|寂寞|孤獨|一個人|沒有人|被丟下|失敗|浪費|掙扎|撐過|逃避|黑暗|迷失|你應該|你必須|振作|正向一點|一定會很棒|別難過|做得很好|又撐過一夜|alone|lonely|by yourself|isolated|abandoned|cheer up|you should|you must/i;
@@ -369,6 +431,29 @@ function voiceMatchesWeather(voiceText: string, weatherSummary?: string | null):
   return !weatherTerm || voiceText.includes(weatherTerm);
 }
 
+function arrivalHello(localTimeLabel?: string | null): string {
+  const label = (localTimeLabel || '').trim();
+  if (/晚上|夜間|夜晚|入夜|午夜|深夜|凌晨|night|evening|midnight|\bpm\b/.test(label)) return '晚安';
+  if (/黃昏|傍晚|日落|sunset|dusk/.test(label)) return '傍晚好';
+  if (/中午|下午|afternoon|noon/.test(label)) return '午安';
+  return '早安';
+}
+
+function timeAdjustedGreeting(localGreeting: string, localTimeLabel?: string | null): string {
+  const hello = arrivalHello(localTimeLabel);
+  const greeting = (localGreeting || hello).replace(/[。！!]+$/g, '');
+  if (hello === '晚安') {
+    if (/おはよう/.test(greeting)) return 'こんばんは';
+    if (/^bonjour$/i.test(greeting)) return 'Bonsoir';
+    if (/早安/.test(greeting)) return '晚安';
+  }
+  if ((hello === '午安' || hello === '傍晚好') && /おはよう/.test(greeting)) return 'こんにちは';
+  return greeting;
+}
+
+const VOICE_BOILERPLATE =
+  /真實城市風貌|街道尺度|建築材料|地理環境呈現|widely documented|real urban character and geographic setting/i;
+
 function fallbackMorning(
   input: MorningContentInput,
   theme: ArrivalSceneTheme
@@ -376,15 +461,16 @@ function fallbackMorning(
   const city = input.city.trim() || input.country.trim() || '今天的目的地';
   const country = input.country.trim() || city;
   const subject = resolveSceneSubject({ ...input, city, country }, theme);
-  const greeting = (input.localGreeting || '早安').replace(/[。！!]+$/g, '');
+  const greeting = timeAdjustedGreeting(input.localGreeting || arrivalHello(input.localTimeLabel), input.localTimeLabel);
+  const hello = arrivalHello(input.localTimeLabel);
   const weather = (input.weatherSummary || '').trim();
   const time = fallbackTimeContext(input.localTimeLabel);
   const weatherLine = weather
     ? `${input.localTimeLabel || '現在'}，這裡${weather}。`
     : time.voiceLine;
-  const voiceText = `${greeting}。早安，Sleep Airline 已抵達今天的目的地——${city}。${weatherLine}今天看見的是${subject.zh}，${subject.detailZh}。歡迎抵達${city}，今天的旅程從這裡開始。`;
+  const voiceText = `${greeting}。${hello}，Sleep Airline 已抵達今天的目的地——${city}。${weatherLine}窗外看見的是${subject.zh}，${subject.detailZh}。歡迎抵達${city}，今天的旅程從這裡開始。`;
   const subjectSafety = subject.isGeneric
-    ? `Use only the real urban character and geographic setting of ${city}; never invent specific cultural facts.`
+    ? `Show a believable, destination-specific view of ${subject.en}; never invent a fake named attraction or recipe.`
     : `Keep this verified destination subject unchanged; do not replace it with a generic scene.`;
   return {
     destination: { country, city },
@@ -455,12 +541,13 @@ export function parseMorningResponse(
   if (themeId !== expectedThemeId || !subjectZh || !subjectEn) return null;
   if (expectedThemeId === 'landmark') {
     const trusted = trustedLandmarkSubject(input);
-    if (
-      !trusted ||
-      normalizeSubjectName(subjectZh) !== normalizeSubjectName(trusted.zh) ||
-      normalizeSubjectName(subjectEn) !== normalizeSubjectName(trusted.en)
-    ) {
-      return null;
+    if (trusted) {
+      if (
+        normalizeSubjectName(subjectZh) !== normalizeSubjectName(trusted.zh) ||
+        normalizeSubjectName(subjectEn) !== normalizeSubjectName(trusted.en)
+      ) {
+        return null;
+      }
     }
   }
 
@@ -477,7 +564,9 @@ export function parseMorningResponse(
   if (!voiceMatchesWeather(voiceText, input.weatherSummary)) return null;
   const localFeature = clean(data.localFeature);
   if (!voiceText.includes(subjectZh) || !localFeature.includes(subjectZh)) return null;
+  if (VOICE_BOILERPLATE.test(`${voiceText} ${localFeature}`)) return null;
   let imagePrompt = clean(data.imagePrompt);
+  if (VOICE_BOILERPLATE.test(imagePrompt)) return null;
   if (/airplane|aircraft|plane window|window frame|porthole|cabin|\bwings?\b|舷窗|機艙|機翼|窗/i.test(imagePrompt)) {
     imagePrompt = '';
   }
@@ -513,25 +602,27 @@ export function parseMorningResponse(
   };
 }
 
-const SYSTEM_PROMPT = `你是 Sleep Airline 的早晨抵達內容系統。對象是剛醒來的旅客。這不是醫療、治療或勵志教練。
+const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛醒來、看著窗外照片的旅客。這不是醫療、治療或勵志教練。
 禁止診斷、解讀情緒，或告訴對方該有什麼感覺。
 
-語氣：溫和、平靜、中性、輕、自然、不評判、不要求。像一段輕柔的航班抵達廣播，加上一點當地日常。
+語氣：溫和、平靜、中性、輕、自然、不評判、不要求。像機長帶著旅客看窗外那張照片，輕聲介紹眼前的當地特色。
 禁止：「你應該」「你必須」「振作」「正向」「今天一定會很棒」「別難過」「你做得很好」「你又撐過一夜」。
 禁止孤獨、遺棄、失敗、壓力、罪惡、比較：獨自、孤單、寂寞、一個人、沒有人、失敗、浪費、掙扎、逃避、黑暗、迷失。
+禁止空話與契約用語，絕對不要寫：真實城市風貌、地理環境、街道尺度、建築材料、可查證、widely documented、urban character。
 
 voiceText 主體必須是繁體中文口語，約 40–80 個中文字，念出來大約 15–30 秒。
 結構：
-A. 抵達：早安，Sleep Airline 已抵達今天的目的地——{城市}。
-B. 嚴格採用 user message 的 sceneTheme，只選一個 widely documented canonical local subject：可看到、可查證且明確屬於這座城市的具體主題。
-C. 同一個主題再補一個廣泛成立的日常細節，不要發明地標、料理、傳統、節慶或歷史。
+A. 抵達：先放當地語言問候（localGreeting，並依 localTimeLabel 改成對應時段，例如日文深夜用こんばんは、下午用こんにちは），再接中文時段問候（早安／午安／傍晚好／晚安），然後「Sleep Airline 已抵達今天的目的地——{城市}。」
+B. 嚴格採用 user message 的 sceneTheme，只選一個確實屬於這座城市、有名字的具體主題：著名景點、自然地貌、地方料理、街區市集或日常文化場景。像在介紹窗外那張照片。
+C. 同一個主題再補一個具體、看得見的細節（顏色、材料、氣味、地形或活動），不要發明地標、料理、傳統、節慶或歷史。
 D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
-開頭可以先放當地語言的早安（localGreeting），後面全部用繁體中文，不要翻譯那句早安，也不要改成英文廣播。
+開頭可以先放當地語言問候，後面全部用繁體中文，不要翻譯那句問候，也不要改成英文廣播。
 若有提供天氣，voiceText 必須用一句話自然說出溫度與晴雨，例如「現在氣溫 18 度，天空大致晴朗」。
-若有提供 localTimeLabel，語音與 imagePrompt 的光線、天空和城市活動必須符合該當地時間，不可一律改成日出。
+若有提供 localTimeLabel，語音與 imagePrompt 的光線、天空和城市活動必須符合該當地時間，不可一律改成日出，也不可在深夜仍說早安。
 內容必須能對上這個城市，不能是任何城市都適用的空話。
 voiceText、localFeature、imagePrompt 必須描述 sceneTheme 下的同一個具體主題，只能抽選一次，不可各自換題。
 回傳 sceneTheme.themeId 必須逐字等於 user message 的 sceneTheme.id。sceneTheme.subject.zh 與 sceneTheme.subject.en 是同一主題的中英文名稱；voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en，供程式驗證同步。
+若 user message 提供 reliableFallbackSubject，優先使用它。若沒有，請自行選一個廣泛記載、確實位於這座城市的具名主題，例如神社、城堡、山、港、市場或地方名物。
 imagePrompt 用英文，必須是 voiceText 裡同一個地點、同一個主題、同一種天氣與氣氛。天空、光線、地面要和語音說的天氣一致。這個主題要成為畫面主體，讓人看得出是這個城市，不要畫成任何地方都適用的郊區住宅。可以出現屬於這個城市的代表性建築或地貌，但必須就是語音講到的那一個，禁止換成別的城市或該國另一個更有名的地標。
 若抽中的類型沒有可靠題材，改用該地真實的著名景點、自然地貌或文化場景；禁止捏造。Taipei 的可靠地標可用 Taipei 101；Cairo／Giza 可用吉薩金字塔，但埃及其他城市不可一律使用金字塔。
 非 landmark 題材也只能使用廣泛記載、可查證的當地主題；只要有任何文化或地理聲明無法確認，safetyCheck.containsUnverifiedCulturalClaim 必須據實回傳 true，不得為了通過驗證而填 false。
@@ -570,7 +661,13 @@ async function requestMorning(
             id: theme.id,
             label: theme.label,
             instruction: theme.instruction,
-            reliableFallbackSubject: {
+            reliableFallbackSubject: subject.isGeneric
+              ? undefined
+              : {
+                  zh: subject.zh,
+                  en: subject.en,
+                },
+            subjectHint: {
               zh: subject.zh,
               en: subject.en,
             },

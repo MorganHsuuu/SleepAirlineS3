@@ -246,6 +246,15 @@ export const RELIABLE_DESTINATION_SUBJECTS: readonly ReliableDestinationSubject[
     sceneryHint:
       'Make the white cliffside houses and blue domes above the caldera the unmistakable subject.',
   },
+  {
+    aliases: ['kasama', '笠間', '笠間市'],
+    zh: '笠間稲荷神社',
+    en: 'Kasama Inari Shrine',
+    detailZh: '朱紅鳥居與神社建築立在陶器之鄉的山邊',
+    keywords: ['Kasama Inari Shrine', 'vermilion torii'],
+    sceneryHint:
+      'Make Kasama Inari Shrine, its vermilion torii and shrine roofs the unmistakable subject, with the pottery-town hills behind.',
+  },
 ];
 
 export function findReliableDestinationSubject(

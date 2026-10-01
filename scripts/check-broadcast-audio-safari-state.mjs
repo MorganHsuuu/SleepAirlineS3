@@ -161,6 +161,21 @@ assert.equal(bed.src, 'media/wakeup.mp3');
 assert.equal(bed.loop, true);
 
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+assert.doesNotMatch(
+  app,
+  /warmWakeupBed\?\.\(/,
+  'shade pull must not start wakeup music before the window is fully open',
+);
+assert.match(
+  app,
+  /armWakeupCarrier\?\.\(/,
+  'first touch may only unlock a silent bed carrier',
+);
+assert.match(
+  app,
+  /startWakeupBed\?\.\(armedWakeup, 0\)/,
+  'wakeup file may load at volume 0 only after the shade is fully open',
+);
 const takeoff = app.slice(app.indexOf('async function doTakeoff()'), app.indexOf('async function requestScenery('));
 assert.ok(
   takeoff.indexOf('markSpeechReady(true)') < takeoff.indexOf('await leadIn;')
