@@ -113,11 +113,6 @@ function setShade(kind) {
   if (handle) handle.classList.remove('is-dragging');
   $('window-shade').classList.toggle('closed', kind === 'closed');
   $('window-shade').classList.toggle('peek', kind === 'peek');
-  syncFlightView();
-}
-function syncFlightView() {
-  const flying = state.stage === 'takeoff' || state.stage === 'cruise';
-  $('window-shade')?.classList.toggle('flight-view', flying);
 }
 function shadeLip() {
   const glass = $('window-glass');
@@ -257,7 +252,6 @@ function render() {
   $('to-city').textContent = state.destination?.name || '未知的遠方';
   $('to-code').textContent = state.destination?.code || '???';
   paintLeg();
-  syncFlightView();
   syncPairCard();
   const labels = {
     ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],

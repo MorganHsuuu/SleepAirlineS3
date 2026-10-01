@@ -93,8 +93,6 @@ body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc(
 .leg-plane{position:absolute;top:50%;left:0;width:5.6cqi;height:2.24cqi;color:#fff;translate:0 -50%;filter:drop-shadow(0 0 4px rgba(255,255,255,.5));z-index:1}
 .leg-strip.is-flying{z-index:5}
 .leg-strip.is-flying .leg-plane{animation:leg-fly 3.2s linear infinite}
-.window-shade.flight-view .shade-panel{background:transparent;box-shadow:none}
-.window-shade.flight-view .shade-texture{opacity:0}
 .leg-strip.is-landed{z-index:5}
 .leg-strip.is-landed .leg-plane{left:calc(100% - 5.6cqi)}
 @keyframes leg-fly{0%{left:0;opacity:.4}10%{opacity:1}90%{opacity:1}100%{left:calc(100% - 5.6cqi);opacity:.4}}
