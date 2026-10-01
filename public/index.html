@@ -42,6 +42,18 @@
             <div class="window-glass" id="window-glass">
               <img id="cloud-image" class="scene-image visible" src="images/clouds-dawn.png" alt="晨光中的雲層">
               <img id="arrival-image" class="scene-image" src="images/arrival-fallback.jpg" alt="降落後的風景">
+              <div class="inflight-scene" id="inflight-scene" aria-label="飛行中的雲海與機翼">
+                <div class="inflight-cloud-track" aria-hidden="true">
+                  <img src="images/inflight-cloud-panorama.jpg" alt="">
+                  <img src="images/inflight-cloud-panorama.jpg" alt="">
+                </div>
+                <img class="inflight-wing" src="images/inflight-wing.png" alt="">
+              </div>
+              <div class="landing-cloud-scene" id="landing-cloud-scene" aria-label="穿越雲層下降">
+                <img class="landing-cloud-layer" src="images/landing-cloud-descent.jpg" alt="">
+                <img class="landing-wing" src="images/inflight-wing.png" alt="">
+                <span class="landing-cloud-wisps" aria-hidden="true"></span>
+              </div>
               <video id="descent-video" class="scene-video" src="media/newlanding.mp4" muted playsinline loop preload="metadata" poster="images/inflight-standby.jpg" aria-label="穿越雲層的下降影片"></video>
               <video id="landing-video" class="scene-video" src="media/newlanding.mp4" muted playsinline preload="metadata" poster="images/inflight-standby.jpg" aria-label="降落進場影片"></video>
               <div class="scene-wash"></div>
@@ -118,9 +130,19 @@
               </div>
               <div class="holy-light" aria-hidden="true"></div>
               <div class="leg-strip" id="leg-strip" hidden aria-label="這趟從哪到哪">
-                <span class="leg-place from" id="leg-from">臺北</span>
-                <span class="leg-track" aria-hidden="true"><span class="leg-line"></span><svg class="leg-plane" viewBox="0 0 40 16"><path fill="currentColor" d="M2 7.6H10L13 2.2h2.2L12.4 7.6H20l-2.8-3.4h2.4L24 7.6h9l6 .6-6 .6H24l-4.4 3.4h-2.4l2.8-3.4H12.4L15.2 14H13L10 8.8H2z"/></svg></span>
-                <span class="leg-place to" id="leg-to"></span>
+                <div class="leg-destination">
+                  <span class="leg-flag" id="leg-flag" aria-hidden="true"></span>
+                  <span class="leg-mini-compass" aria-hidden="true">
+                    <i class="mini-n">N</i><i class="mini-e">E</i><i class="mini-s">S</i><i class="mini-w">W</i>
+                    <span class="leg-mini-needle"></span><span class="leg-mini-dot"></span>
+                  </span>
+                  <span class="leg-heading-copy"><span class="leg-place to" id="leg-to"></span><span class="leg-heading-meta" id="leg-heading-meta"></span></span>
+                </div>
+                <span class="leg-track" aria-hidden="true">
+                  <span class="leg-line"></span>
+                  <svg class="leg-plane" viewBox="0 0 40 16"><path fill="currentColor" d="M2 7.6H10L13 2.2h2.2L12.4 7.6H20l-2.8-3.4h2.4L24 7.6h9l6 .6-6 .6H24l-4.4 3.4h-2.4l2.8-3.4H12.4L15.2 14H13L10 8.8H2z"/></svg>
+                </span>
+                <span class="leg-origin-label">FROM <span class="leg-place from" id="leg-from">臺北</span></span>
               </div>
               <div class="window-shade" id="window-shade"><div class="shade-panel"><div class="shade-texture"></div><button type="button" id="shade-handle" class="shade-handle" aria-label="拉動窗簾"></button></div></div>
               <div class="window-caption"><span class="caption-dot"></span><span id="window-caption">台北上空 · 等待出發</span></div>

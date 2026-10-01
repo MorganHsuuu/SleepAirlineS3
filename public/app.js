@@ -18,7 +18,6 @@ const tracks = ['wakeup1.mp3', 'wakeup2.mp3', 'wakeup3.mp3', 'wakeup4.mp3'];
 /** Standby photo inside the oval window when OpenAI scenery is skipped or fails. */
 const ARRIVAL_FALLBACK = 'images/arrival-fallback.jpg';
 const CLOUD_STANDBY = 'images/clouds-dawn.png';
-const INFLIGHT_STANDBY = 'images/inflight-standby.jpg';
 let wakeupIndex = Number(localStorage.getItem('sleepAirlineS3Wakeup') || 0) || 0;
 function nextWakeup() {
   const file = tracks[wakeupIndex % tracks.length];
@@ -47,7 +46,7 @@ const state = {
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
   destination: null, busy: false, shadeHold: false, sceneryUrl: null, openaiReady: false,
-  sleepDial: false,
+  sleepDial: false, landedLegReady: false,
 };
 let clockTimer = null;
 let toastTimer = null;
@@ -64,9 +63,10 @@ function codeFor(name) {
 function locationFromFlight(flight, prefix) {
   const raw = String(flight?.[prefix + 'Location'] || '');
   const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
+  const knownCity = demoCities.find((city) => city.name === parts[0]);
   return {
     name: parts[0] || '臺北',
-    country: parts[1] || '',
+    country: parts.length > 1 ? parts.at(-1) : (knownCity?.country || ''),
     code: codeFor(raw),
     lat: finiteCoordinate(flight?.[prefix + 'Latitude'], 25.033),
     lon: finiteCoordinate(flight?.[prefix + 'Longitude'], 121.5654),
@@ -87,9 +87,11 @@ function hideCeremony() { $('ceremony').classList.add('hidden'); }
 function setInflightStandby(inflight) {
   const img = $('cloud-image');
   if (!img) return;
-  img.src = inflight ? INFLIGHT_STANDBY : CLOUD_STANDBY;
+  if (!inflight) img.src = CLOUD_STANDBY;
   img.classList.toggle('is-inflight', !!inflight);
   img.alt = inflight ? '飛行中的窗外' : '晨光中的雲層';
+  $('window-glass')?.classList.toggle('inflight-active', !!inflight);
+  $('inflight-scene')?.classList.toggle('is-on', !!inflight && img.classList.contains('visible'));
 }
 function setScene(which) {
   $('cloud-image').classList.toggle('visible', which === 'clouds' || which === 'descent');
@@ -97,6 +99,11 @@ function setScene(which) {
   $('globe-canvas').classList.toggle('active', which === 'globe');
   $('descent-video').classList.toggle('active', which === 'descent');
   $('landing-video').classList.toggle('active', which === 'approach');
+  $('landing-cloud-scene')?.classList.toggle('is-on', which === 'cloud-approach');
+  $('inflight-scene')?.classList.toggle(
+    'is-on',
+    $('window-glass')?.classList.contains('inflight-active') && which === 'clouds',
+  );
 }
 function shadeOpenLip() {
   const glass = $('window-glass');
@@ -166,9 +173,23 @@ function applyDirection(index) {
   $('compass-name').textContent = d.name;
   paintLeg();
 }
+function countryFlag(country) {
+  const normalized = String(country || '').trim().replaceAll('台灣', '臺灣').toLowerCase();
+  const fallbackCode = [
+    [['日本', 'japan'], 'JP'], [['韓國', '南韓', 'south korea', 'korea'], 'KR'],
+    [['臺灣', '台灣', 'taiwan'], 'TW'], [['中國', 'china'], 'CN'],
+    [['香港', 'hong kong'], 'HK'], [['菲律賓', 'philippines'], 'PH'],
+    [['泰國', 'thailand'], 'TH'], [['新加坡', 'singapore'], 'SG'],
+    [['越南', 'vietnam'], 'VN'],
+  ].find(([names]) => names.some((name) => normalized.includes(name)))?.[1];
+  const code = countryIsoMap?.[normalized] || fallbackCode;
+  return code ? [...code].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join('') : '';
+}
 function paintLeg() {
   const from = $('leg-from');
   const to = $('leg-to');
+  const flagNode = $('leg-flag');
+  const headingMeta = $('leg-heading-meta');
   const strip = $('leg-strip');
   if (!from || !to || !strip) return;
   const place = state.destination?.name || '';
@@ -176,13 +197,22 @@ function paintLeg() {
   const flying = state.stage === 'takeoff' || state.stage === 'cruise';
   const landed = state.stage === 'landed';
   const heading = directions[state.direction]?.name || '';
+  const headingAngle = directions[state.direction]?.angle ?? 0;
   from.textContent = state.origin?.name || '';
   to.textContent = landed && place ? place : heading;
-  const show = !headingOn && !!from.textContent && !!to.textContent && (flying || (landed && !!place));
+  if (headingMeta) {
+    headingMeta.textContent = flying ? `${String(headingAngle).padStart(3, '0')}°` : '';
+  }
+  strip.style.setProperty('--compass-angle', `${headingAngle}deg`);
+  const flag = landed ? countryFlag(state.destination?.country) : '';
+  if (flagNode) flagNode.textContent = flag;
+  const show = !headingOn && !!from.textContent && !!to.textContent
+    && (flying || (landed && state.landedLegReady && !!place));
   strip.classList.toggle('is-route', show);
   strip.hidden = !show;
   strip.classList.toggle('is-flying', show && flying);
   strip.classList.toggle('is-landed', show && landed);
+  strip.classList.toggle('has-flag', show && !!flag);
 }
 function applyStoredDirection(routeDirection) {
   const index = directions.findIndex((d) => d.key === routeDirection);
@@ -455,6 +485,7 @@ function adoptLanded(flight) {
   state.lastFlight = flight;
   state.activeFlight = null;
   state.stage = 'landed';
+  state.landedLegReady = true;
   state.origin = departure;
   state.destination = arrival;
   state.nextOrigin = arrival;
@@ -863,6 +894,10 @@ function helloForPlace(place) {
 }
 function showWeatherCard(place, weather, { kicker } = {}) {
   hideGlassPanel('glass-compass');
+  if (state.stage === 'landed') {
+    state.landedLegReady = false;
+    paintLeg();
+  }
   document.body.classList.add('weather-focus');
   if ($('wx-temp')) $('wx-temp').textContent = String(weather.temp);
   if ($('wx-city')) $('wx-city').textContent = place.name;
@@ -882,6 +917,10 @@ function showWeatherCard(place, weather, { kicker } = {}) {
   }).then(() => {
     document.body.classList.remove('weather-focus');
     hideGlassPanel('glass-weather');
+    if (state.stage === 'landed') {
+      state.landedLegReady = true;
+      paintLeg();
+    }
   });
 }
 function revealArrivalImage(url, late = false) {
@@ -961,6 +1000,7 @@ function playApproachVoiceSync() {
 async function doLand() {
   if (state.busy || state.stage !== 'cruise') return;
   state.busy = true;
+  state.landedLegReady = false;
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
   window.BroadcastAudio?.primeFromUserGesture?.();
@@ -1036,25 +1076,17 @@ async function doLand() {
     $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
     $('glass-meta').textContent = formatFlightSpan(minutes);
     await routeVisual;
-    let approachPlayed = false;
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
     $('window-glass').classList.add('arc-dive');
     $('glass-route').classList.add('is-leaving');
-    const landingVideo = $('landing-video');
-    holdVideoOnLastFrame(landingVideo);
-    approachPlayed = await startSceneVideo('landing-video', false);
-    if (approachPlayed) {
-      landingVideo.classList.add('active', 'dive-in');
-      setScene('approach');
-      if (state.sound) {
-        void window.BroadcastAudio?.duckCeremonyBed?.();
-        void window.BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .55, fadeInMs: 1200 });
-      }
-    } else setScene('clouds');
+    setScene('cloud-approach');
+    if (state.sound) {
+      void window.BroadcastAudio?.duckCeremonyBed?.();
+      void window.BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .42, fadeInMs: 1200 });
+    }
     await delay(380);
     $('window-caption').textContent = '穿越雲層 · 緩緩下降';
     await delay(1500);
-    landingVideo.classList.remove('dive-in');
     $('window-glass').classList.remove('arc-dive', 'cloud-entering', 'destination-zoom', 'revealing', 'sky-soft');
     hideGlassPanel('glass-route');
     // Wait for generated scenery only when a real job exists; null/skip resolves immediately.
@@ -1085,8 +1117,7 @@ async function doLand() {
     }
     setCeremony('FINAL APPROACH', '風景已就緒，正在對準跑道…');
     $('window-caption').textContent = '即將著陸';
-    if (approachPlayed) await waitForVideoEnd(landingVideo);
-    else await delay(4200);
+    await delay(4200);
     if (state.sound) {
       await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 900 });
     } else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
@@ -1117,7 +1148,6 @@ async function doLand() {
         image.src = ARRIVAL_FALLBACK;
       };
     });
-    pinLandingFrame(landingVideo);
     setScene('arrival');
     state.stage = 'landed';
     render();
@@ -1134,7 +1164,6 @@ async function doLand() {
       }).catch(() => {});
     }
     stopLandingVideos();
-    pinLandingFrame(landingVideo);
     const weather = await weatherJob;
     // Let the arrival photo ease out of developing blur before weather fades in.
     await delay(2200);
@@ -1210,7 +1239,7 @@ function restart({ keepShade = false } = {}) {
   state.origin = state.nextOrigin || state.origin;
   state.nextOrigin = null;
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
-  state.destination = null; state.takeoffAt = null; state.sceneryUrl = null;
+  state.destination = null; state.takeoffAt = null; state.sceneryUrl = null; state.landedLegReady = false;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('is-inflight', 'developing');
   setInflightStandby(false);
@@ -1516,6 +1545,9 @@ async function init() {
   });
   bindDial();
   bindShadeGesture();
+  const syncPageActivity = () => document.body.classList.toggle('page-hidden', document.hidden);
+  document.addEventListener('visibilitychange', syncPageActivity);
+  syncPageActivity();
   paintCachedFlight();
   render();
   revealApp();
