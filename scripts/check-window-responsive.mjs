@@ -108,11 +108,31 @@ assert.match(
   /<img class="landing-cloud-wisps" src="images\/landing-cloud-wisps\.png" alt="">/,
   '降落雲霧應使用生成的透明圖片',
 );
+assert.match(
+  html,
+  /<span class="leg-heading-text">\s*<span class="leg-flag" id="leg-flag"/,
+  '國旗應定位於目的地文字群旁，不得占用置中欄寬',
+);
 assert.doesNotMatch(css, /\.landing-cloud-wisps\{[^}]*background:/);
 assert.match(
   css,
-  /\.landing-cloud-wisps\{[^}]*object-fit:contain;[^}]*will-change:transform,opacity/,
+  /\.landing-cloud-wisps\{[^}]*right:-78%;bottom:-24%;width:156%;height:110%;[^}]*object-fit:contain;[^}]*will-change:transform,opacity/,
   '生成雲層應使用單一可合成圖層',
+);
+assert.match(
+  css,
+  /@keyframes landing-wisps-pass\{0%\{transform:translate3d\(0,16%,0\)[^}]*\}[^@]*100%\{transform:translate3d\(-94%,-42%,0\)/,
+  '降落雲層應由右下往左上移動',
+);
+assert.match(
+  css,
+  /\.leg-heading-text\{[^}]*position:relative;[^}]*display:flex/,
+  '目的地文字需有獨立定位容器',
+);
+assert.match(
+  css,
+  /\.leg-strip\.is-landed \.leg-flag\{position:absolute;right:calc\(100% \+ 1\.4cqi\);top:50%;translate:0 -50%/,
+  '國旗應緊鄰目的地文字左側',
 );
 assert.match(
   css,
