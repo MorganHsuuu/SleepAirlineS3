@@ -189,12 +189,8 @@ function stopCeremonyWebAudio(tag) {
 
 function stopCaptainIntro() {
   stopCeremonyWebAudio('captain');
-  if (captainGestureAudio && currentAudio === captainGestureAudio) {
-    currentAudio = null;
-    captainGestureAudio.loop = false;
-    try { captainGestureAudio.pause(); } catch { /* noop */ }
-    try { captainGestureAudio.currentTime = 0; } catch { /* 尚未可 seek */ }
-  }
+  if (captainGestureAudio && currentAudio === captainGestureAudio) currentAudio = null;
+  resetCaptainCarrierToSilent();
 }
 
 function detachCeremonyNode(node, tag) {
@@ -336,7 +332,7 @@ function playOnGestureElement(audio, src, {
       audio.onerror = null;
       if (currentAudio === audio) currentAudio = null;
       if (restoreSilent) {
-        resetKeepAliveToSilent();
+        resetAudioCarrierToSilent(audio);
       } else {
         audio.loop = false;
         try { audio.pause(); } catch { /* noop */ }
@@ -387,7 +383,11 @@ function playOnGestureElement(audio, src, {
 async function playTimedClip(url, { seconds = 0, volume = 1, loop = false, fadeInMs = 0 } = {}) {
   if (!url) return false;
   if (prefersGestureElement() && mediaUnlocked) {
-    const ok = await playOnGestureElement(ensureCaptainGestureElement(), url, { seconds, volume });
+    const ok = await playOnGestureElement(ensureCaptainGestureElement(), url, {
+      seconds,
+      volume,
+      restoreSilent: true,
+    });
     if (ok) return true;
   }
   await ensureAudioCtx();
@@ -947,8 +947,7 @@ function tryPlayKeepAlive(audio, src) {
   return audio.play();
 }
 
-function resetKeepAliveToSilent() {
-  const audio = keepAliveAudio || document.getElementById('ceremony-keepalive');
+function resetAudioCarrierToSilent(audio) {
   if (!audio) return;
   try { audio.pause(); } catch { /* noop */ }
   try { audio.currentTime = 0; } catch { /* noop */ }
@@ -956,6 +955,14 @@ function resetKeepAliveToSilent() {
     const played = tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
     if (played && typeof played.catch === 'function') played.catch(() => {});
   } catch { /* keepalive is best effort */ }
+}
+
+function resetKeepAliveToSilent() {
+  resetAudioCarrierToSilent(keepAliveAudio || document.getElementById('ceremony-keepalive'));
+}
+
+function resetCaptainCarrierToSilent() {
+  resetAudioCarrierToSilent(captainGestureAudio || document.getElementById('ceremony-captain-gesture'));
 }
 
 /** iPhone 的系統朗讀吃靜音鍵，而且必須在點擊當下 speak，之後再叫就沒聲音。 */
@@ -986,23 +993,15 @@ function primeFromUserGesture() {
     const silentPlay = tryPlayKeepAlive(keepalive, SILENT_KEEPALIVE);
     if (silentPlay && typeof silentPlay.catch === 'function') silentPlay.catch(() => {});
   } catch { /* AudioContext may still be enough outside Safari */ }
-  // Safari：手勢當下另行預熱 captain；真正播放與靜音保活不可共用元素。
+  // Safari：機長載體也只以無聲 WAV 解鎖；正式廣播前絕不可預播 captain.mp3。
   if (prefersGestureElement()) {
     const captain = ensureCaptainGestureElement();
-    if (currentAudio === captain) {
+    if (!captain.paused && captain.dataset.src === SILENT_KEEPALIVE) {
       mediaUnlocked = true;
       return true;
     }
     try {
-      if (captain.dataset.src !== CAPTAIN_SFX.url) {
-        captain.src = CAPTAIN_SFX.url;
-        captain.dataset.src = CAPTAIN_SFX.url;
-        captain.load();
-      }
-      captain.loop = true;
-      captain.volume = 0;
-      try { captain.currentTime = 0; } catch { /* 尚未可 seek */ }
-      const playPromise = captain.play();
+      const playPromise = tryPlayKeepAlive(captain, SILENT_KEEPALIVE);
       mediaUnlocked = true;
       if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
       return true;
@@ -1516,6 +1515,10 @@ function resumeAudioOnForeground() {
   void ensureAudioCtx();
   if (keepAliveAudio?.paused && mediaUnlocked) {
     try { void tryPlayKeepAlive(keepAliveAudio, SILENT_KEEPALIVE); } catch { /* noop */ }
+  }
+  if (captainGestureAudio && currentAudio !== captainGestureAudio
+      && captainGestureAudio.dataset.src !== SILENT_KEEPALIVE) {
+    resetCaptainCarrierToSilent();
   }
 }
 document.addEventListener('visibilitychange', resumeAudioOnForeground);

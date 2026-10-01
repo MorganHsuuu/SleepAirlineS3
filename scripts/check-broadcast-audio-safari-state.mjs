@@ -111,12 +111,19 @@ assert.ok(keepalive, 'silent keepalive element should exist');
 assert.ok(captain, 'dedicated captain gesture element should exist');
 assert.match(keepalive.src, /^data:audio\/wav;base64,/, 'keepalive must use silent WAV');
 assert.equal(keepalive.dataset.src, keepalive.src);
-assert.equal(captain.src, 'media/captain.mp3');
+assert.match(captain.src, /^data:audio\/wav;base64,/, 'captain carrier must warm with silent WAV');
+assert.notEqual(captain.src, 'media/captain.mp3', 'first touch must not start captain.mp3');
+assert.equal(captain.loop, true, 'captain carrier may only loop the silent WAV');
+
+const warmPlayCount = captain.playCount;
+window.BroadcastAudio.primeFromUserGesture();
+assert.match(captain.src, /^data:audio\/wav;base64,/);
+assert.equal(captain.playCount, warmPlayCount, 'repeated gestures must not restart the carrier');
 
 await window.BroadcastAudio.playCaptainIntro({ handoff: true });
-assert.equal(captain.loop, false, 'captain must not loop after its timed clip');
-assert.equal(captain.paused, true, 'captain must pause after its timed clip');
-assert.equal(captain.currentTime, 0, 'captain must reset after its timed clip');
+assert.match(captain.src, /^data:audio\/wav;base64,/, 'captain must return to silent WAV');
+assert.equal(captain.dataset.src, captain.src);
+assert.equal(captain.loop, true, 'only the restored silent WAV may loop');
 
 const captainPlayCount = captain.playCount;
 keepalive.pause();
@@ -127,7 +134,8 @@ await Promise.resolve();
 
 assert.match(keepalive.src, /^data:audio\/wav;base64,/, 'foreground resume must force silent WAV');
 assert.equal(captain.playCount, captainPlayCount, 'foreground resume must not replay captain');
-assert.equal(captain.paused, true, 'captain must remain stopped after foreground resume');
+assert.match(captain.src, /^data:audio\/wav;base64,/, 'captain carrier must remain silent after foreground resume');
+assert.equal(captain.paused, false, 'captain carrier keeps only the silent WAV alive');
 
 window.BroadcastAudio.startWakeupBed('media/wakeup.mp3', 0.16);
 const bed = elements.get('ceremony-bed');
