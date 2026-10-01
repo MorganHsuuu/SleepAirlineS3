@@ -21,8 +21,8 @@ const requiredRules = [
     /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*margin:\.7cqi 0 0;/,
   ],
   [
-    '飛行資訊依內容置中並限制在安全寬度',
-    /\.leg-strip\.is-flying\{[^}]*width:max-content;max-width:78%/,
+    '飛行資訊以對稱三欄將文字固定在玻璃中心',
+    /\.leg-strip\.is-flying\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:clamp\(42px,12\.5cqi,52px\) minmax\(0,1fr\) clamp\(42px,12\.5cqi,52px\)/,
   ],
   [
     '國旗不參與指南針與目的地的欄寬計算',
@@ -33,8 +33,8 @@ const requiredRules = [
     /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*grid-column:2;grid-row:2;[^}]*width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis/,
   ],
   [
-    '降落資訊依內容置中並限制在安全寬度',
-    /\.leg-strip\.is-landed\{[^}]*width:max-content;max-width:78%/,
+    '降落資訊以對稱外欄將文字固定在玻璃中心',
+    /\.leg-strip\.is-landed\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:1fr minmax\(0,62cqi\) 1fr/,
   ],
   [
     '降落目的地以國旗與文字兩欄排列',
@@ -63,6 +63,12 @@ for (const [message, pattern] of requiredRules) {
   assert.match(css, pattern, message);
 }
 
+assert.match(
+  css,
+  /body\.window-only \.window-area\{[^}]*flex:0 0 auto;[^}]*justify-content:flex-start;[^}]*padding-top:clamp\(12px,2\.4svh,22px\)/,
+  '視窗版窗框應靠上並保留固定安全間距',
+);
+
 const frameWidth = (viewportWidth, viewportHeight) => {
   const reserve = Math.min(306, Math.max(218, viewportHeight * 0.4));
   return Math.min(viewportWidth * 0.88, 540, (viewportHeight - reserve) * 388 / 458);
@@ -72,15 +78,18 @@ for (const [width, height] of [
   [320, 568],
   [375, 667],
   [390, 844],
+  [402, 874],
   [430, 932],
   [592, 789],
   [1024, 768],
 ]) {
   const frameW = frameWidth(width, height);
   const frameH = frameW * 458 / 388;
+  const topGap = Math.min(22, Math.max(12, height * 0.024));
   assert.ok(frameW >= Math.min(width * 0.88, 280), `${width}x${height} 的窗框不應異常縮小`);
   assert.ok(frameH <= height - 210, `${width}x${height} 的窗框應保留控制區安全高度`);
   assert.ok(Math.abs(frameW / frameH - 388 / 458) < 0.001, `${width}x${height} 的窗框比例應固定`);
+  assert.ok(topGap >= 12 && topGap <= 22, `${width}x${height} 的窗框上方間距需落在安全範圍`);
 }
 
 assert.match(css, /\.window-shade,\.window-shade\.closed,\.window-shade\.peek\{inset:0;/);
