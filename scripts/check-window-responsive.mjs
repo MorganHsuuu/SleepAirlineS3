@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const css = await readFile(new URL('../public/style.css', import.meta.url), 'utf8');
+const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 
 const requiredRules = [
   [
@@ -94,6 +95,22 @@ for (const [width, height] of [
 
 assert.match(css, /\.window-shade,\.window-shade\.closed,\.window-shade\.peek\{inset:0;/);
 assert.match(css, /\.window-glass\{container-type:size\}/);
+assert.match(
+  html,
+  /<img class="landing-cloud-wisps" src="images\/landing-cloud-wisps\.png" alt="">/,
+  '降落雲霧應使用生成的透明圖片',
+);
+assert.doesNotMatch(css, /\.landing-cloud-wisps\{[^}]*background:/);
+assert.match(
+  css,
+  /\.landing-cloud-wisps\{[^}]*object-fit:contain;[^}]*will-change:transform,opacity/,
+  '生成雲層應使用單一可合成圖層',
+);
+assert.match(
+  css,
+  /@media\(prefers-reduced-motion:reduce\)\{[\s\S]*?\.landing-cloud-wisps\{display:none\}/,
+  '減少動態時不移動前景雲層',
+);
 
 const narrowDial = Math.max(110, Math.min(320 * 0.38, 568 * 0.25, 178));
 assert.ok(narrowDial <= 122, '320x568 的指南針需保留南向標記安全空間');
