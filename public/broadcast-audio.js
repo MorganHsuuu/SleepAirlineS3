@@ -68,11 +68,15 @@ function delay(ms) {
 function stopPlayback({ keepSpeech = false } = {}) {
   stopCeremonyWebAudio();
   const carrier = keepAliveAudio || document.getElementById('ceremony-keepalive');
-  if (currentAudio && currentAudio === carrier && prefersGestureElement()) {
-    // Safari 一 pause，之後再 play 就沒聲音。只壓音量，讓這個元素維持播放中。
-    currentAudio.volume = 0;
+  if (currentAudio && currentAudio === carrier) {
+    currentAudio = null;
+    resetKeepAliveToSilent();
   } else if (currentAudio) {
     currentAudio.pause();
+    if (currentAudio === captainGestureAudio) {
+      currentAudio.loop = false;
+      try { currentAudio.currentTime = 0; } catch { /* 尚未可 seek */ }
+    }
     currentAudio = null;
   }
   if (!keepSpeech && window.speechSynthesis) speechSynthesis.cancel();
@@ -185,6 +189,12 @@ function stopCeremonyWebAudio(tag) {
 
 function stopCaptainIntro() {
   stopCeremonyWebAudio('captain');
+  if (captainGestureAudio && currentAudio === captainGestureAudio) {
+    currentAudio = null;
+    captainGestureAudio.loop = false;
+    try { captainGestureAudio.pause(); } catch { /* noop */ }
+    try { captainGestureAudio.currentTime = 0; } catch { /* 尚未可 seek */ }
+  }
 }
 
 function detachCeremonyNode(node, tag) {
@@ -309,9 +319,12 @@ function prefersGestureElement() {
   return iOS || safari;
 }
 
-/** Safari 只承認手勢當下 play() 過的那個 audio 元素。之後換 src 再 play，captain 與語音才出得了聲。 */
-function playOnGestureElement(src, { seconds = 0, volume = 1 } = {}) {
-  const audio = ensureKeepAliveElement();
+/** Safari 只承認手勢當下 play() 過的 audio 元素；內容播完後不得留在 loop 狀態。 */
+function playOnGestureElement(audio, src, {
+  seconds = 0,
+  volume = 1,
+  restoreSilent = false,
+} = {}) {
   return new Promise((resolve) => {
     let done = false;
     let timer = null;
@@ -321,6 +334,14 @@ function playOnGestureElement(src, { seconds = 0, volume = 1 } = {}) {
       if (timer) clearTimeout(timer);
       audio.onended = null;
       audio.onerror = null;
+      if (currentAudio === audio) currentAudio = null;
+      if (restoreSilent) {
+        resetKeepAliveToSilent();
+      } else {
+        audio.loop = false;
+        try { audio.pause(); } catch { /* noop */ }
+        try { audio.currentTime = 0; } catch { /* 尚未可 seek */ }
+      }
       resolve(ok);
     };
     audio.onerror = () => finish(false);
@@ -340,8 +361,6 @@ function playOnGestureElement(src, { seconds = 0, volume = 1 } = {}) {
       if (audio.paused) { finish(false); return; }
       if (seconds > 0) {
         timer = setTimeout(() => {
-          audio.volume = 0;
-          audio.loop = true;
           finish(true);
         }, seconds * 1000 + 80);
         return;
@@ -368,7 +387,7 @@ function playOnGestureElement(src, { seconds = 0, volume = 1 } = {}) {
 async function playTimedClip(url, { seconds = 0, volume = 1, loop = false, fadeInMs = 0 } = {}) {
   if (!url) return false;
   if (prefersGestureElement() && mediaUnlocked) {
-    const ok = await playOnGestureElement(url, { seconds, volume });
+    const ok = await playOnGestureElement(ensureCaptainGestureElement(), url, { seconds, volume });
     if (ok) return true;
   }
   await ensureAudioCtx();
@@ -607,7 +626,7 @@ let wakeupBedOpen = false;
 
 function startWakeupBed(url, volume = 0.14, fadeInMs = 0) {
   if (!url) return false;
-  primeFromUserGesture();
+  startWebKeepAlive();
   const audio = ensureBedAudio();
   const same = audio.dataset.src === url;
   if (!same) {
@@ -796,6 +815,7 @@ function restoreLandingMusic() {
 
 let mediaUnlocked = false;
 let keepAliveAudio = null;
+let captainGestureAudio = null;
 
 function markInlineAudio(audio) {
   if (!audio) return;
@@ -901,6 +921,20 @@ function ensureKeepAliveElement() {
   return keepAliveAudio;
 }
 
+function ensureCaptainGestureElement() {
+  if (captainGestureAudio) return captainGestureAudio;
+  captainGestureAudio = document.getElementById('ceremony-captain-gesture');
+  if (!captainGestureAudio) {
+    captainGestureAudio = document.createElement('audio');
+    captainGestureAudio.id = 'ceremony-captain-gesture';
+    captainGestureAudio.preload = 'auto';
+    captainGestureAudio.style.display = 'none';
+    markInlineAudio(captainGestureAudio);
+    document.body.appendChild(captainGestureAudio);
+  }
+  return captainGestureAudio;
+}
+
 function tryPlayKeepAlive(audio, src) {
   if (src && audio.dataset.src !== src) {
     audio.src = src;
@@ -916,10 +950,12 @@ function tryPlayKeepAlive(audio, src) {
 function resetKeepAliveToSilent() {
   const audio = keepAliveAudio || document.getElementById('ceremony-keepalive');
   if (!audio) return;
-  if (audio.dataset.src === CAPTAIN_SFX.url || audio.dataset.src === TAKEOFF_SFX_URL) {
-    try { audio.pause(); } catch { /* noop */ }
-    tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
-  }
+  try { audio.pause(); } catch { /* noop */ }
+  try { audio.currentTime = 0; } catch { /* noop */ }
+  try {
+    const played = tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
+    if (played && typeof played.catch === 'function') played.catch(() => {});
+  } catch { /* keepalive is best effort */ }
 }
 
 /** iPhone 的系統朗讀吃靜音鍵，而且必須在點擊當下 speak，之後再叫就沒聲音。 */
@@ -945,17 +981,28 @@ function speakFromGesture(text) {
 function primeFromUserGesture() {
   startWebKeepAlive();
   preloadCeremonyMp3Buffers();
-  const audio = ensureKeepAliveElement();
-  // Safari：手勢當下就開始播 captain.mp3（音量 0、循環）。之後只調音量與播放頭，不必再 play()。
+  const keepalive = ensureKeepAliveElement();
+  try {
+    const silentPlay = tryPlayKeepAlive(keepalive, SILENT_KEEPALIVE);
+    if (silentPlay && typeof silentPlay.catch === 'function') silentPlay.catch(() => {});
+  } catch { /* AudioContext may still be enough outside Safari */ }
+  // Safari：手勢當下另行預熱 captain；真正播放與靜音保活不可共用元素。
   if (prefersGestureElement()) {
-    if (!audio.paused && audio.dataset.src === CAPTAIN_SFX.url) {
+    const captain = ensureCaptainGestureElement();
+    if (currentAudio === captain) {
       mediaUnlocked = true;
       return true;
     }
     try {
-      const playPromise = tryPlayKeepAlive(audio, CAPTAIN_SFX.url);
-      audio.loop = true;
-      audio.volume = 0;
+      if (captain.dataset.src !== CAPTAIN_SFX.url) {
+        captain.src = CAPTAIN_SFX.url;
+        captain.dataset.src = CAPTAIN_SFX.url;
+        captain.load();
+      }
+      captain.loop = true;
+      captain.volume = 0;
+      try { captain.currentTime = 0; } catch { /* 尚未可 seek */ }
+      const playPromise = captain.play();
       mediaUnlocked = true;
       if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
       return true;
@@ -963,23 +1010,21 @@ function primeFromUserGesture() {
       return false;
     }
   }
-  if (!audio.paused && audio.currentTime > 0) {
+  if (!keepalive.paused && keepalive.currentTime > 0) {
     mediaUnlocked = true;
     return true;
   }
-  let playPromise;
+  let playPromise = null;
   try {
-    playPromise = tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
-  } catch {
-    playPromise = null;
-  }
+    playPromise = tryPlayKeepAlive(keepalive, SILENT_KEEPALIVE);
+  } catch { /* noop */ }
   if (playPromise && typeof playPromise.then === 'function') {
     playPromise.then(() => { mediaUnlocked = true; }).catch(() => { /* silent keepalive only */ });
     mediaUnlocked = true;
     return true;
   }
   try {
-    tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
+    tryPlayKeepAlive(keepalive, SILENT_KEEPALIVE);
     mediaUnlocked = true;
     return true;
   } catch {
@@ -989,12 +1034,12 @@ function primeFromUserGesture() {
 
 /** 儀式期間維持無聲 loop，避免 API 等待後 Audio / TTS 被瀏覽器擋住 */
 async function startMediaKeepAlive() {
-  primeFromUserGesture();
+  startWebKeepAlive();
   const audio = keepAliveAudio || ensureKeepAliveElement();
-  if (audio && !audio.paused) return true;
+  if (audio && !audio.paused && audio.dataset.src === SILENT_KEEPALIVE) return true;
   if (audio?.paused) {
     try {
-      await tryPlayKeepAlive(audio, audio.dataset.src || SILENT_KEEPALIVE);
+      await tryPlayKeepAlive(audio, SILENT_KEEPALIVE);
       mediaUnlocked = true;
       return true;
     } catch { /* recreate below */ }
@@ -1017,9 +1062,9 @@ function stopMediaKeepAlive() {
 
 /** 在使用者點擊當下解鎖 Audio / Video 自動播放（避免 API 等待後被瀏覽器擋住） */
 async function unlockMedia() {
-  primeFromUserGesture();
+  startWebKeepAlive();
   await ensureAudioCtx();
-  if (keepAliveAudio && !keepAliveAudio.paused) {
+  if (keepAliveAudio && !keepAliveAudio.paused && keepAliveAudio.dataset.src === SILENT_KEEPALIVE) {
     mediaUnlocked = true;
     return true;
   }
@@ -1049,6 +1094,15 @@ function releaseCeremonyMedia() {
     try { el.pause(); } catch { /* noop */ }
     el.removeAttribute('src');
     el.load();
+  }
+  const captain = captainGestureAudio || document.getElementById('ceremony-captain-gesture');
+  captainGestureAudio = null;
+  if (captain) {
+    try { captain.pause(); } catch { /* noop */ }
+    captain.loop = false;
+    try { captain.currentTime = 0; } catch { /* noop */ }
+    captain.removeAttribute('src');
+    captain.load();
   }
 }
 
@@ -1218,7 +1272,10 @@ async function playPreparedSpeech(prepared, { immediate = false } = {}) {
       || (prepared.url ? await fetch(prepared.url).then((r) => r.blob()).catch(() => null) : null);
     if (blob) {
       const url = URL.createObjectURL(blob);
-      const ok = await playOnGestureElement(url, { volume: 1 });
+      const ok = await playOnGestureElement(ensureKeepAliveElement(), url, {
+        volume: 1,
+        restoreSilent: true,
+      });
       URL.revokeObjectURL(url);
       if (ok) {
         if (prepared.url) URL.revokeObjectURL(prepared.url);
@@ -1458,7 +1515,7 @@ function resumeAudioOnForeground() {
   if (document.visibilityState && document.visibilityState !== 'visible') return;
   void ensureAudioCtx();
   if (keepAliveAudio?.paused && mediaUnlocked) {
-    try { void tryPlayKeepAlive(keepAliveAudio, keepAliveAudio.dataset.src || SILENT_KEEPALIVE); } catch { /* noop */ }
+    try { void tryPlayKeepAlive(keepAliveAudio, SILENT_KEEPALIVE); } catch { /* noop */ }
   }
 }
 document.addEventListener('visibilitychange', resumeAudioOnForeground);
@@ -1486,7 +1543,10 @@ async function primeApproachClip(base64) {
 
 function playApproachClip() {
   if (prefersGestureElement() && mediaUnlocked && approachClipUrl) {
-    return playOnGestureElement(approachClipUrl, { volume: 1 });
+    return playOnGestureElement(ensureKeepAliveElement(), approachClipUrl, {
+      volume: 1,
+      restoreSilent: true,
+    });
   }
   if (!approachBuffer) return Promise.resolve(false);
   return playWebAudioBuffer(approachBuffer, { volume: 1, tag: 'speech', fadeInMs: 0, padSec: 0 });

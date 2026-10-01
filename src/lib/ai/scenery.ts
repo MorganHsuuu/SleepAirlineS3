@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
+import { findReliableDestinationSubject } from './destination-subjects';
 
 export interface SceneryGenerationResult {
   imageBuffer: Buffer;
@@ -69,55 +70,7 @@ export function describeSceneryLocalMoment(
 }
 
 function iconicSubjectHint(city: string, country: string, displayName: string): string | null {
-  const place = `${city} ${country} ${displayName}`.toLocaleLowerCase();
-  const hints: Array<[string[], string]> = [
-    [
-      ['rio de janeiro', '里約熱內盧'],
-      'Make Christ the Redeemer, Corcovado Mountain and Rio’s dramatic bay-and-mountain geography the unmistakable subject.',
-    ],
-    [
-      ['cairo', 'giza', '開羅', '吉薩'],
-      'Make the Giza pyramids and the desert plateau the unmistakable subject, with the Nile landscape only where compositionally accurate.',
-    ],
-    [
-      ['egypt', '埃及'],
-      'Use the destination’s geographically correct Egyptian icon: pyramids only for the Cairo–Giza area; otherwise prioritize its own Nile, desert, temple, oasis or Red Sea identity.',
-    ],
-    [
-      ['antarctica', 'south pole', '南極'],
-      'Make Antarctic ice, glaciers and penguins in a believable colony habitat the main subject; show no town or generic houses.',
-    ],
-    [
-      ['arctic', 'north pole', 'svalbard', 'longyearbyen', '北極', '斯瓦爾巴', '朗伊爾城'],
-      'Make Arctic sea ice, polar landscape and a polar bear in a believable habitat the main subject; include aurora only when the stated local time is dark.',
-    ],
-    [
-      ['netherlands', 'holland', 'amsterdam', '荷蘭', '阿姆斯特丹'],
-      'Prioritize iconic Dutch windmills, canals and seasonally plausible tulip fields over ordinary houses.',
-    ],
-    [['tokyo', '東京'], 'Make Tokyo Tower or the Shibuya crossing skyline the unmistakable subject, with dense neon towers behind it.'],
-    [['kyoto', '京都'], 'Make a vermilion torii gate, Kinkaku-ji, or Fushimi Inari the unmistakable subject among temple roofs.'],
-    [['osaka', '大阪'], 'Make Osaka Castle or the Tsutenkaku / Dotonbori canal lights the unmistakable subject.'],
-    [['paris', '巴黎'], 'Make the Eiffel Tower the unmistakable subject, with the Seine and Haussmann rooftops around it.'],
-    [['london', '倫敦'], 'Make Tower Bridge or the Elizabeth Tower and the Thames the unmistakable subject.'],
-    [['rome', '羅馬'], 'Make the Colosseum the unmistakable subject.'],
-    [['barcelona', '巴塞隆納'], 'Make the Sagrada Família the unmistakable subject.'],
-    [['sydney', '雪梨'], 'Make the Sydney Opera House and harbour the unmistakable subject.'],
-    [['new york', '紐約'], 'Make the Statue of Liberty or the Empire State Building skyline the unmistakable subject.'],
-    [['taipei', '台北', '臺北'], 'Make Taipei 101 the unmistakable subject above the city basin and surrounding mountains.'],
-    [['singapore', '新加坡'], 'Make Marina Bay Sands and the waterfront skyline the unmistakable subject.'],
-    [['hong kong', '香港'], 'Make the Victoria Harbour skyline and Peak ridgeline the unmistakable subject.'],
-    [['beijing', '北京'], 'Make the Forbidden City or the Temple of Heaven the unmistakable subject.'],
-    [['shanghai', '上海'], 'Make the Oriental Pearl Tower and Pudong skyline across the river the unmistakable subject.'],
-    [['seoul', '首爾'], 'Make N Seoul Tower on Namsan or Gyeongbokgung the unmistakable subject.'],
-    [['bangkok', '曼谷'], 'Make Wat Arun or the Grand Palace spires along the river the unmistakable subject.'],
-    [['agra', '阿格拉'], 'Make the Taj Mahal the unmistakable subject.'],
-    [['dubai', '杜拜'], 'Make the Burj Khalifa the unmistakable subject above the desert-city skyline.'],
-    [['istanbul', '伊斯坦堡'], 'Make the Hagia Sophia and Bosphorus the unmistakable subject.'],
-    [['venice', '威尼斯'], 'Make the Grand Canal, gondolas and St Mark’s campanile the unmistakable subject.'],
-    [['santorini', '聖托里尼'], 'Make the white cliffside houses and blue domes above the caldera the unmistakable subject.'],
-  ];
-  return hints.find(([aliases]) => aliases.some((alias) => place.includes(alias)))?.[1] ?? null;
+  return findReliableDestinationSubject(city, country, displayName)?.sceneryHint ?? null;
 }
 
 export function buildSceneryPrompt(
