@@ -31,19 +31,27 @@ const requiredRules = [
   ],
   [
     '飛行中的 FROM 可在安全寬度內省略',
-    /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*grid-column:2;grid-row:2;[^}]*width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis/,
+    /\.leg-strip\.is-flying \.leg-origin-label\{[^}]*grid-column:2;grid-row:2;[^}]*width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis;text-align:center/,
+  ],
+  [
+    '飛行方向文字本身對準玻璃中心',
+    /\.leg-strip\.is-flying \.leg-heading-copy\{[^}]*justify-content:center;[^}]*justify-self:stretch/,
   ],
   [
     '降落資訊以對稱外欄將文字固定在玻璃中心',
-    /\.leg-strip\.is-landed\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:1fr minmax\(0,62cqi\) 1fr/,
+    /\.leg-strip\.is-landed\{[^}]*width:76cqi;max-width:76%;[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,62cqi\) minmax\(0,1fr\)/,
   ],
   [
     '降落目的地以國旗與文字兩欄排列',
     /\.leg-strip\.is-landed \.leg-destination\{display:contents\}/,
   ],
   [
-    '降落後的 FROM 與目的地左對齊並可省略',
-    /\.leg-strip\.is-landed \.leg-origin-label\{[^}]*grid-column:2;grid-row:3;width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis/,
+    '降落後的 FROM 與目的地置中並可省略',
+    /\.leg-strip\.is-landed \.leg-origin-label\{[^}]*grid-column:2;grid-row:3;width:100%;min-width:0;max-width:100%;[^}]*overflow:hidden;text-overflow:ellipsis;text-align:center/,
+  ],
+  [
+    '抵達目的地文字本身對準玻璃中心',
+    /\.leg-strip\.is-landed \.leg-heading-copy\{[^}]*justify-self:stretch;justify-content:center/,
   ],
   [
     '窗內指南針文字有最小字級',
