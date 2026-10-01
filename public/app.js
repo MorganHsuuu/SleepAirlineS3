@@ -113,6 +113,11 @@ function setShade(kind) {
   if (handle) handle.classList.remove('is-dragging');
   $('window-shade').classList.toggle('closed', kind === 'closed');
   $('window-shade').classList.toggle('peek', kind === 'peek');
+  syncFlightView();
+}
+function syncFlightView() {
+  const flying = state.stage === 'takeoff' || state.stage === 'cruise';
+  $('window-shade')?.classList.toggle('flight-view', flying);
 }
 function shadeLip() {
   const glass = $('window-glass');
@@ -252,6 +257,7 @@ function render() {
   $('to-city').textContent = state.destination?.name || '未知的遠方';
   $('to-code').textContent = state.destination?.code || '???';
   paintLeg();
+  syncFlightView();
   syncPairCard();
   const labels = {
     ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],
@@ -601,6 +607,7 @@ async function doTakeoff() {
   ensureGuestProfile();
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
+  setInflightStandby(true);
   clearTimeout(compassTimer);
   hideGlassPanel('glass-compass');
   window.BroadcastAudio?.primeFromUserGesture?.();
@@ -664,7 +671,7 @@ async function doTakeoff() {
     window.BroadcastAudio?.stopTowerSignalLoop?.();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
     await BroadcastAudio?.stopCaptainIntro?.();
-    hideCeremony(); setShade('open'); state.stage = 'ready'; render();
+    hideCeremony(); setInflightStandby(false); setShade('open'); state.stage = 'ready'; render();
     showToast(`起飛失敗：${error.message}`);
   } finally { state.busy = false; }
 }
