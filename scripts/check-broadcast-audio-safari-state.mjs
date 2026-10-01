@@ -101,6 +101,21 @@ window.window = window;
 
 vm.createContext(context);
 const source = await readFile(new URL('../public/broadcast-audio.js', import.meta.url), 'utf8');
+assert.match(source, /const SPEECH_BED_VOLUME = 0\.006;/);
+assert.match(
+  source,
+  /muteCeremonyBedForSpeech\(\)[\s\S]*fadeLandingBedVolume\(SPEECH_BED_VOLUME, ms\)/,
+  'speech must duck the landing bed to near silence',
+);
+assert.doesNotMatch(
+  source,
+  /muteCeremonyBedForSpeech\(\)[\s\S]{0,500}fadeLandingBedVolume\(0\.08, ms\)/,
+);
+assert.match(
+  source,
+  /const speechOpts = \{ volume: 1, tag: 'speech'/,
+  'Web Audio speech gain must stay below clipping level',
+);
 vm.runInContext(source, context, { filename: 'public/broadcast-audio.js' });
 
 assert.equal(window.BroadcastAudio.primeFromUserGesture(), true);

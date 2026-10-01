@@ -16,6 +16,7 @@ const TAKEOFF_SFX_URL = 'media/takeoff.mp3';
 /** 儀式音景切換：wakeup ↔ captain ↔ TTS */
 const CEREMONY_CROSSFADE_MS = 900;
 const CEREMONY_RESTORE_MS = 1400;
+const SPEECH_BED_VOLUME = 0.006;
 /** wakeup 在機長／著陸時壓低但不切斷（相對 landingVolume） */
 const WAKEUP_DUCK_RATIO = {
   captain: 0.12,
@@ -771,7 +772,7 @@ async function muteCeremonyBedForSpeech() {
   const ms = Math.max(1100, CEREMONY_CROSSFADE_MS);
   const jobs = [];
   if (landingAudio) {
-    jobs.push(fadeLandingBedVolume(0.08, ms));
+    jobs.push(fadeLandingBedVolume(SPEECH_BED_VOLUME, ms));
   }
   if (flightSfxAudio) {
     if (savedFlightSfxVolume == null) savedFlightSfxVolume = flightSfxAudio.volume;
@@ -1285,7 +1286,7 @@ async function playPreparedSpeech(prepared, { immediate = false } = {}) {
   stopCeremonyWebAudio('captain');
   await ensureAudioCtx();
   // padSec：開頭留白，避免「歡迎」被 captain 交叉／裝置緩衝吃掉；immediate 為起飛無縫交接
-  const speechOpts = { volume: 1.35, tag: 'speech', fadeInMs: 0, padSec: immediate ? 0 : 0.48 };
+  const speechOpts = { volume: 1, tag: 'speech', fadeInMs: 0, padSec: immediate ? 0 : 0.48 };
   if (prepared.buffer && await playWebAudioBuffer(prepared.buffer, speechOpts)) {
     if (prepared.url) URL.revokeObjectURL(prepared.url);
     return true;
