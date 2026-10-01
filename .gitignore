@@ -10,3 +10,4 @@ api/index.js.map
 .vercel
 .env*
 .superpowers/
+.worktrees/
