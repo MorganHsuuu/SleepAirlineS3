@@ -93,6 +93,16 @@ function setInflightStandby(inflight) {
   $('window-glass')?.classList.toggle('inflight-active', !!inflight);
   $('inflight-scene')?.classList.toggle('is-on', !!inflight && img.classList.contains('visible'));
 }
+function resetLandingCloudScene() {
+  const scene = $('landing-cloud-scene');
+  const layer = scene?.querySelector('.landing-cloud-layer');
+  scene?.classList.remove('is-fading');
+  if (layer) {
+    layer.style.animation = '';
+    layer.style.transform = '';
+  }
+}
+
 function setScene(which, { holdInflight = false, holdLanding = false } = {}) {
   $('cloud-image').classList.toggle('visible', which === 'clouds' || which === 'descent');
   $('arrival-image').classList.toggle('visible', which === 'arrival');
@@ -1133,6 +1143,7 @@ async function doLand() {
     await routeVisual;
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
     $('glass-route').classList.add('is-leaving');
+    resetLandingCloudScene();
     setScene('cloud-approach', { holdInflight: true });
     if (state.sound) {
       void window.BroadcastAudio?.duckCeremonyBed?.();
@@ -1172,17 +1183,24 @@ async function doLand() {
     const arrivalVoice = arrivalPack?.voice || arrivalPack || null;
     const arrivalPrepared = arrivalPack?.prepared || null;
     const image = $('arrival-image');
-    image.classList.add('developing');
-    image.classList.remove('is-inflight');
+    image.classList.remove('is-inflight', 'developing');
     image.src = finalImage;
     await Promise.race([whenImageReady(image), delay(2000)]);
     if (!(image.complete && image.naturalWidth > 0)) {
       state.sceneryUrl = null;
       image.src = ARRIVAL_FALLBACK;
     }
+    const glass = $('window-glass');
+    glass.classList.remove('arrival-flash');
+    void glass.offsetWidth;
+    glass.classList.add('arrival-flash');
+    await delay(180);
     setScene('arrival', { holdLanding: true });
-    await delay(1400);
-    $('landing-cloud-scene')?.classList.remove('is-on');
+    $('landing-cloud-scene')?.classList.add('is-fading');
+    await delay(1300);
+    $('landing-cloud-scene')?.classList.remove('is-on', 'is-fading');
+    glass.classList.remove('arrival-flash');
+    resetLandingCloudScene();
     state.stage = 'landed';
     render();
     const spoken = arrivalVoice?.text
@@ -1222,10 +1240,11 @@ async function doLand() {
     state.nextOrigin = state.destination;
     if (state.mode === 'live') void fetchBoard().catch(() => {});
   } catch (error) {
-    $('window-glass').classList.remove('cloud-entering', 'destination-zoom', 'arc-dive');
+    $('window-glass').classList.remove('cloud-entering', 'destination-zoom', 'arc-dive', 'arrival-flash');
     hideGlassPanel('glass-route');
     hideGlassPanel('glass-weather');
     $('window-glass').classList.remove('revealing', 'sky-soft');
+    resetLandingCloudScene();
     hideCeremony();
     stopLandingVideos();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });

@@ -217,7 +217,17 @@ assert.match(
 assert.doesNotMatch(
   landing,
   /classList\.add\('arc-dive'\)/,
-  'landing must not trigger the holy-light flash',
+  'landing must not trigger the holy-light flash at the start of descent',
+);
+assert.match(
+  landing,
+  /classList\.add\('arrival-flash'\)/,
+  'clouds must hold then flash into the arrival image',
+);
+assert.match(
+  landing,
+  /classList\.add\('is-fading'\)/,
+  'descent clouds must fade out instead of snapping away',
 );
 assert.doesNotMatch(
   landing,
