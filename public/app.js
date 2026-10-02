@@ -1059,45 +1059,43 @@ async function doLand() {
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
   try {
-    let sceneryJob = null;
-    let voiceJob = null;
+    let sceneryJob = Promise.resolve(null);
+    let voiceJob = Promise.resolve(null);
     if (state.mode === 'live') {
       ensureGuestProfile();
-      let data = null;
-      try {
-        data = await api('POST', '/api/flight/land', flightBody(), 110000);
-      } catch (landError) {
-        // 找不到進行中航班或 Notion 暫時失敗時，仍完成窗景降落。
-        console.warn('live land failed, continuing locally', landError);
-        showToast(`連線降落未寫入：${landError.message}`);
-      }
-      if (data) {
-        state.lastFlight = data.flight;
-        state.destination = locationFromFlight(data.flight, 'arrival');
-        voiceJob = state.openaiReady
-          ? api('POST', '/api/arrival-voice', { flightId: data.flight.flightId, broadcastStyle: 'formal_captain' }, 120000)
-            .then(async (voice) => {
-              if (!voice?.text || !state.sound || !window.BroadcastAudio?.prepareTakeoffSpeech) return { voice, prepared: null };
-              const prepared = await BroadcastAudio.prepareTakeoffSpeech(voice.text, voice.speechAudioBase64 || null).catch(() => null);
-              const decoded = prepared
-                ? await BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared)
-                : null;
-              return { voice, prepared: decoded };
-            })
-            .catch(() => null)
-          : Promise.resolve(null);
-        sceneryJob = !state.openaiReady
-          ? Promise.resolve(null)
-          : data.landingScenery?.imageUrl
-            ? preloadImage(data.landingScenery.imageUrl).then((ok) => ok ? data.landingScenery.imageUrl : null)
-            : requestScenery(data.flight.flightId);
-      } else {
-        state.destination ||= destinationFor(state.direction);
-        sceneryJob = Promise.resolve(null);
-      }
-    } else {
-      state.destination ||= destinationFor(state.direction);
-      sceneryJob = Promise.resolve(null);
+      const landPromise = api('POST', '/api/flight/land', flightBody(), 110000)
+        .then((data) => {
+          if (data?.flight) {
+            state.lastFlight = data.flight;
+            state.destination = locationFromFlight(data.flight, 'arrival') || state.destination;
+          }
+          return data;
+        })
+        .catch((landError) => {
+          console.warn('live land failed, continuing locally', landError);
+          showToast(`連線降落未寫入：${landError.message}`);
+          return null;
+        });
+      voiceJob = landPromise.then((data) => {
+        if (!data?.flight?.flightId || !state.openaiReady) return null;
+        return api('POST', '/api/arrival-voice', { flightId: data.flight.flightId, broadcastStyle: 'formal_captain' }, 120000)
+          .then(async (voice) => {
+            if (!voice?.text || !state.sound || !window.BroadcastAudio?.prepareTakeoffSpeech) return { voice, prepared: null };
+            const prepared = await BroadcastAudio.prepareTakeoffSpeech(voice.text, voice.speechAudioBase64 || null).catch(() => null);
+            const decoded = prepared
+              ? await BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared)
+              : null;
+            return { voice, prepared: decoded };
+          })
+          .catch(() => null);
+      });
+      sceneryJob = landPromise.then((data) => {
+        if (!state.openaiReady) return null;
+        if (data?.landingScenery?.imageUrl) {
+          return preloadImage(data.landingScenery.imageUrl, 4000).then((ok) => ok ? data.landingScenery.imageUrl : null);
+        }
+        return data?.flight?.flightId ? requestScenery(data.flight.flightId) : null;
+      });
     }
     $('to-city').textContent = state.destination.name;
     $('to-code').textContent = state.destination.code;
@@ -1131,69 +1129,43 @@ async function doLand() {
     await delay(1500);
     $('window-glass').classList.remove('arc-dive', 'cloud-entering', 'destination-zoom', 'revealing', 'sky-soft');
     hideGlassPanel('glass-route');
-    // Wait for generated scenery only when a real job exists; null/skip resolves immediately.
-    // The 165s bound only covers an unresponsive backend — not used when OpenAI is off.
-    const sceneryWait = sceneryJob
-      ? Promise.race([sceneryJob.catch(() => null), delay(165000).then(() => null)])
-      : Promise.resolve(null);
-    const [readyUrl] = await Promise.all([
-      sceneryWait,
-      delay(3200),
-    ]);
-    if (readyUrl && state.mode === 'live') state.sceneryUrl = readyUrl;
-    if (!readyUrl && state.mode === 'live' && sceneryJob) {
-      const flightId = state.lastFlight?.flightId;
-      void sceneryJob.then((url) => {
-        if (!url || state.lastFlight?.flightId !== flightId) return;
-        state.sceneryUrl = url;
-        if (state.stage === 'landed') revealArrivalImage(url, true);
-      }).catch(() => {});
-    }
+    void sceneryJob.then((url) => {
+      if (!url) return;
+      state.sceneryUrl = url;
+      if (state.stage === 'landed') revealArrivalImage(url, true);
+    }).catch(() => {});
+    const readyUrl = await Promise.all([
+      Promise.race([sceneryJob.catch(() => null), delay(3500).then(() => null)]),
+      delay(1600),
+    ]).then(([url]) => url);
+    if (readyUrl) state.sceneryUrl = readyUrl;
 
-    // Generated scenery when the API returns one; otherwise the local standby photo.
     let finalImage = state.sceneryUrl || ARRIVAL_FALLBACK;
-    if (!await preloadImage(finalImage)) {
+    if (!await preloadImage(finalImage, 2500)) {
       state.sceneryUrl = null;
       finalImage = ARRIVAL_FALLBACK;
-      await preloadImage(finalImage);
     }
-    setCeremony('FINAL APPROACH', '風景已就緒，正在對準跑道…');
     $('window-caption').textContent = '即將著陸';
-    await delay(4200);
-    if (state.sound) {
-      await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 900 });
-    } else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
+    if (state.sound) void BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 700 });
+    else void BroadcastAudio?.stopFlightSfx?.({ fade: false });
 
-    const arrivalPack = voiceJob ? await voiceJob : null;
+    const arrivalPack = await Promise.race([
+      voiceJob.catch(() => null),
+      delay(2500).then(() => null),
+    ]);
     const arrivalVoice = arrivalPack?.voice || arrivalPack || null;
     const arrivalPrepared = arrivalPack?.prepared || null;
-    if (!state.sceneryUrl && state.lastFlight?.flightId) {
-      try {
-        const fresh = await api('GET', `/api/scenery?flightId=${encodeURIComponent(state.lastFlight.flightId)}`, undefined, 8000);
-        if (fresh?.scenery?.imageUrl) state.sceneryUrl = fresh.scenery.imageUrl;
-      } catch { /* 圖還沒好就用備用風景 */ }
-    }
-    finalImage = state.sceneryUrl || ARRIVAL_FALLBACK;
-    if (!await preloadImage(finalImage)) {
-      state.sceneryUrl = null;
-      finalImage = ARRIVAL_FALLBACK;
-    }
     const image = $('arrival-image');
     image.classList.add('developing');
     image.classList.remove('is-inflight');
     image.src = finalImage;
-    await new Promise((resolve) => {
-      if (image.complete && image.naturalWidth > 0) { resolve(); return; }
-      image.onload = resolve;
-      image.onerror = () => {
-        state.sceneryUrl = null;
-        image.onerror = resolve;
-        image.classList.remove('is-inflight');
-        image.src = ARRIVAL_FALLBACK;
-      };
-    });
+    await Promise.race([whenImageReady(image), delay(2000)]);
+    if (!(image.complete && image.naturalWidth > 0)) {
+      state.sceneryUrl = null;
+      image.src = ARRIVAL_FALLBACK;
+    }
     setScene('arrival', { holdLanding: true });
-    await delay(1100);
+    await delay(700);
     $('landing-cloud-scene')?.classList.remove('is-on');
     state.stage = 'landed';
     render();
@@ -1216,9 +1188,9 @@ async function doLand() {
     }
     stopLandingVideos();
     const weather = await weatherJob;
-    await delay(900);
+    await delay(500);
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
-    await speechPlay;
+    await Promise.race([speechPlay, delay(18000)]);
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
@@ -1367,78 +1339,127 @@ function offerSleepDial() {
 function bindShadeGesture() {
   const handle = $('shade-handle');
   const glass = $('window-glass');
-  const panel = () => document.querySelector('.shade-panel');
+  const shadePanel = document.querySelector('.shade-panel');
   let pulling = false;
+  let committed = false;
   let offset = 0;
+  let startLip = 0;
+  let armedWakeup = '';
   const place = (lip) => {
     const height = glass.getBoundingClientRect().height;
     const clamped = Math.max(shadeOpenLip(), Math.min(height, lip));
-    const shade = panel();
-    shade.style.transform = `translateY(${clamped - height}px)`;
+    shadePanel.style.transform = `translateY(${clamped - height}px)`;
     return clamped;
   };
-  let armedWakeup = '';
   const armAudio = () => {
     window.BroadcastAudio?.primeFromUserGesture?.();
     window.BroadcastAudio?.armWakeupCarrier?.();
   };
-  const shadePanel = panel();
-  shadePanel.addEventListener('touchstart', (event) => {
-    if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
-    if (event.touches?.length > 1) return;
+  const clearDrag = () => {
+    pulling = false;
+    handle.classList.remove('is-dragging');
+    shadePanel.classList.remove('is-dragging');
+  };
+  const startTakeoff = () => {
+    if (committed) return;
+    committed = true;
+    const again = state.stage === 'landed';
+    if (state.stage === 'cruise') {
+      state.activeFlight = null;
+      state.lastFlight = null;
+      state.busy = false;
+      state.stage = 'ready';
+    }
+    state.shadeHold = true;
+    setShade('closed');
+    window.BroadcastAudio?.primeFromUserGesture?.();
+    window.BroadcastAudio?.stopWakeupWarmup?.();
+    armedWakeup = '';
+    state.shadeHold = false;
+    clearDrag();
+    if (again) restart({ keepShade: true });
+    void doTakeoff();
+  };
+  const startLand = () => {
+    if (committed) return;
+    committed = true;
+    setShade('open');
+    window.BroadcastAudio?.primeFromUserGesture?.();
+    if (state.sound) {
+      armedWakeup = armedWakeup || `media/${nextWakeup()}`;
+      window.BroadcastAudio?.startWakeupBed?.(armedWakeup, 0);
+    }
+    clearDrag();
+    void doLand();
+  };
+  const consider = (lip) => {
+    const height = glass.getBoundingClientRect().height;
+    const canTakeoff = state.stage === 'ready' || state.stage === 'landed'
+      || (state.stage === 'cruise' && startLip < height * 0.4);
+    if (canTakeoff && lip > height * 0.52) {
+      startTakeoff();
+      return true;
+    }
+    if (state.stage === 'cruise' && lip < height * 0.32) {
+      startLand();
+      return true;
+    }
+    return false;
+  };
+  const begin = (clientY) => {
+    if (pulling || state.busy || state.shadeHold) return false;
+    if (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed') return false;
     armAudio();
-  }, { passive: true });
-  shadePanel.addEventListener('pointerdown', (event) => {
-    if (state.busy || state.shadeHold || (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed')) return;
-    armAudio();
-    event.preventDefault();
     pulling = true;
+    committed = false;
     const rect = glass.getBoundingClientRect();
-    offset = shadeLip() - (event.clientY - rect.top);
+    startLip = shadeLip();
+    offset = startLip - (clientY - rect.top);
     handle.classList.add('is-dragging');
     shadePanel.classList.add('is-dragging');
-    try { shadePanel.setPointerCapture(event.pointerId); } catch { /* already released */ }
-  });
-  shadePanel.addEventListener('pointermove', (event) => {
-    if (!pulling) return;
+    return true;
+  };
+  const move = (clientY) => {
+    if (!pulling || committed) return;
     const rect = glass.getBoundingClientRect();
-    place((event.clientY - rect.top) + offset);
-  });
+    consider(place((clientY - rect.top) + offset));
+  };
   const end = () => {
+    if (committed) return;
     if (!pulling) return;
-    pulling = false;
-    const height = glass.getBoundingClientRect().height;
-    const lip = shadeLip();
-    if ((state.stage === 'ready' || state.stage === 'landed') && lip > height * 0.78) {
-      const again = state.stage === 'landed';
-      state.shadeHold = true;
-      setShade('closed');
-      // iOS：必須還在 pointerup／touchend 手勢堆疊內解鎖並立刻起飛
-      window.BroadcastAudio?.primeFromUserGesture?.();
-      window.BroadcastAudio?.stopWakeupWarmup?.();
-      armedWakeup = '';
-      state.shadeHold = false;
-      if (again) restart({ keepShade: true });
-      void doTakeoff();
-      return;
-    }
-    if (state.stage === 'cruise' && lip < height * 0.22) {
-      setShade('open');
-      window.BroadcastAudio?.primeFromUserGesture?.();
-      if (state.sound) {
-        armedWakeup = armedWakeup || `media/${nextWakeup()}`;
-        window.BroadcastAudio?.startWakeupBed?.(armedWakeup, 0);
-      }
-      void doLand();
-      return;
-    }
+    if (consider(shadeLip())) return;
     window.BroadcastAudio?.stopWakeupWarmup?.();
     armedWakeup = '';
     setShade(state.stage === 'cruise' ? 'closed' : 'open');
+    clearDrag();
   };
-  shadePanel.addEventListener('pointerup', end);
-  shadePanel.addEventListener('pointercancel', end);
-  shadePanel.addEventListener('touchend', () => { if (pulling) end(); }, { passive: true });
+  const ignoreCancel = () => {
+    // iOS 常在 preventDefault／setPointerCapture 後立刻 pointercancel；不要把窗簾彈回去。
+    handle.classList.remove('is-dragging');
+    shadePanel.classList.remove('is-dragging');
+  };
+  for (const el of [shadePanel, handle]) {
+    if (!el) continue;
+    el.addEventListener('pointerdown', (event) => {
+      if (!begin(event.clientY)) return;
+      event.preventDefault();
+      try { el.setPointerCapture(event.pointerId); } catch { /* already released */ }
+    });
+    el.addEventListener('pointermove', (event) => move(event.clientY));
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', ignoreCancel);
+    el.addEventListener('touchstart', (event) => {
+      if (event.touches?.length !== 1) return;
+      armAudio();
+      if (!pulling) begin(event.touches[0].clientY);
+    }, { passive: true });
+    el.addEventListener('touchmove', (event) => {
+      if (!pulling || !event.touches?.[0]) return;
+      move(event.touches[0].clientY);
+    }, { passive: true });
+    el.addEventListener('touchend', end, { passive: true });
+    el.addEventListener('touchcancel', ignoreCancel, { passive: true });
+  }
   syncShadeHandle();
 }
 function applySleepTurn(delta) {

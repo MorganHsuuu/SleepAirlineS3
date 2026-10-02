@@ -196,13 +196,28 @@ assert.match(
 );
 assert.match(
   landing,
-  /await speechPlay/,
+  /await Promise\.race\(\[speechPlay, delay\(18000\)\]\)/,
   'arrival speech must finish before the post-landing UI takes over',
+);
+assert.match(
+  landing,
+  /delay\(3500\)\.then\(\(\) => null\)/,
+  'landing UI must not wait for the full scenery job after descent',
+);
+assert.doesNotMatch(
+  landing,
+  /data = await api\('POST', '\/api\/flight\/land'/,
+  'landing visuals must not wait for the land API before descent',
 );
 assert.doesNotMatch(
   app.slice(app.indexOf('function bindShadeGesture()')),
   /setTimeout\(\(\) => \{[\s\S]*void doTakeoff\(\);/,
   'closing the shade must start takeoff inside the user gesture',
+);
+assert.doesNotMatch(
+  app.slice(app.indexOf('function bindShadeGesture()')),
+  /addEventListener\('pointercancel', end\)/,
+  'Safari pointercancel must not snap the shade closed before takeoff',
 );
 assert.match(
   source,
