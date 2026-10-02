@@ -3,6 +3,7 @@
 // S2 direction and audio behavior are retained. The independent visual prototype
 // stays in preview mode until the new data connections are ready.
 const FRONTEND_PREVIEW_ONLY = false;
+const REED_BRIDGE_ENABLED = new URLSearchParams(window.location.search).get('reed') === '1';
 const $ = (id) => document.getElementById(id);
 const directions = [
   { key: 'northbound', name: '向北', angle: 0 },
@@ -1590,6 +1591,66 @@ function bindDial() {
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
+function startReedBridge() {
+  if (!REED_BRIDGE_ENABLED) return;
+  const url = 'http://127.0.0.1:8765/state';
+  let observedClosed = null;
+  let pending = false;
+  let connected = false;
+  let warned = false;
+
+  // A browser gesture may be needed before sensor-triggered audio can play.
+  document.addEventListener('pointerdown', () => {
+    window.BroadcastAudio?.primeFromUserGesture?.();
+  }, { once: true, capture: true });
+
+  const poll = async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      let response;
+      try {
+        response = await fetch(url, {
+          cache: 'no-store',
+          signal: controller.signal,
+          targetAddressSpace: 'loopback',
+        });
+      } finally { clearTimeout(timeout); }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (typeof data.closed !== 'boolean') throw new Error('Invalid reed state');
+      if (!connected) showToast('磁簧控制已連線');
+      connected = true;
+      warned = false;
+
+      if (data.closed !== observedClosed) {
+        observedClosed = data.closed;
+        pending = true;
+      }
+      if (pending && !state.busy) {
+        if (observedClosed && (state.stage === 'ready' || state.stage === 'landed')) {
+          pending = false;
+          if (state.stage === 'landed') restart();
+          void doTakeoff();
+        } else if (!observedClosed && state.stage === 'cruise') {
+          pending = false;
+          void doLand();
+        } else if ((observedClosed && state.stage === 'cruise')
+          || (!observedClosed && (state.stage === 'ready' || state.stage === 'landed'))) {
+          pending = false;
+        }
+      }
+    } catch {
+      if (!warned) showToast('無法連接磁簧，請檢查樹莓派程式與瀏覽器權限');
+      warned = true;
+      connected = false;
+    } finally {
+      setTimeout(poll, connected ? 350 : 2000);
+    }
+  };
+  void poll();
+}
+
 async function init() {
   const incomingPair = readPairQuery();
   if (incomingPair) {
@@ -1695,6 +1756,7 @@ async function init() {
       await restoreNotionFlight(result);
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
+  startReedBridge();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
 void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
