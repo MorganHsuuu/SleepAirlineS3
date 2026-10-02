@@ -608,6 +608,17 @@ async function restoreNotionFlight(passengerResult) {
 function revealApp() {
   document.body.classList.remove('booting');
 }
+function syncLandingDestination(place) {
+  if (!place?.name) return;
+  state.destination = place;
+  $('to-city').textContent = place.name;
+  $('to-code').textContent = place.code || '???';
+  $('glass-pin-from').textContent = state.origin?.name || '';
+  $('glass-pin-to').textContent = place.name;
+  paintLeg();
+  void applyDestinationSky(place);
+}
+
 function destinationFor(direction) {
   const d = directions[direction];
   const start = state.origin;
@@ -1048,26 +1059,34 @@ async function doLand() {
     window.BroadcastAudio?.startWakeupBed?.(url, 0.16, 800);
   })();
   primeLandingVideos();
-  state.destination ||= destinationFor(state.direction);
-  const openingMinutes = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
-  const routeVisual = playGlassRoute({
-    minutes: openingMinutes,
-    distanceKm: Math.max(12, openingMinutes * 12),
-    from: state.origin.name,
-    to: state.destination.name,
-  });
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
   $('window-caption').textContent = '正在確認航線';
   try {
     let sceneryJob = Promise.resolve(null);
     let voiceJob = Promise.resolve(null);
+    let weatherJob = Promise.resolve(null);
+    const paintDestCopy = (place) => {
+      syncLandingDestination(place);
+      if (!place?.name) return;
+      const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
+      const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
+      const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
+      $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
+      $('glass-meta').textContent = formatFlightSpan(minutes);
+      if (state.stage !== 'landing' && state.stage !== 'landed') return;
+      setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${place.name}`);
+      if (state.stage === 'landing') {
+        $('window-caption').textContent = `${state.origin.name} → ${place.name}`;
+      }
+    };
     if (state.mode === 'live') {
       ensureGuestProfile();
       const landPromise = api('POST', '/api/flight/land', flightBody(), 110000)
         .then((data) => {
           if (data?.flight) {
             state.lastFlight = data.flight;
-            state.destination = locationFromFlight(data.flight, 'arrival') || state.destination;
+            paintDestCopy(locationFromFlight(data.flight, 'arrival'));
+            weatherJob = loadWeather(state.destination);
           }
           return data;
         })
@@ -1096,38 +1115,35 @@ async function doLand() {
         }
         return data?.flight?.flightId ? requestScenery(data.flight.flightId) : null;
       });
+      await Promise.race([landPromise, delay(5000)]);
     }
-    $('to-city').textContent = state.destination.name;
-    $('to-code').textContent = state.destination.code;
-    $('glass-to').textContent = '';
-    $('glass-pin-from').textContent = state.origin.name;
-    $('glass-pin-to').textContent = state.destination.name;
-    paintLeg();
-    void applyDestinationSky(state.destination);
-    const weatherJob = loadWeather(state.destination);
-    setCeremony('YOUR JOURNEY', `${state.origin.name}  →  ${state.destination.name}`);
-    $('window-caption').textContent = `${state.origin.name} → ${state.destination.name}`;
-    const elapsedMin = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
-    const minutes = state.lastFlight?.flightDurationMinutes || elapsedMin;
+    if (!state.destination) state.destination = destinationFor(state.direction);
+    paintDestCopy(state.destination);
+    weatherJob ||= loadWeather(state.destination);
+    const openingMinutes = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
+    const minutes = state.lastFlight?.flightDurationMinutes || openingMinutes;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
-    $('glass-time').textContent = `${Math.round(distanceKm).toLocaleString('zh-Hant')} km`;
-    $('glass-meta').textContent = formatFlightSpan(minutes);
+    const routeVisual = playGlassRoute({
+      minutes,
+      distanceKm,
+      from: state.origin.name,
+      to: state.destination.name,
+    });
+    $('glass-to').textContent = '';
     await routeVisual;
     $('window-caption').textContent = `降入 ${state.destination.name} 的雲層`;
-    $('window-glass').classList.add('arc-dive');
     $('glass-route').classList.add('is-leaving');
     setScene('cloud-approach', { holdInflight: true });
     if (state.sound) {
       void window.BroadcastAudio?.duckCeremonyBed?.();
       void window.BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: true, volume: .42, fadeInMs: 1200 });
     }
-    await delay(700);
+    await delay(800);
     $('inflight-scene')?.classList.remove('is-on');
     $('window-glass')?.classList.remove('inflight-active');
-    await delay(380);
+    await delay(500);
     $('window-caption').textContent = '穿越雲層 · 緩緩下降';
-    await delay(1500);
-    $('window-glass').classList.remove('arc-dive', 'cloud-entering', 'destination-zoom', 'revealing', 'sky-soft');
+    $('window-glass').classList.remove('cloud-entering', 'destination-zoom', 'revealing', 'sky-soft');
     hideGlassPanel('glass-route');
     void sceneryJob.then((url) => {
       if (!url) return;
@@ -1136,7 +1152,7 @@ async function doLand() {
     }).catch(() => {});
     const readyUrl = await Promise.all([
       Promise.race([sceneryJob.catch(() => null), delay(3500).then(() => null)]),
-      delay(1600),
+      delay(4500),
     ]).then(([url]) => url);
     if (readyUrl) state.sceneryUrl = readyUrl;
 
@@ -1165,7 +1181,7 @@ async function doLand() {
       image.src = ARRIVAL_FALLBACK;
     }
     setScene('arrival', { holdLanding: true });
-    await delay(700);
+    await delay(1400);
     $('landing-cloud-scene')?.classList.remove('is-on');
     state.stage = 'landed';
     render();

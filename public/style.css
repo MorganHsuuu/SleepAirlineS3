@@ -35,13 +35,13 @@
 .window-glass[data-sky="dusk"] .inflight-scene:after,.window-glass[data-sky="dusk"] .landing-cloud-scene:after{background:radial-gradient(circle at 84% 8%,rgba(255,186,120,.42),rgba(255,140,80,.12) 28%,transparent 52%)}
 .window-glass[data-sky="night"] .inflight-scene:after,.window-glass[data-sky="night"] .landing-cloud-scene:after{background:radial-gradient(circle at 78% 10%,rgba(180,210,255,.18),rgba(20,32,64,.08) 32%,transparent 58%)}
 .landing-cloud-layer{position:absolute;left:-25%;top:-25%;width:150%;height:150%;object-fit:cover;will-change:transform;transform:translate3d(4%,8%,0)}
-.landing-cloud-scene.is-on .landing-cloud-layer{animation:landing-cloud-descent 18s cubic-bezier(.28,.08,.22,1) forwards}
+.landing-cloud-scene.is-on .landing-cloud-layer{animation:landing-cloud-descent 24s cubic-bezier(.22,.08,.2,1) forwards}
 .landing-wing{position:absolute;z-index:1;left:-14%;bottom:-15%;width:148%;height:auto;transform:rotate(1.2deg);transform-origin:65% 55%;filter:brightness(1.12) saturate(.68) contrast(.94) hue-rotate(8deg) drop-shadow(0 8px 13px rgba(22,47,64,.14))}
 .landing-cloud-wisps{position:absolute;z-index:3;right:-78%;bottom:-24%;width:156%;height:110%;object-fit:contain;opacity:0;pointer-events:none;will-change:transform,opacity;filter:blur(2px) brightness(1.08);mix-blend-mode:screen}
 .landing-cloud-scene.is-on .landing-cloud-wisps{animation:landing-wisps-pass 12.5s cubic-bezier(.3,.04,.22,1) 1s forwards}
 .page-hidden .landing-cloud-layer{animation-play-state:paused!important}
 .page-hidden .landing-cloud-wisps{animation-play-state:paused!important}
-@keyframes landing-cloud-descent{from{transform:translate3d(4%,8%,0) scale(1)}to{transform:translate3d(-4%,-12%,0) scale(1.12)}}
+@keyframes landing-cloud-descent{from{transform:translate3d(3%,12%,0) scale(1)}to{transform:translate3d(-5%,-32%,0) scale(1.28)}}
 @keyframes landing-wisps-pass{0%{transform:translate3d(0,16%,0) scale(.94);opacity:0}18%{opacity:.16}46%{opacity:.5}72%{opacity:.34}100%{transform:translate3d(-94%,-42%,0) scale(1.08);opacity:0}}
 @media(prefers-reduced-motion:reduce){.inflight-cloud-track,.landing-cloud-layer,.landing-cloud-wisps{animation:none!important}.landing-cloud-wisps{display:none}}
 .scene-image.visible{z-index:2}
@@ -49,8 +49,8 @@
 .cloud-veil{position:absolute;inset:-2px;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 48% 45%,rgba(244,249,244,.88) 0%,rgba(211,229,226,.72) 34%,rgba(146,189,196,.42) 68%,rgba(39,91,112,.28) 100%);filter:blur(8px);transition:opacity 1.45s cubic-bezier(.45,.05,.2,1)}
 .window-glass.cloud-entering .cloud-veil{opacity:1}
 .holy-light{position:absolute;inset:-45%;z-index:6;pointer-events:none;opacity:0;transform-origin:50% 46%;background:radial-gradient(circle at 50% 46%,rgba(255,253,248,1) 0%,rgba(255,246,224,.98) 24%,rgba(255,226,168,.94) 46%,rgba(255,255,255,.78) 68%,rgba(255,248,236,.4) 84%,rgba(255,255,255,0) 100%)}
-.window-glass.arc-dive .holy-light{animation:holy-burst 1.75s cubic-bezier(.3,.04,.2,1) forwards}
-@keyframes holy-burst{0%{opacity:0;transform:scale(.2)}20%{opacity:1;transform:scale(1.05)}48%{opacity:1;transform:scale(1.85)}100%{opacity:0;transform:scale(2.35)}}
+.window-glass.arc-dive .holy-light{animation:none;opacity:0}
+@keyframes holy-burst{0%{opacity:0;transform:scale(.2)}20%{opacity:0;transform:scale(1.05)}100%{opacity:0;transform:scale(2.35)}}
 .scene-video.dive-in{animation:dive-zoom 1.85s cubic-bezier(.18,.7,.24,1) both}
 @keyframes dive-zoom{from{transform:scale(1.58);filter:brightness(1.8) saturate(.8)}to{transform:scale(1);filter:brightness(1) saturate(1)}}
 .glass-route{position:absolute;inset:0;z-index:5;display:grid;place-items:center;align-content:center;color:#fff;text-align:center;pointer-events:none;border-radius:inherit;overflow:hidden;opacity:0;transition:opacity 1.35s cubic-bezier(.42,.02,.18,1)}

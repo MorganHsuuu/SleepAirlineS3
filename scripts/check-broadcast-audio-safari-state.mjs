@@ -204,6 +204,21 @@ assert.match(
   /delay\(3500\)\.then\(\(\) => null\)/,
   'landing UI must not wait for the full scenery job after descent',
 );
+assert.match(
+  landing,
+  /await Promise\.race\(\[landPromise, delay\(5000\)\]\)/,
+  'route arc must wait briefly for the real landing destination',
+);
+assert.match(
+  landing,
+  /delay\(4500\)/,
+  'descent through clouds must hold long enough to feel like flying down',
+);
+assert.doesNotMatch(
+  landing,
+  /classList\.add\('arc-dive'\)/,
+  'landing must not trigger the holy-light flash',
+);
 assert.doesNotMatch(
   landing,
   /data = await api\('POST', '\/api\/flight\/land'/,
