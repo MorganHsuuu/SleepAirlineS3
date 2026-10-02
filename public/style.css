@@ -108,10 +108,10 @@ body.window-only .story,body.window-only .footer,body.window-only .window-index,
 body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100svh;min-height:0;overflow:hidden;padding:max(60px,calc(env(safe-area-inset-top) + 8px)) 14px max(8px,env(safe-area-inset-bottom))}
 body.window-only .window-area{position:relative;z-index:1;width:100%;flex:0 0 auto;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:flex-start;padding-top:clamp(12px,2.4svh,22px);box-sizing:border-box}
 body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc((100svh - clamp(218px,40svh,306px)) * 388 / 458));height:auto;min-height:0;max-height:none}
-.leg-strip{position:absolute;z-index:3;left:50%;bottom:8%;width:max-content;max-width:78%;translate:-50% 0;display:none;flex-direction:column;align-items:center;gap:1.4cqi;color:#fff;pointer-events:none;text-align:center;text-shadow:0 1px 9px rgba(8,20,32,.66)}
+.leg-strip{position:absolute;z-index:3;left:50%;bottom:13%;width:max-content;max-width:56%;translate:-50% 0;display:none;flex-direction:column;align-items:center;gap:1.4cqi;box-sizing:border-box;color:#fff;pointer-events:none;text-align:center;text-shadow:0 1px 9px rgba(8,20,32,.66)}
 .leg-strip.is-route{display:flex}
 .leg-strip[hidden]{display:none}
-.leg-destination{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.8cqi;max-width:74cqi}
+.leg-destination{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.8cqi;max-width:100%;min-width:0}
 .leg-flag{font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif;font-size:clamp(16px,4.1cqi,23px);line-height:1;filter:drop-shadow(0 1px 3px rgba(8,20,32,.42))}
 .leg-flag:empty{display:none}
 .leg-mini-compass{display:none;position:relative;width:12.5cqi;height:12.5cqi;max-width:52px;max-height:52px;min-width:42px;min-height:42px;flex:none;border:1px solid rgba(255,255,255,.72);border-radius:50%;background:rgba(15,43,52,.2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15),0 2px 10px rgba(8,20,32,.2);font-family:'DM Sans',sans-serif;font-size:clamp(7px,1.55cqi,10px);font-style:normal}
@@ -126,28 +126,26 @@ body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc(
 .leg-heading-text .leg-place.to{min-width:0}
 .leg-heading-meta{display:none;font-family:'DM Sans','PingFang TC',system-ui,sans-serif;font-size:clamp(12px,2.75cqi,15px);font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.82);white-space:nowrap}
 .leg-place{font-family:'Noto Serif TC','Songti TC',serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.leg-place.to{max-width:62cqi;font-size:clamp(20px,5.5cqi,30px);font-weight:600;letter-spacing:.05em;line-height:1.15}
-.leg-origin-label{margin-top:.8cqi;color:rgba(255,255,255,.82);font-size:clamp(9px,2.15cqi,14px);font-weight:700;letter-spacing:.14em;line-height:1;white-space:nowrap}
-.leg-place.from{max-width:28cqi;font-family:'DM Sans','PingFang TC',system-ui,sans-serif;font-size:clamp(10px,2.75cqi,16px);font-weight:600;letter-spacing:.04em;vertical-align:baseline}
+.leg-place.to{max-width:100%;font-size:clamp(20px,5.5cqi,30px);font-weight:600;letter-spacing:.05em;line-height:1.15}
+.leg-origin-label{margin-top:.8cqi;max-width:100%;min-width:0;color:rgba(255,255,255,.82);font-size:clamp(9px,2.15cqi,14px);font-weight:700;letter-spacing:.08em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leg-place.from{max-width:100%;font-family:'DM Sans','PingFang TC',system-ui,sans-serif;font-size:clamp(10px,2.75cqi,16px);font-weight:600;letter-spacing:.04em;vertical-align:baseline}
 .leg-track{position:relative;width:17cqi;height:4.6cqi;margin-top:1.6cqi;opacity:.86;transform-origin:center;transition:transform .8s cubic-bezier(.2,.7,.2,1)}
 .leg-line{position:absolute;left:0;right:0;top:50%;height:1px;overflow:hidden;background:rgba(255,255,255,.26)}
 .leg-line:before,.leg-line:after{content:'';position:absolute;top:50%;width:1.3cqi;height:1.3cqi;border-radius:50%;background:#fff;translate:0 -50%;box-shadow:0 0 0 .7cqi rgba(255,255,255,.2)}
 .leg-line:before{left:0}
 .leg-line:after{right:0}
 .leg-plane{position:absolute;top:50%;left:0;width:4.5cqi;height:1.8cqi;color:#fff;translate:0 -50%;filter:drop-shadow(0 0 4px rgba(255,255,255,.5));z-index:1}
-.leg-strip.is-flying{z-index:5;width:max-content;max-width:78%}
+.leg-strip.is-flying{z-index:5;width:max-content;max-width:56%}
 .leg-strip.is-flying .leg-mini-compass{display:block}
-.leg-strip.is-flying .leg-heading-copy{justify-content:center;min-width:0}
+.leg-strip.is-flying .leg-heading-copy{justify-content:center;min-width:0;max-width:100%}
 .leg-strip.is-flying .leg-place.to{max-width:100%;font-size:clamp(17px,4.2cqi,22px);letter-spacing:.06em}
 .leg-strip.is-flying .leg-heading-meta{display:block}
 .leg-strip.is-flying .leg-track{display:none}
-.leg-strip.is-flying .leg-origin-label{display:block;width:auto;max-width:74cqi;margin:0;overflow:hidden;text-overflow:ellipsis;text-align:center}
-.leg-strip.is-flying .leg-place.from{max-width:none}
-.leg-strip.is-landed{z-index:5;width:max-content;max-width:78%}
-.leg-strip.is-landed .leg-heading-copy{justify-content:center;min-width:0;max-width:74cqi}
+.leg-strip.is-flying .leg-origin-label{display:block;width:100%;max-width:100%;margin:0;text-align:center}
+.leg-strip.is-landed{z-index:5;width:max-content;max-width:56%}
+.leg-strip.is-landed .leg-heading-copy{justify-content:center;min-width:0;max-width:100%}
 .leg-strip.is-landed .leg-place.to{max-width:100%}
-.leg-strip.is-landed .leg-origin-label{display:block;width:auto;max-width:74cqi;margin:0;overflow:hidden;text-overflow:ellipsis;text-align:center}
-.leg-strip.is-landed .leg-place.from{max-width:none}
+.leg-strip.is-landed .leg-origin-label{display:block;width:100%;max-width:100%;margin:0;text-align:center}
 .leg-strip.is-landed .leg-plane{left:calc(100% - 4.5cqi)}
 @keyframes leg-fly{0%{left:0;opacity:.4}10%{opacity:1}90%{opacity:1}100%{left:calc(100% - 4.5cqi);opacity:.4}}
 @keyframes compass-glow{from{background-position:0 130%}to{background-position:0 -80%}}

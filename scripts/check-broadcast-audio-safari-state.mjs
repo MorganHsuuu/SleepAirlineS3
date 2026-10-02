@@ -189,6 +189,26 @@ assert.ok(
     && landing.indexOf('playApproachClip?.(') < landing.indexOf('startWakeupBed?.('),
   'landing must wait one second, play captain, play approach voice, then fade in music',
 );
+assert.match(
+  landing,
+  /preferWebAudio:\s*true/,
+  'arrival speech must prefer Web Audio after the open-window gesture has expired',
+);
+assert.match(
+  landing,
+  /await speechPlay/,
+  'arrival speech must finish before the post-landing UI takes over',
+);
+assert.doesNotMatch(
+  app.slice(app.indexOf('function bindShadeGesture()')),
+  /setTimeout\(\(\) => \{[\s\S]*void doTakeoff\(\);/,
+  'closing the shade must start takeoff inside the user gesture',
+);
+assert.match(
+  source,
+  /preferWebAudio = false/,
+  'prepared speech can skip late Safari src-swap playback',
+);
 
 console.log('✓ Safari keepalive stays silent');
 console.log('✓ captain uses a dedicated one-shot gesture element');

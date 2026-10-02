@@ -635,13 +635,14 @@ function bearingBetween(a, b) {
 }
 async function playBroadcast(text, speechBase64, {
   restoreBed = false, skipCaptainIntro = false, immediate = false, prepared = null,
+  preferWebAudio = false,
 } = {}) {
   setCeremony('CAPTAIN SPEAKING', text);
   try {
     if (state.sound && window.BroadcastAudio) {
       await Promise.race([
         BroadcastAudio.playCaptainBroadcast(text, 'formal_captain', {
-          speechBase64, restoreBed, skipCaptainIntro, immediate, prepared,
+          speechBase64, restoreBed, skipCaptainIntro, immediate, prepared, preferWebAudio,
         }),
         delay(180000).then(() => BroadcastAudio.stopPlayback()),
       ]);
@@ -1074,7 +1075,16 @@ async function doLand() {
         state.lastFlight = data.flight;
         state.destination = locationFromFlight(data.flight, 'arrival');
         voiceJob = state.openaiReady
-          ? api('POST', '/api/arrival-voice', { flightId: data.flight.flightId, broadcastStyle: 'formal_captain' }, 120000).catch(() => null)
+          ? api('POST', '/api/arrival-voice', { flightId: data.flight.flightId, broadcastStyle: 'formal_captain' }, 120000)
+            .then(async (voice) => {
+              if (!voice?.text || !state.sound || !window.BroadcastAudio?.prepareTakeoffSpeech) return { voice, prepared: null };
+              const prepared = await BroadcastAudio.prepareTakeoffSpeech(voice.text, voice.speechAudioBase64 || null).catch(() => null);
+              const decoded = prepared
+                ? await BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared)
+                : null;
+              return { voice, prepared: decoded };
+            })
+            .catch(() => null)
           : Promise.resolve(null);
         sceneryJob = !state.openaiReady
           ? Promise.resolve(null)
@@ -1154,7 +1164,9 @@ async function doLand() {
       await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 900 });
     } else await BroadcastAudio?.stopFlightSfx?.({ fade: false });
 
-    const arrivalVoice = voiceJob ? await voiceJob : null;
+    const arrivalPack = voiceJob ? await voiceJob : null;
+    const arrivalVoice = arrivalPack?.voice || arrivalPack || null;
+    const arrivalPrepared = arrivalPack?.prepared || null;
     if (!state.sceneryUrl && state.lastFlight?.flightId) {
       try {
         const fresh = await api('GET', `/api/scenery?flightId=${encodeURIComponent(state.lastFlight.flightId)}`, undefined, 8000);
@@ -1187,9 +1199,14 @@ async function doLand() {
     render();
     const spoken = arrivalVoice?.text
       || `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
-    if (state.sound) {
-      void playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, { skipCaptainIntro: true, restoreBed: true });
-    }
+    const speechPlay = state.sound
+      ? playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, {
+        skipCaptainIntro: true,
+        restoreBed: true,
+        prepared: arrivalPrepared,
+        preferWebAudio: true,
+      })
+      : delay(1900);
     if (state.mode === 'live' && state.profile && state.lastFlight?.flightId && spoken) {
       void api('POST', '/api/flight/captain-broadcast', {
         passengerId: state.profile.passengerId,
@@ -1199,10 +1216,9 @@ async function doLand() {
     }
     stopLandingVideos();
     const weather = await weatherJob;
-    // Let the arrival photo ease out of developing blur before weather fades in.
-    await delay(1600);
-    requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
     await delay(900);
+    requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
+    await speechPlay;
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
@@ -1393,19 +1409,17 @@ function bindShadeGesture() {
     pulling = false;
     const height = glass.getBoundingClientRect().height;
     const lip = shadeLip();
-    if ((state.stage === 'ready' || state.stage === 'landed') && lip > height * 0.86) {
+    if ((state.stage === 'ready' || state.stage === 'landed') && lip > height * 0.78) {
       const again = state.stage === 'landed';
       state.shadeHold = true;
       setShade('closed');
-      // iOS：必須在 pointerup 手勢堆疊內解鎖 Audio／後續 HTMLAudio
+      // iOS：必須還在 pointerup／touchend 手勢堆疊內解鎖並立刻起飛
       window.BroadcastAudio?.primeFromUserGesture?.();
       window.BroadcastAudio?.stopWakeupWarmup?.();
       armedWakeup = '';
-      setTimeout(() => {
-        state.shadeHold = false;
-        if (again) restart({ keepShade: true });
-        void doTakeoff();
-      }, 1000);
+      state.shadeHold = false;
+      if (again) restart({ keepShade: true });
+      void doTakeoff();
       return;
     }
     if (state.stage === 'cruise' && lip < height * 0.22) {
@@ -1424,6 +1438,7 @@ function bindShadeGesture() {
   };
   shadePanel.addEventListener('pointerup', end);
   shadePanel.addEventListener('pointercancel', end);
+  shadePanel.addEventListener('touchend', () => { if (pulling) end(); }, { passive: true });
   syncShadeHandle();
 }
 function applySleepTurn(delta) {

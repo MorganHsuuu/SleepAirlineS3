@@ -19,7 +19,7 @@ const requiredRules = [
   ],
   [
     '飛行資訊以置中直向堆疊排在窗戶中下',
-    /\.leg-strip\.is-flying\{[^}]*width:max-content;max-width:78%/,
+    /\.leg-strip\.is-flying\{[^}]*width:max-content;max-width:56%/,
   ],
   [
     '飛行中顯示指南針',
@@ -35,7 +35,7 @@ const requiredRules = [
   ],
   [
     '降落資訊以置中直向堆疊',
-    /\.leg-strip\.is-landed\{[^}]*width:max-content;max-width:78%/,
+    /\.leg-strip\.is-landed\{[^}]*width:max-content;max-width:56%/,
   ],
   [
     '降落後的 FROM 置中並可省略',
@@ -102,8 +102,8 @@ assert.match(
 );
 assert.match(
   css,
-  /\.leg-strip\{[^}]*left:50%;bottom:8%;[^}]*flex-direction:column;[^}]*align-items:center/,
-  '航線資訊應整組置中於窗戶中下',
+  /\.leg-strip\{[^}]*left:50%;bottom:13%;[^}]*max-width:56%;[^}]*flex-direction:column;[^}]*align-items:center/,
+  '航線資訊應整組置中，並留在橢圓下緣的安全寬度內',
 );
 assert.match(
   html,

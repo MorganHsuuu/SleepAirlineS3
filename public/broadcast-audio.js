@@ -1285,24 +1285,28 @@ async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain'
   return prepareCaptainSpeech(text, style);
 }
 
-async function playPreparedSpeech(prepared, { immediate = false } = {}) {
+async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio = false } = {}) {
   if (!prepared) return false;
   if (prepared.kind === 'browser') return speakText(prepared.text);
-  if (prefersGestureElement() && mediaUnlocked) {
+  if (!prepared.buffer && prepared.blob) {
+    try { prepared.buffer = await decodeBlobToBuffer(prepared.blob); } catch { /* 下面再用 HTMLAudio */ }
+  }
+  const playOnUnlockedElement = async () => {
+    if (!(prefersGestureElement() && mediaUnlocked) || preferWebAudio) return false;
     const blob = prepared.blob
       || (prepared.url ? await fetch(prepared.url).then((r) => r.blob()).catch(() => null) : null);
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const ok = await playOnGestureElement(ensureKeepAliveElement(), url, {
-        volume: 1,
-        restoreSilent: true,
-      });
-      URL.revokeObjectURL(url);
-      if (ok) {
-        if (prepared.url) URL.revokeObjectURL(prepared.url);
-        return true;
-      }
-    }
+    if (!blob) return false;
+    const url = URL.createObjectURL(blob);
+    const ok = await playOnGestureElement(ensureKeepAliveElement(), url, {
+      volume: 1,
+      restoreSilent: true,
+    });
+    URL.revokeObjectURL(url);
+    if (ok && prepared.url) URL.revokeObjectURL(prepared.url);
+    return ok;
+  };
+  if (!preferWebAudio) {
+    if (await playOnUnlockedElement()) return true;
   }
   stopCeremonyWebAudio('captain');
   await ensureAudioCtx();
@@ -1395,6 +1399,7 @@ async function playCaptainBroadcast(text, style, {
   restoreBed = true,
   skipCaptainIntro = false,
   immediate = false,
+  preferWebAudio = false,
   prepared: preparedIn = null,
 } = {}) {
   if (!text?.trim()) return false;
@@ -1432,7 +1437,7 @@ async function playCaptainBroadcast(text, style, {
     // 短間隔，讓裝置緩衝就緒，減少首字「歡迎」被吃
     if (!immediate) await delay(280);
     if (!prepared) return await speakText(text);
-    const ok = await playPreparedSpeech(prepared, { immediate });
+    const ok = await playPreparedSpeech(prepared, { immediate, preferWebAudio });
     // 再等語音真正靜下來，避免 Promise 提前 resolve 就切 landing.mp4
     await waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
     await delay(280);
