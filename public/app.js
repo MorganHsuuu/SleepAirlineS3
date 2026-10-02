@@ -1396,11 +1396,11 @@ function bindShadeGesture() {
     const height = glass.getBoundingClientRect().height;
     const canTakeoff = state.stage === 'ready' || state.stage === 'landed'
       || (state.stage === 'cruise' && startLip < height * 0.4);
-    if (canTakeoff && lip > height * 0.52) {
+    if (canTakeoff && lip > height * 0.9) {
       startTakeoff();
       return true;
     }
-    if (state.stage === 'cruise' && lip < height * 0.32) {
+    if (state.stage === 'cruise' && lip < height * 0.2) {
       startLand();
       return true;
     }

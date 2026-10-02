@@ -220,6 +220,16 @@ assert.doesNotMatch(
   'Safari pointercancel must not snap the shade closed before takeoff',
 );
 assert.match(
+  app.slice(app.indexOf('function bindShadeGesture()')),
+  /lip > height \* 0\.9/,
+  'takeoff must wait until the shade is pulled nearly closed',
+);
+assert.doesNotMatch(
+  app.slice(app.indexOf('function bindShadeGesture()')),
+  /height \* 0\.52/,
+  'takeoff must not start at half shade',
+);
+assert.match(
   source,
   /preferWebAudio = false/,
   'prepared speech can skip late Safari src-swap playback',
