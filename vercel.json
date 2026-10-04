@@ -3,6 +3,7 @@
   "framework": null,
   "buildCommand": "npm run build",
   "rewrites": [
+    { "source": "/classic", "destination": "/classic/index.html" },
     { "source": "/api/(.*)", "destination": "/api" }
   ],
   "crons": [

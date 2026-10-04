@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises';
 const css = await readFile(new URL('../public/style.css', import.meta.url), 'utf8');
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const js = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+const classicCss = await readFile(new URL('../public/classic/style.css', import.meta.url), 'utf8');
+const classicHtml = await readFile(new URL('../public/classic/index.html', import.meta.url), 'utf8');
+const classicJs = await readFile(new URL('../public/classic/app.js', import.meta.url), 'utf8');
 
 const requiredRules = [
   [
@@ -142,6 +145,17 @@ assert.match(
   '減少動態時不移動前景雲層',
 );
 
+assert.match(
+  classicCss,
+  /body\.window-only \.window-frame\{[^}]*aspect-ratio:388 \/ 458/,
+  'classic 分頁應保留橢圓窗框',
+);
+assert.match(classicCss, /@keyframes arrival-flash/, 'classic 分頁應保留降落閃光');
+assert.match(classicJs, /glass\.classList\.add\('arrival-flash'\)/, 'classic 分頁應在降落時觸發閃光');
+assert.match(classicHtml, /href="style\.css"/, 'classic 分頁應使用自己的樣式');
+assert.match(classicHtml, /src="app\.js"/, 'classic 分頁應使用自己的腳本');
+
 console.log('✓ 直式滿版只保留窗戶內畫面');
 console.log('✓ 航線與時間資訊具有可讀的最小字級');
 console.log('✓ 遮板仍以窗戶安全區為定位基準');
+console.log('✓ /classic 仍是橢圓窗與降落閃光的舊版');
