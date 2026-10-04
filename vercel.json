@@ -2,8 +2,10 @@
   "version": 2,
   "framework": null,
   "buildCommand": "npm run build",
+  "redirects": [
+    { "source": "/classic", "destination": "/classic/", "permanent": false }
+  ],
   "rewrites": [
-    { "source": "/classic", "destination": "/classic/index.html" },
     { "source": "/api/(.*)", "destination": "/api" }
   ],
   "crons": [

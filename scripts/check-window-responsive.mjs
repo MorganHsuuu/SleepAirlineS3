@@ -152,8 +152,8 @@ assert.match(
 );
 assert.match(classicCss, /@keyframes arrival-flash/, 'classic 分頁應保留降落閃光');
 assert.match(classicJs, /glass\.classList\.add\('arrival-flash'\)/, 'classic 分頁應在降落時觸發閃光');
-assert.match(classicHtml, /href="style\.css(?:\?[^"]*)?"/, 'classic 分頁應使用自己的樣式');
-assert.match(classicHtml, /src="app\.js"/, 'classic 分頁應使用自己的腳本');
+assert.match(classicHtml, /href="\/classic\/style\.css(?:\?[^"]*)?"/, 'classic 分頁應使用自己的樣式');
+assert.match(classicHtml, /src="\/classic\/app\.js"/, 'classic 分頁應使用自己的腳本');
 assert.match(html, /<p class="sleep-hint">轉動旋鈕紀錄<\/p>/, '情緒臉下方應提示轉動旋鈕紀錄');
 assert.match(css, /\.ceremony\{display:none!important\}/, '起飛降落對話框應隱藏');
 assert.match(classicCss, /\.ceremony\{display:none!important\}/, 'classic 分頁也應隱藏對話框');
