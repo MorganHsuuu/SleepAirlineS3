@@ -342,11 +342,24 @@ function render() {
 }
 function applyWindowOnly(on) {
   document.body.classList.toggle('window-only', on);
+  syncViewportSize();
   const button = $('view-toggle');
   if (!button) return;
   button.textContent = on ? '完整介面' : '只有窗戶';
   button.setAttribute('aria-pressed', String(on));
   localStorage.setItem('sleepAirlineS3WindowOnly', on ? '1' : '0');
+}
+function syncViewportSize() {
+  const view = window.visualViewport;
+  const width = Math.max(1, Math.round(view?.width || window.innerWidth || 1));
+  const height = Math.max(1, Math.round(view?.height || window.innerHeight || 1));
+  const left = Math.round(view?.offsetLeft || 0);
+  const top = Math.round(view?.offsetTop || 0);
+  const root = document.documentElement;
+  root.style.setProperty('--view-w', `${width}px`);
+  root.style.setProperty('--view-h', `${height}px`);
+  root.style.setProperty('--view-x', `${left}px`);
+  root.style.setProperty('--view-y', `${top}px`);
 }
 function formatTime(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -1683,6 +1696,10 @@ async function init() {
   }
   $('mode-label').textContent = state.mode === 'live' ? '連線航班' : '獨立體驗';
   applyWindowOnly(true);
+  window.addEventListener('resize', syncViewportSize);
+  window.addEventListener('orientationchange', syncViewportSize);
+  window.visualViewport?.addEventListener('resize', syncViewportSize);
+  window.visualViewport?.addEventListener('scroll', syncViewportSize);
   window.addEventListener('wheel', (event) => { if (event.ctrlKey) event.preventDefault(); }, { passive: false });
   window.addEventListener('gesturestart', (event) => event.preventDefault());
   $('view-toggle').addEventListener('click', () => applyWindowOnly(!document.body.classList.contains('window-only')));

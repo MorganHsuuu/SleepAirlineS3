@@ -103,14 +103,15 @@
 .window-glass{clip-path:inset(0 round 48% 48% 44% 44% / 36% 36% 33% 33%);transform:translateZ(0)}
 .frame-screw{z-index:7}
 .scene-image,.scene-video,#globe-canvas,.cloud-veil,.window-shade{border-radius:inherit}
-body.window-only{background:#101820;touch-action:none}
-body.window-only .app-shell{max-width:none;background:radial-gradient(circle at 50% 42%,#1b3038 0,#101820 62%)}
-body.window-only .topbar{position:absolute;inset:0 0 auto;height:64px;border:0;background:linear-gradient(180deg,rgba(8,16,20,.55),transparent);z-index:8}
-body.window-only .brand,body.window-only #mode-label,body.window-only .live-dot{display:none}
-body.window-only .story,body.window-only .footer,body.window-only .window-index,body.window-only .controls-top,body.window-only .direction-heading,body.window-only .stage-heading,body.window-only .stage-copy,body.window-only .direction-readout,body.window-only .sound-row,body.window-only .control-divider{display:none}
-body.window-only .main-grid{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100svh;min-height:0;overflow:hidden;padding:max(60px,calc(env(safe-area-inset-top) + 8px)) 14px max(8px,env(safe-area-inset-bottom))}
-body.window-only .window-area{position:relative;z-index:1;width:100%;flex:0 0 auto;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:flex-start;padding-top:clamp(12px,2.4svh,22px);box-sizing:border-box}
-body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc((100svh - clamp(218px,40svh,306px)) * 388 / 458));height:auto;min-height:0;max-height:none}
+html:has(body.window-only),body.window-only{width:100%;height:100%;height:100dvh;min-height:100svh;overflow:hidden;background:#000;touch-action:none}
+body.window-only .app-shell{max-width:none;width:100%;height:100%;min-height:0;background:#000}
+body.window-only .topbar,body.window-only .brand,body.window-only #mode-label,body.window-only .live-dot,body.window-only .topbar-right{display:none}
+body.window-only .story,body.window-only .footer,body.window-only .window-index,body.window-only .controls,body.window-only .window-backdrop,body.window-only .frame-screw,body.window-only .window-reflection{display:none}
+body.window-only .main-grid{display:block;width:100%;height:100%;min-height:0;overflow:hidden;padding:0}
+body.window-only .window-area{position:fixed;inset:auto;top:var(--view-y,0px);left:var(--view-x,0px);z-index:1;width:var(--view-w,100%);height:var(--view-h,100%);flex:none;min-height:0;overflow:hidden;display:block;padding:0;box-sizing:border-box}
+body.window-only .window-frame,body.window-only .window-rim,body.window-only .window-glass{aspect-ratio:auto;width:100%;height:100%;min-height:0;max-height:none;border-radius:0;padding:0;background:transparent;box-shadow:none}
+body.window-only .window-frame::after{display:none}
+body.window-only .window-glass{clip-path:none;border-radius:0;container-type:size}
 .leg-strip{position:absolute;z-index:3;left:50%;bottom:13%;width:max-content;max-width:56%;translate:-50% 0;display:none;flex-direction:column;align-items:center;gap:1.4cqi;box-sizing:border-box;color:#fff;pointer-events:none;text-align:center;text-shadow:0 1px 9px rgba(8,20,32,.66)}
 .leg-strip.is-route{display:flex}
 .leg-strip[hidden]{display:none}
@@ -153,30 +154,37 @@ body.window-only .window-frame{aspect-ratio:388 / 458;width:min(88vw,540px,calc(
 @keyframes leg-fly{0%{left:0;opacity:.4}10%{opacity:1}90%{opacity:1}100%{left:calc(100% - 4.5cqi);opacity:.4}}
 @keyframes compass-glow{from{background-position:0 130%}to{background-position:0 -80%}}
 @keyframes compass-pulse{0%,100%{box-shadow:0 0 0 3px rgba(255,255,255,.14),0 0 3px rgba(255,255,255,.3)}50%{box-shadow:0 0 0 6px rgba(255,255,255,.03),0 0 9px rgba(255,255,255,.9)}}
-body.window-only .dial-cardinal.n{top:-7px}
-body.window-only .dial-cardinal.e{right:-7px}
-body.window-only .dial-cardinal.s{bottom:-7px}
-body.window-only .dial-cardinal.w{left:-7px}
-body.window-only .direction-dial{inset:8%}
-body.window-only .dial-ticks{inset:5%;mask:radial-gradient(circle,transparent 0 63%,#000 65%)}
-body.window-only .dial-inner{inset:11%}
-body.window-only .dial-pointer{height:46%}
-body.window-only .window-backdrop{display:none}
-body.window-only .controls{order:3;position:relative;z-index:20;flex:0 0 auto;width:min(92vw,360px);margin:4px 0 0;padding:0;border:0;align-items:center}
-body.window-only .dial-wrap{width:clamp(110px,min(38vw,25svh),178px);height:clamp(110px,min(38vw,25svh),178px);margin:clamp(10px,2svh,14px) auto 2px}
 body.weather-focus .dial-wrap,
 body.weather-focus .direction-heading,
 body.weather-focus .direction-readout{visibility:hidden}
-body.window-only .dial-wrap.is-sleep .dial-center{width:42px;height:42px;font-size:18px;font-weight:600;color:#3d5c56}
-body.window-only .dial-wrap.is-sleep .dial-pointer{width:3px;background:linear-gradient(#8d5a3c,#c4a36a)}
-body.window-only .primary-button,body.window-only .secondary-button{width:min(100%,280px)}
+body.window-only .leg-strip{bottom:7.5%;max-width:min(78cqi,72%)}
+body.window-only .leg-strip.is-flying,body.window-only .leg-strip.is-landed{width:max-content;max-width:min(78cqi,72%)}
+body.window-only .leg-place.to{font-size:clamp(18px,min(5.2cqh,8.4cqi),96px)}
+body.window-only .leg-strip.is-flying .leg-place.to{font-size:clamp(16px,min(4.2cqh,7cqi),72px)}
+body.window-only .leg-origin-label{font-size:clamp(11px,min(1.8cqh,3.2cqi),28px)}
+body.window-only .leg-place.from{font-size:clamp(12px,min(2.2cqh,3.8cqi),32px)}
+body.window-only .leg-heading-meta{font-size:clamp(12px,min(2.1cqh,3.6cqi),30px)}
+body.window-only .leg-mini-compass{width:clamp(48px,min(8.8cqh,16cqi),120px);height:clamp(48px,min(8.8cqh,16cqi),120px);min-width:0;min-height:0;max-width:none;max-height:none;font-size:clamp(8px,min(1.4cqh,2.4cqi),16px)}
+body.window-only .leg-flag{font-size:clamp(18px,min(3.6cqh,6cqi),56px)}
+body.window-only .glass-board{top:46%;width:min(88cqi,70cqh)}
+body.window-only .glass-copy{gap:clamp(6px,1.2cqh,18px)}
+body.window-only .glass-copy .glass-kicker{font-size:clamp(11px,min(1.7cqh,2.8cqi),22px)}
+body.window-only .glass-copy .glass-time{font-size:clamp(28px,min(8.4cqh,14cqi),140px)}
+body.window-only .glass-copy .glass-meta{font-size:clamp(12px,min(2.1cqh,3.6cqi),32px)}
+body.window-only .glass-board .glass-pin{font-size:clamp(12px,min(2.2cqh,3.8cqi),34px)}
+body.window-only .compass-face{width:clamp(96px,min(28cqw,18cqh),280px);height:clamp(96px,min(28cqw,18cqh),280px)}
+body.window-only .glass-compass .glass-time{font-size:clamp(24px,min(6.2cqh,10cqi),88px)}
+body.window-only .wx-temp{font-size:clamp(48px,min(13cqh,22cqi),180px)}
+body.window-only .wx-city,body.window-only .wx-hello{font-size:clamp(16px,min(3.4cqh,5.8cqi),52px)}
+body.window-only .wx-place{font-size:clamp(12px,min(2cqh,3.4cqi),28px)}
+body.window-only .wx-icon{width:clamp(40px,min(8cqh,14cqi),96px);height:clamp(40px,min(8cqh,14cqi),96px)}
+body.window-only .shade-handle{width:clamp(48px,min(16cqw,18cqi),140px);height:clamp(8px,min(1.2cqh,2.2cqi),18px)}
+body.window-only .ceremony{width:min(86cqi,540px);bottom:max(22px,env(safe-area-inset-bottom))}
 .pair-board canvas{display:block;width:116px;height:116px;margin:0 auto;border-radius:8px}
 .pair-board p{margin:4px 0 0;font-size:10px;line-height:1.5;color:#5d736e}
 .pair-board{display:flex;flex-direction:column;align-items:center;gap:8px;margin:14px 0 8px}
 .pair-board canvas{width:148px;height:148px}
 .pair-board p{margin:0;text-align:center}
-body.window-only .topbar-right{margin-left:auto;color:#e7f2ee}
-body.window-only .text-button{color:#f4f7f2;border-bottom-color:rgba(244,247,242,.7)}
 .window-shade,.window-shade.closed,.window-shade.peek{inset:0;height:auto;transform:none;transition:none;background:none;box-shadow:none;overflow:hidden;border-radius:inherit;pointer-events:none}
 .window-glass{container-type:size}
 .shade-panel{position:absolute;inset:0;transform:translateY(calc(-100% + 16cqh));transition:transform 1.45s cubic-bezier(.63,.06,.2,1);background:repeating-linear-gradient(0deg,transparent 0,transparent 11px,rgba(101,116,113,.08) 12px),linear-gradient(93deg,#b2bcb4,#e0e5dc 18%,#cad4cc 51%,#e9ede5 84%,#afbeb6);pointer-events:auto;touch-action:none;cursor:grab}

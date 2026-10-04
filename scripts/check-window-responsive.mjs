@@ -3,11 +3,28 @@ import { readFile } from 'node:fs/promises';
 
 const css = await readFile(new URL('../public/style.css', import.meta.url), 'utf8');
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+const js = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 
 const requiredRules = [
   [
-    '窗框以固定比例及穩定的寬高預算縮放',
-    /body\.window-only \.window-frame\{[^}]*aspect-ratio:388 \/ 458;[^}]*width:min\(88vw,540px,calc\(\(100svh - clamp\(218px,40svh,306px\)\) \* 388 \/ 458\)\);height:auto;min-height:0;max-height:none/,
+    '直式窗戶畫面佔滿實際可視範圍',
+    /body\.window-only \.window-area\{[^}]*position:fixed;[^}]*width:var\(--view-w,100%\);height:var\(--view-h,100%\)/,
+  ],
+  [
+    '滿版根節點改用動態可視高度',
+    /html:has\(body\.window-only\),body\.window-only\{[^}]*height:100dvh/,
+  ],
+  [
+    '窗框與玻璃取消橢圓外框並改滿版',
+    /body\.window-only \.window-frame,body\.window-only \.window-rim,body\.window-only \.window-glass\{[^}]*width:100%;height:100%;[^}]*border-radius:0;padding:0/,
+  ],
+  [
+    '滿版玻璃取消橢圓裁切',
+    /body\.window-only \.window-glass\{clip-path:none;border-radius:0/,
+  ],
+  [
+    '外框與旋鈕從直式畫面隱藏',
+    /body\.window-only \.story,body\.window-only \.footer,body\.window-only \.window-index,body\.window-only \.controls,body\.window-only \.window-backdrop,body\.window-only \.frame-screw,body\.window-only \.window-reflection\{display:none\}/,
   ],
   [
     'FROM 標籤有可讀的最小字級',
@@ -19,7 +36,7 @@ const requiredRules = [
   ],
   [
     '飛行資訊以置中直向堆疊排在窗戶中下',
-    /\.leg-strip\.is-flying\{[^}]*width:max-content;max-width:56%/,
+    /body\.window-only \.leg-strip\.is-flying,body\.window-only \.leg-strip\.is-landed\{width:max-content;max-width:min\(78cqi,72%\)\}/,
   ],
   [
     '飛行中顯示指南針',
@@ -34,10 +51,6 @@ const requiredRules = [
     /\.leg-strip\.is-flying \.leg-heading-copy\{[^}]*justify-content:center/,
   ],
   [
-    '降落資訊以置中直向堆疊',
-    /\.leg-strip\.is-landed\{[^}]*width:max-content;max-width:56%/,
-  ],
-  [
     '降落後的 FROM 置中並可省略',
     /\.leg-strip\.is-landed \.leg-origin-label\{[^}]*text-align:center/,
   ],
@@ -46,12 +59,12 @@ const requiredRules = [
     /\.leg-strip\.is-landed \.leg-heading-copy\{[^}]*justify-content:center/,
   ],
   [
-    '窗內指南針文字有最小字級',
-    /\.leg-mini-compass\{[^}]*font-size:clamp\(7px,1\.55cqi,10px\)/,
+    '滿版飛行文字放大到直式可讀',
+    /body\.window-only \.leg-place\.to\{font-size:clamp\(18px,min\(5\.2cqh,8\.4cqi\),96px\)\}/,
   ],
   [
-    '短螢幕會縮小外部指南針',
-    /body\.window-only \.dial-wrap\{width:clamp\(110px,min\(38vw,25svh\),178px\);height:clamp\(110px,min\(38vw,25svh\),178px\)/,
+    '滿版航線距離字級放大',
+    /body\.window-only \.glass-copy \.glass-time\{font-size:clamp\(28px,min\(8\.4cqh,14cqi\),140px\)\}/,
   ],
   ['時間看板標籤有最小字級', /\.glass-copy \.glass-kicker\{font-size:clamp\(9px,2\.7cqi,14px\)/],
   ['時間看板時間有安全字級', /\.glass-copy \.glass-time\{font-size:clamp\(32px,11cqi,62px\)/],
@@ -64,34 +77,26 @@ for (const [message, pattern] of requiredRules) {
   assert.match(css, pattern, message);
 }
 
-assert.match(
+assert.doesNotMatch(
   css,
-  /body\.window-only \.window-area\{[^}]*flex:0 0 auto;[^}]*justify-content:flex-start;[^}]*padding-top:clamp\(12px,2\.4svh,22px\)/,
-  '視窗版窗框應靠上並保留固定安全間距',
+  /body\.window-only \.window-frame\{[^}]*aspect-ratio:388 \/ 458/,
+  '直式滿版不應再鎖橢圓窗框比例',
 );
-
-const frameWidth = (viewportWidth, viewportHeight) => {
-  const reserve = Math.min(306, Math.max(218, viewportHeight * 0.4));
-  return Math.min(viewportWidth * 0.88, 540, (viewportHeight - reserve) * 388 / 458);
-};
-
-for (const [width, height] of [
-  [320, 568],
-  [375, 667],
-  [390, 844],
-  [402, 874],
-  [430, 932],
-  [592, 789],
-  [1024, 768],
-]) {
-  const frameW = frameWidth(width, height);
-  const frameH = frameW * 458 / 388;
-  const topGap = Math.min(22, Math.max(12, height * 0.024));
-  assert.ok(frameW >= Math.min(width * 0.88, 280), `${width}x${height} 的窗框不應異常縮小`);
-  assert.ok(frameH <= height - 210, `${width}x${height} 的窗框應保留控制區安全高度`);
-  assert.ok(Math.abs(frameW / frameH - 388 / 458) < 0.001, `${width}x${height} 的窗框比例應固定`);
-  assert.ok(topGap >= 12 && topGap <= 22, `${width}x${height} 的窗框上方間距需落在安全範圍`);
-}
+assert.doesNotMatch(
+  css,
+  /body\.window-only \.window-area\{[^}]*width:100vw/,
+  '滿版窗戶不應用 100vw，避免超出可視範圍',
+);
+assert.match(
+  js,
+  /root\.style\.setProperty\('--view-w'/,
+  '應把實際可視寬度寫進 --view-w',
+);
+assert.match(
+  js,
+  /window\.visualViewport\?\.addEventListener\('resize', syncViewportSize\)/,
+  '畫面尺寸改變時應重算滿版變數',
+);
 
 assert.match(css, /\.window-shade,\.window-shade\.closed,\.window-shade\.peek\{inset:0;/);
 assert.match(css, /\.window-glass\{container-type:size\}/);
@@ -137,9 +142,6 @@ assert.match(
   '減少動態時不移動前景雲層',
 );
 
-const narrowDial = Math.max(110, Math.min(320 * 0.38, 568 * 0.25, 178));
-assert.ok(narrowDial <= 122, '320x568 的指南針需保留南向標記安全空間');
-
-console.log('✓ 窗框使用固定比例與穩定的響應式尺寸');
+console.log('✓ 直式滿版只保留窗戶內畫面');
 console.log('✓ 航線與時間資訊具有可讀的最小字級');
 console.log('✓ 遮板仍以窗戶安全區為定位基準');
