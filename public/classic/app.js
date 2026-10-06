@@ -1590,6 +1590,19 @@ function bindDial() {
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
+function startDeviceControls() {
+  window.FlightDeviceControls?.start({
+    getState: () => state,
+    setDirection: (index) => setDirection(index),
+    takeoff: () => {
+      if (state.stage === 'landed') restart();
+      void doTakeoff();
+    },
+    land: () => { void doLand(); },
+    notify: showToast,
+  });
+}
+
 async function init() {
   const incomingPair = readPairQuery();
   if (incomingPair) {
@@ -1695,6 +1708,7 @@ async function init() {
       await restoreNotionFlight(result);
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
+  startDeviceControls();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
 void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
