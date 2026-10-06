@@ -40,3 +40,7 @@ npm run build
 ```
 
 主畫面在 `public/index.html`、`public/style.css`、`public/app.js`。兩張新製作的圖片放在 `public/images/`。後端與其他素材沿用 S2；請勿將含金鑰的 `.env.local` 提交到版本庫。
+
+## 樹莓派實體控制
+
+全螢幕與 `/classic/` 均可使用 `?device=1`，以 GPIO17 起飛磁簧、GPIO27 降落磁簧和 ADS1115 A0 方位旋鈕控制網頁。安裝與接線請見 [裝置控制說明](hardware/DEVICE_CONTROLS.md)。

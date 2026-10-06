@@ -1664,6 +1664,19 @@ function startReedBridge() {
   void poll();
 }
 
+function startDeviceControls() {
+  window.FlightDeviceControls?.start({
+    getState: () => state,
+    setDirection: (index) => setDirection(index),
+    takeoff: () => {
+      if (state.stage === 'landed') restart();
+      void doTakeoff();
+    },
+    land: () => { void doLand(); },
+    notify: showToast,
+  });
+}
+
 async function init() {
   const incomingPair = readPairQuery();
   if (incomingPair) {
@@ -1773,7 +1786,8 @@ async function init() {
       await restoreNotionFlight(result);
     } catch { showToast('暫時無法恢復航班進度。'); }
   }
-  startReedBridge();
+  if (window.FlightDeviceControls?.enabled) startDeviceControls();
+  else startReedBridge();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
 void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
