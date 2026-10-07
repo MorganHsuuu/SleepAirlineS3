@@ -88,13 +88,55 @@ function findTaipei(): Destination | typeof DEFAULT_DEPARTURE {
     || DEFAULT_DEPARTURE;
 }
 
+export function findCityByLocation(displayName?: string | null): Destination | null {
+  const name = (displayName || '').trim();
+  if (!name) return null;
+  const exact = CITIES.find((city) => city.displayName === name);
+  if (exact) return exact;
+  const city = name.split(',')[0].trim();
+  const lower = city.toLowerCase();
+  return CITIES.find((item) => {
+    const short = item.displayName.split(',')[0].trim();
+    return short === city
+      || item.city === city
+      || item.city.toLowerCase() === lower
+      || short.toLowerCase() === lower;
+  }) || null;
+}
+
+export function findOriginByLocation(displayName?: string | null): Destination | typeof DEFAULT_DEPARTURE {
+  return findCityByLocation(displayName) || findTaipei();
+}
+
+export function globeHop(fromLocation: string, toLocation: string): GlobeRoute {
+  const from = findOriginByLocation(fromLocation);
+  const to = findCityByLocation(toLocation) || findOriginByLocation(toLocation);
+  return {
+    from: {
+      name: shortPlace(from.displayName),
+      lat: from.latitude,
+      lon: from.longitude,
+    },
+    to: {
+      name: shortPlace(to.displayName),
+      lat: to.latitude,
+      lon: to.longitude,
+    },
+    arrivalLocation: to.displayName,
+    departureLocation: from.displayName,
+    durationMinutes: 0,
+    routeDirection: 'eastbound',
+  };
+}
+
 export function simulateRoute(
   routeDirection: RouteDirection,
   durationMinutes: number,
-  landingHour: number | null
+  landingHour: number | null,
+  originLocation?: string | null
 ): SimulatedRoute {
   const minutes = Math.max(30, Math.min(720, Math.round(durationMinutes || 90)));
-  const origin = findTaipei();
+  const origin = findOriginByLocation(originLocation);
   const distanceKm = calculateFlightDistance(minutes);
   const arrival = findArrivalDestination(
     origin.latitude,

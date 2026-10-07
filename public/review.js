@@ -38,6 +38,21 @@ function toast(message) {
   el._t = setTimeout(() => { el.hidden = true; }, 3200);
 }
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function shortPlace(name) {
+  const text = String(name || '').trim();
+  return text.split(',')[0].trim() || text || '臺北';
+}
+
 function formatDuration(minutes) {
   const safe = Math.max(30, Math.min(720, Number(minutes) || 90));
   const hours = Math.floor(safe / 60);
@@ -57,6 +72,22 @@ function currentDirection() {
   return directions[state.direction];
 }
 
+function chainOriginLocation() {
+  return (state.samples[0]?.arrivalLocation || '').trim();
+}
+
+function originLabel() {
+  return shortPlace(chainOriginLocation() || '臺北');
+}
+
+function sampleImageSrc(sample) {
+  if (!sample?.sampleId) return '';
+  if (sample.hasImage || sample.imageUrl) {
+    return `/api/review/image?sampleId=${encodeURIComponent(sample.sampleId)}`;
+  }
+  return '';
+}
+
 function paintControls() {
   const dir = currentDirection();
   $('dial-pointer').style.transform = `translate(-50%,-100%) rotate(${dir.angle}deg)`;
@@ -65,9 +96,16 @@ function paintControls() {
   $('duration-readout').textContent = formatDuration(minutes);
   const hour = Number($('hour-bar').value);
   $('hour-readout').textContent = hourLabel(hour);
+  $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   if (!state.sampleId) {
     const dest = state.preview?.to?.name || '預覽中';
-    $('route-line').textContent = `臺北出發 · ${dir.name} · ${formatDuration(minutes)} · ${hourLabel(hour)} · ${dest}`;
+    $('route-line').textContent = [
+      `${originLabel()}出發`,
+      dir.name,
+      formatDuration(minutes),
+      hourLabel(hour),
+      dest,
+    ].join(' · ');
   }
   schedulePreview();
 }
@@ -89,8 +127,7 @@ function renderSample(sample) {
   const hour = sample.landingHour == null ? -1 : Number(sample.landingHour);
   $('sample-id').textContent = sample.sampleId;
   $('route-line').textContent = [
-    sample.departureLocation || '臺北出發',
-    sample.arrivalLocation || dir.name,
+    `${shortPlace(sample.departureLocation || '臺北')} → ${shortPlace(sample.arrivalLocation || dir.name)}`,
     formatDuration(sample.durationMinutes || Number($('duration-bar').value)),
     hourLabel(hour),
   ].join(' · ');
@@ -98,12 +135,21 @@ function renderSample(sample) {
   $('landing-copy').textContent = sample.landingBroadcast || '還沒有降落文字。';
   $('image-prompt').textContent = sample.imagePrompt || '';
   const frame = $('image-frame');
-  if (sample.imageUrl) {
-    frame.innerHTML = `<img alt="降落風景" src="${sample.imageUrl}">`;
+  const src = sampleImageSrc(sample);
+  if (src) {
+    const img = document.createElement('img');
+    img.alt = '降落風景';
+    img.src = src;
+    img.onload = () => { img.dataset.ok = '1'; };
+    img.onerror = () => {
+      frame.innerHTML = '<p>圖片暫時無法載入。通常是 Notion 網址過期，請再點一次這筆紀錄。</p>';
+    };
+    frame.replaceChildren(img);
   } else {
     frame.innerHTML = '<p>選擇「文字＋圖片」時會一起生成風景。</p>';
   }
   $('comments').textContent = sample.comments || '還沒有評論。';
+  $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   renderList();
 }
 
@@ -116,9 +162,12 @@ function renderList() {
   box.innerHTML = state.samples.map((sample) => {
     const dir = directions.find((item) => item.key === sample.routeDirection)?.name || sample.routeDirection;
     const active = sample.sampleId === state.sampleId ? ' active' : '';
-    return `<button type="button" class="sample-item${active}" data-id="${sample.sampleId}">
-      <strong>${sample.sampleId}</strong>
-      <small>${dir} · ${formatDuration(sample.durationMinutes)} · ${sample.arrivalLocation || '尚未降落'}</small>
+    const from = shortPlace(sample.departureLocation || '臺北');
+    const to = shortPlace(sample.arrivalLocation || '尚未降落');
+    const pic = sample.hasImage || sample.imageUrl ? ' · 有圖' : '';
+    return `<button type="button" class="sample-item${active}" data-id="${escapeHtml(sample.sampleId)}">
+      <strong>${escapeHtml(sample.sampleId)}</strong>
+      <small>${escapeHtml(from)} → ${escapeHtml(to)} · ${escapeHtml(dir)} · ${escapeHtml(formatDuration(sample.durationMinutes))}${pic}</small>
     </button>`;
   }).join('');
 }
@@ -171,6 +220,21 @@ async function flyGlobe(route) {
   }
 }
 
+async function loadHop(fromLocation, toLocation) {
+  try {
+    const params = new URLSearchParams({
+      fromLocation: fromLocation || '',
+      toLocation: toLocation || '',
+    });
+    const res = await fetch(`/api/review/preview?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '航線載入失敗');
+    drawGlobe(data.route, 1);
+  } catch {
+    $('globe-caption').textContent = '航線暫時無法載入';
+  }
+}
+
 let previewTimer = 0;
 function schedulePreview() {
   clearTimeout(previewTimer);
@@ -183,6 +247,7 @@ async function loadPreview() {
       routeDirection: currentDirection().key,
       durationMinutes: String($('duration-bar').value),
       landingHour: String($('hour-bar').value),
+      fromLocation: chainOriginLocation(),
     });
     const res = await fetch(`/api/review/preview?${params}`);
     const data = await res.json();
@@ -190,7 +255,7 @@ async function loadPreview() {
     state.preview = data.route;
     if (!state.sampleId) {
       $('route-line').textContent = [
-        '臺北出發',
+        `${originLabel()}出發`,
         currentDirection().name,
         formatDuration(Number($('duration-bar').value)),
         hourLabel(Number($('hour-bar').value)),
@@ -211,6 +276,7 @@ async function loadSamples() {
     state.samples = data.samples || [];
     applyStore(data);
     renderList();
+    $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   } catch (err) {
     toast(err.message || '讀取測試內容失敗');
   }
@@ -221,6 +287,7 @@ function controlsPayload() {
     routeDirection: currentDirection().key,
     durationMinutes: Number($('duration-bar').value),
     landingHour: Number($('hour-bar').value),
+    fromLocation: chainOriginLocation(),
   };
 }
 
@@ -332,12 +399,14 @@ $('sample-list').addEventListener('click', async (event) => {
   if (index >= 0) state.direction = index;
   $('duration-bar').value = String(Math.max(30, Math.min(720, sample.durationMinutes || 90)));
   $('hour-bar').value = String(sample.landingHour == null ? -1 : sample.landingHour);
-  paintControls();
   renderSample(sample);
-  await loadPreview();
+  $('dial-pointer').style.transform = `translate(-50%,-100%) rotate(${currentDirection().angle}deg)`;
+  $('direction-name').textContent = `${currentDirection().name} · ${String(currentDirection().angle).padStart(3, '0')}°`;
+  $('duration-readout').textContent = formatDuration(Number($('duration-bar').value));
+  $('hour-readout').textContent = hourLabel(Number($('hour-bar').value));
+  await loadHop(sample.departureLocation, sample.arrivalLocation);
 });
 
 bindDial();
 paintControls();
-loadSamples();
-loadPreview();
+loadSamples().then(() => loadPreview());

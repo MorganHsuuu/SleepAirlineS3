@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">Review Lab · 不進體驗流程</p>
         <h1>內容審查台</h1>
-        <p class="lede">先轉方向、調飛行時間，再選擇只要文字，或文字加上圖片。按一次會新增一筆紀錄，不會覆蓋舊的。</p>
+        <p class="lede">下一班會接著上一站飛。中間對照起飛、降落與風景，右側是歷史。</p>
       </div>
       <div class="mast-side">
         <span class="pill" id="store-pill">讀取中</span>
@@ -62,6 +62,8 @@
           <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
         </section>
 
+        <p class="origin-note" id="origin-note">下一班從臺北出發</p>
+
         <div class="globe-stage">
           <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
           <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
@@ -91,32 +93,36 @@
           <span id="route-line">臺北出發 · 向東 · 1 小時 30 分</span>
         </div>
 
-        <article class="card">
-          <header>
-            <small>Takeoff</small>
-            <h3>起飛文字</h3>
-          </header>
-          <p class="copy" id="takeoff-copy">調整左側條件，選擇生成文字或文字＋圖片，再按開始生成。</p>
-        </article>
+        <div class="read-grid">
+          <div class="texts">
+            <article class="card">
+              <header>
+                <small>Takeoff</small>
+                <h3>起飛文字</h3>
+              </header>
+              <p class="copy" id="takeoff-copy">調整左側條件，選擇生成文字或文字＋圖片，再按開始生成。</p>
+            </article>
 
-        <article class="card">
-          <header>
-            <small>Landing</small>
-            <h3>降落文字</h3>
-          </header>
-          <p class="copy" id="landing-copy">目的地由方向與飛行時間決定，不會覆蓋舊的紀錄。</p>
-        </article>
-
-        <article class="card image-card">
-          <header>
-            <small>Scenery</small>
-            <h3>降落風景</h3>
-          </header>
-          <div class="image-frame" id="image-frame">
-            <p>選擇「文字＋圖片」時會一起生成風景。</p>
+            <article class="card">
+              <header>
+                <small>Landing</small>
+                <h3>降落文字</h3>
+              </header>
+              <p class="copy" id="landing-copy">目的地會接著上一站，不會覆蓋舊的紀錄。</p>
+            </article>
           </div>
-          <p class="prompt" id="image-prompt"></p>
-        </article>
+
+          <article class="card image-card">
+            <header>
+              <small>Scenery</small>
+              <h3>降落風景</h3>
+            </header>
+            <div class="image-frame" id="image-frame">
+              <p>選擇「文字＋圖片」時會一起生成風景。</p>
+            </div>
+            <p class="prompt" id="image-prompt" hidden></p>
+          </article>
+        </div>
 
         <article class="card comment-card">
           <header>
@@ -124,14 +130,16 @@
             <h3>對照評論</h3>
           </header>
           <div class="comments" id="comments">還沒有評論。</div>
-          <label>
-            你的名字
-            <input id="reviewer" type="text" maxlength="40" placeholder="心理師／小隊成員">
-          </label>
-          <label>
-            這筆內容的評論
-            <textarea id="comment" rows="4" maxlength="1200" placeholder="語氣是否合適、會不會讓旅客不舒服、圖文是否一致……"></textarea>
-          </label>
+          <div class="comment-form">
+            <label>
+              你的名字
+              <input id="reviewer" type="text" maxlength="40" placeholder="心理師／小隊成員">
+            </label>
+            <label>
+              這筆內容的評論
+              <textarea id="comment" rows="2" maxlength="1200" placeholder="語氣是否合適、圖文是否一致……"></textarea>
+            </label>
+          </div>
           <button type="button" class="primary" id="btn-comment">寫回 Notion</button>
         </article>
       </main>
@@ -141,7 +149,7 @@
           <small>Archive</small>
           <h2>歷史紀錄</h2>
         </div>
-        <p class="hint">每一次生成都會新增一列，點選可回看，不會覆蓋舊內容。</p>
+        <p class="hint">點一筆可回看。新生成會從前一站接著飛。</p>
         <div class="sample-list" id="sample-list"></div>
       </aside>
     </div>

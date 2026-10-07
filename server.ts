@@ -26,9 +26,11 @@ import {
   getReviewSample,
   getReviewStoreStatus,
   listReviewSamples,
+  loadReviewImage,
+  toReviewClient,
   updateReviewSample,
 } from './src/lib/notion/reviews';
-import { globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
+import { findOriginByLocation, globeHop, globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
@@ -1080,21 +1082,52 @@ app.get('/review', (_req, res) => {
 app.get('/api/review/samples', async (_req, res) => {
   try {
     const [samples, review] = await Promise.all([listReviewSamples(40), getReviewStoreStatus()]);
-    res.json({ samples, ...review, openaiReady: Boolean(openAiApiKey()) });
+    res.json({
+      samples: samples.map(toReviewClient),
+      ...review,
+      openaiReady: Boolean(openAiApiKey()),
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '讀取測試內容失敗' });
   }
 });
 
+app.get('/api/review/image', async (req, res) => {
+  try {
+    const sampleId = String(req.query.sampleId || '');
+    if (!sampleId) {
+      res.status(400).json({ error: '請提供 sampleId。' });
+      return;
+    }
+    const image = await loadReviewImage(sampleId);
+    if (!image) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(404).json({ error: '找不到這張圖。' });
+      return;
+    }
+    res.setHeader('Content-Type', image.contentType);
+    res.setHeader('Cache-Control', 'private, max-age=600');
+    res.send(image.buffer);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '圖片載入失敗' });
+  }
+});
+
 app.get('/api/review/preview', (req, res) => {
   try {
+    const fromLocation = String(req.query.fromLocation || '').trim();
+    const toLocation = String(req.query.toLocation || '').trim();
+    if (toLocation) {
+      res.json({ route: globeHop(fromLocation, toLocation) });
+      return;
+    }
     const routeDirection = parseReviewDirection(req.query.routeDirection);
     const durationMinutes = Number(req.query.durationMinutes) || 90;
     const rawHour = req.query.landingHour;
     const landingHour = rawHour === '' || rawHour == null || Number(rawHour) < 0
       ? null
       : Math.max(0, Math.min(23, Number(rawHour)));
-    const route = simulateRoute(routeDirection, durationMinutes, landingHour);
+    const route = simulateRoute(routeDirection, durationMinutes, landingHour, fromLocation);
     res.json({ route: globePoints(route) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '預覽航線失敗' });
@@ -1128,7 +1161,8 @@ app.post('/api/review/generate', async (req, res) => {
       const route = simulateRoute(
         parseReviewDirection(current.routeDirection),
         current.durationMinutes,
-        current.landingHour
+        current.landingHour,
+        current.departureLocation
       );
       const generated = await withTimeout(
         generateLandingScenery(
@@ -1146,7 +1180,7 @@ app.post('/api/review/generate', async (req, res) => {
         () => null
       );
       if (!generated) {
-        res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample: current });
+        res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample: toReviewClient(current) });
         return;
       }
       const imageUrl = await attachReviewImage(
@@ -1160,14 +1194,20 @@ app.post('/api/review/generate', async (req, res) => {
         imageUrl,
         phase: 'scenery',
       });
-      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
+      res.json({
+        sample: toReviewClient(sample),
+        route: globeHop(current.departureLocation, current.arrivalLocation || route.arrivalLocation),
+        review: await getReviewStoreStatus(),
+      });
       return;
     }
 
     const routeDirection = parseReviewDirection(req.body?.routeDirection);
     const durationMinutes = Number(req.body?.durationMinutes) || 90;
     const landingHour = parseHour(req.body?.landingHour);
-    const route = simulateRoute(routeDirection, durationMinutes, landingHour);
+    const fromLocation = String(req.body?.fromLocation || '').trim();
+    const route = simulateRoute(routeDirection, durationMinutes, landingHour, fromLocation);
+    const origin = findOriginByLocation(fromLocation);
 
     let sample = await createReviewSample({
       routeDirection,
@@ -1179,7 +1219,9 @@ app.post('/api/review/generate', async (req, res) => {
     });
 
     const depLocal = await localContextFor(
-      '臺北', '臺灣', 'TW',
+      origin.city,
+      origin.country,
+      origin.countryIso,
       route.departureLatitude, route.departureLongitude,
       route.departureLocation, null
     );
@@ -1212,7 +1254,7 @@ app.post('/api/review/generate', async (req, res) => {
         )
       );
       sample = await updateReviewSample(sample.sampleId, { takeoffBroadcast, phase: 'takeoff' });
-      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
+      res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
@@ -1230,7 +1272,7 @@ app.post('/api/review/generate', async (req, res) => {
         arrivalLocation: route.arrivalLocation,
         phase: 'landing',
       });
-      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
+      res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
@@ -1277,7 +1319,7 @@ app.post('/api/review/generate', async (req, res) => {
     if (includeImage) {
       if (!openAiApiKey()) {
         res.json({
-          sample,
+          sample: toReviewClient(sample),
           route: globePoints(route),
           review: await getReviewStoreStatus(),
           warning: '文字已存檔，但尚未設定 OPENAI_API，這次沒有生圖。',
@@ -1301,7 +1343,7 @@ app.post('/api/review/generate', async (req, res) => {
       );
       if (!generated) {
         res.json({
-          sample,
+          sample: toReviewClient(sample),
           route: globePoints(route),
           review: await getReviewStoreStatus(),
           warning: '文字已存檔，生圖失敗，請再試一次。',
@@ -1321,7 +1363,7 @@ app.post('/api/review/generate', async (req, res) => {
       });
     }
 
-    res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
+    res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失敗' });
   }
@@ -1335,7 +1377,7 @@ app.post('/api/review/comment', async (req, res) => {
     if (!sampleId) { res.status(400).json({ error: '請先選一筆測試內容。' }); return; }
     if (!comment) { res.status(400).json({ error: '請先寫評論。' }); return; }
     const sample = await appendReviewComment(sampleId, comment, reviewer);
-    res.json({ sample });
+    res.json({ sample: toReviewClient(sample) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '評論寫入失敗' });
   }

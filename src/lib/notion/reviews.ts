@@ -145,7 +145,17 @@ export async function getReviewSample(sampleId: string): Promise<ReviewSample | 
   }
 
   const samples = await listReviewSamples(50);
-  return samples.find((item) => item.sampleId === sampleId || item.notionId === sampleId) || fromMem || null;
+  const listed = samples.find((item) => item.sampleId === sampleId || item.notionId === sampleId) || fromMem || null;
+  if (listed && listed.notionId && !listed.notionId.startsWith('mem_')) {
+    try {
+      const page = await getNotionClient().pages.retrieve({ page_id: listed.notionId });
+      const typed = page as { id: string; properties: Record<string, unknown> };
+      return parseSample(typed.id, typed.properties);
+    } catch {
+      return listed;
+    }
+  }
+  return listed;
 }
 
 export async function createReviewSample(input: Partial<ReviewSample>): Promise<ReviewSample> {
@@ -228,12 +238,69 @@ export async function appendReviewComment(
   return updateReviewSample(current.sampleId, { comments, reviewer: name, phase: current.phase });
 }
 
+type CachedReviewImage = { buffer: Buffer; contentType: string; at: number };
+const imageCache = new Map<string, CachedReviewImage>();
+const IMAGE_CACHE_MS = 30 * 60 * 1000;
+
+export function cacheReviewImage(sampleId: string, buffer: Buffer, contentType: string) {
+  imageCache.set(sampleId, { buffer, contentType, at: Date.now() });
+}
+
+export function toReviewClient(sample: ReviewSample) {
+  const hasImage = Boolean(sample.imageUrl);
+  return {
+    ...sample,
+    hasImage,
+    imageUrl: hasImage ? `/api/review/image?sampleId=${encodeURIComponent(sample.sampleId)}` : '',
+  };
+}
+
+export async function loadReviewImage(sampleId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const cached = imageCache.get(sampleId);
+  if (cached && Date.now() - cached.at < IMAGE_CACHE_MS) return cached;
+
+  const sample = await getReviewSample(sampleId);
+  if (!sample?.imageUrl) return cached || null;
+
+  if (sample.imageUrl.startsWith('data:')) {
+    const match = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(sample.imageUrl);
+    if (!match) return null;
+    const payload = {
+      buffer: match[2]
+        ? Buffer.from(match[3], 'base64')
+        : Buffer.from(decodeURIComponent(match[3]), 'utf8'),
+      contentType: match[1] || 'image/png',
+      at: Date.now(),
+    };
+    imageCache.set(sampleId, payload);
+    return payload;
+  }
+
+  let upstream = await fetch(sample.imageUrl);
+  if (!upstream.ok && sample.notionId && !sample.notionId.startsWith('mem_')) {
+    const refreshed = await getReviewSample(sampleId);
+    if (refreshed?.imageUrl && refreshed.imageUrl !== sample.imageUrl) {
+      upstream = await fetch(refreshed.imageUrl);
+    }
+  }
+  if (!upstream.ok) return cached || null;
+
+  const payload = {
+    buffer: Buffer.from(await upstream.arrayBuffer()),
+    contentType: upstream.headers.get('content-type') || 'image/jpeg',
+    at: Date.now(),
+  };
+  imageCache.set(sampleId, payload);
+  return payload;
+}
+
 export async function attachReviewImage(
   sample: ReviewSample,
   buffer: Buffer,
   filename: string,
   contentType: string
 ): Promise<string> {
+  cacheReviewImage(sample.sampleId, buffer, contentType);
   if (!isNotionConfigured() || !sample.notionId || sample.notionId.startsWith('mem_')) {
     return `data:${contentType};base64,${buffer.toString('base64')}`;
   }
