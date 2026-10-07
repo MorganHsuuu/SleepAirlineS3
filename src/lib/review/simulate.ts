@@ -32,6 +32,38 @@ export interface SimulatedRoute {
   landingTime: string;
 }
 
+export interface GlobeRoute {
+  from: { name: string; lat: number; lon: number };
+  to: { name: string; lat: number; lon: number };
+  arrivalLocation: string;
+  departureLocation: string;
+  durationMinutes: number;
+  routeDirection: RouteDirection;
+}
+
+function shortPlace(displayName: string) {
+  return displayName.split(',')[0].trim() || displayName;
+}
+
+export function globePoints(route: SimulatedRoute): GlobeRoute {
+  return {
+    from: {
+      name: shortPlace(route.departureLocation),
+      lat: route.departureLatitude,
+      lon: route.departureLongitude,
+    },
+    to: {
+      name: shortPlace(route.arrivalLocation),
+      lat: route.arrivalLatitude,
+      lon: route.arrivalLongitude,
+    },
+    arrivalLocation: route.arrivalLocation,
+    departureLocation: route.departureLocation,
+    durationMinutes: route.durationMinutes,
+    routeDirection: route.routeDirection,
+  };
+}
+
 const TIME_LABELS = [
   [5, '當地深夜'],
   [8, '當地黎明'],

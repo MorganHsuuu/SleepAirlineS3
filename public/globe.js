@@ -3,7 +3,9 @@
   'use strict';
 
   const canvas = document.getElementById('globe-canvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   const width = canvas.width;
   const height = canvas.height;
   const cx = width / 2;
@@ -14,7 +16,7 @@
   let countries = null;
   let frameId = null;
 
-  const ready = fetch('countries.geojson')
+  const ready = fetch('/countries.geojson')
     .then((response) => {
       if (!response.ok) throw new Error('Country outlines could not be loaded');
       return response.json();

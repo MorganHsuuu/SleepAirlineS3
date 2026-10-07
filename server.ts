@@ -28,7 +28,7 @@ import {
   listReviewSamples,
   updateReviewSample,
 } from './src/lib/notion/reviews';
-import { localContextFor, simulateRoute } from './src/lib/review/simulate';
+import { globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
@@ -1079,55 +1079,117 @@ app.get('/review', (_req, res) => {
 
 app.get('/api/review/samples', async (_req, res) => {
   try {
-    const [samples, review] = await Promise.all([listReviewSamples(24), getReviewStoreStatus()]);
+    const [samples, review] = await Promise.all([listReviewSamples(40), getReviewStoreStatus()]);
     res.json({ samples, ...review, openaiReady: Boolean(openAiApiKey()) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '讀取測試內容失敗' });
   }
 });
 
+app.get('/api/review/preview', (req, res) => {
+  try {
+    const routeDirection = parseReviewDirection(req.query.routeDirection);
+    const durationMinutes = Number(req.query.durationMinutes) || 90;
+    const rawHour = req.query.landingHour;
+    const landingHour = rawHour === '' || rawHour == null || Number(rawHour) < 0
+      ? null
+      : Math.max(0, Math.min(23, Number(rawHour)));
+    const route = simulateRoute(routeDirection, durationMinutes, landingHour);
+    res.json({ route: globePoints(route) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '預覽航線失敗' });
+  }
+});
+
 app.post('/api/review/generate', async (req, res) => {
   try {
     const kind = String(req.body?.kind || '');
-    if (!['takeoff', 'landing', 'scenery'].includes(kind)) {
-      res.status(400).json({ error: '請選擇起飛文字、降落文字或生圖。' });
+    if (!['flight', 'takeoff', 'landing', 'scenery'].includes(kind)) {
+      res.status(400).json({ error: '請選擇生成航班或生圖。' });
+      return;
+    }
+
+    const parseHour = (value: unknown) => (
+      value === '' || value == null || Number(value) < 0
+        ? null
+        : Math.max(0, Math.min(23, Number(value)))
+    );
+
+    if (kind === 'scenery') {
+      const current = await getReviewSample(String(req.body?.sampleId || ''));
+      if (!current) {
+        res.status(400).json({ error: '請先生成一筆起飛與降落。' });
+        return;
+      }
+      if (!openAiApiKey()) {
+        res.status(400).json({ error: '尚未設定 OPENAI_API_KEY，無法生圖。' });
+        return;
+      }
+      const route = simulateRoute(
+        parseReviewDirection(current.routeDirection),
+        current.durationMinutes,
+        current.landingHour
+      );
+      const generated = await withTimeout(
+        generateLandingScenery(
+          route.arrivalCity,
+          route.arrivalCountry,
+          route.arrivalLocation,
+          current.sampleId,
+          {
+            landingTime: route.landingTime,
+            timezone: route.arrivalTimezone,
+            alignedPrompt: current.imagePrompt,
+          }
+        ),
+        90_000,
+        () => null
+      );
+      if (!generated) {
+        res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample: current });
+        return;
+      }
+      const imageUrl = await attachReviewImage(
+        current,
+        generated.imageBuffer,
+        generated.filename,
+        generated.contentType
+      );
+      const sample = await updateReviewSample(current.sampleId, {
+        imagePrompt: generated.imagePrompt,
+        imageUrl,
+        phase: 'scenery',
+      });
+      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
     const routeDirection = parseReviewDirection(req.body?.routeDirection);
     const durationMinutes = Number(req.body?.durationMinutes) || 90;
-    const rawHour = req.body?.landingHour;
-    const landingHour = rawHour === '' || rawHour == null || Number(rawHour) < 0
-      ? null
-      : Math.max(0, Math.min(23, Number(rawHour)));
+    const landingHour = parseHour(req.body?.landingHour);
     const route = simulateRoute(routeDirection, durationMinutes, landingHour);
-    const existingId = String(req.body?.sampleId || '');
-    let sample = existingId ? await getReviewSample(existingId) : null;
-    if (!sample) {
-      sample = await createReviewSample({
-        routeDirection,
-        durationMinutes: route.durationMinutes,
-        landingHour,
-        departureLocation: route.departureLocation,
-        arrivalLocation: route.arrivalLocation,
-        phase: 'draft',
-      });
-    } else {
-      sample = await updateReviewSample(sample.sampleId, {
-        routeDirection,
-        durationMinutes: route.durationMinutes,
-        landingHour,
-        departureLocation: route.departureLocation,
-        arrivalLocation: route.arrivalLocation,
-      });
-    }
+
+    let sample = await createReviewSample({
+      routeDirection,
+      durationMinutes: route.durationMinutes,
+      landingHour,
+      departureLocation: route.departureLocation,
+      arrivalLocation: route.arrivalLocation,
+      phase: 'draft',
+    });
+
+    const depLocal = await localContextFor(
+      '臺北', '臺灣', 'TW',
+      route.departureLatitude, route.departureLongitude,
+      route.departureLocation, null
+    );
+    const arrLocal = await localContextFor(
+      route.arrivalCity, route.arrivalCountry, route.arrivalIso,
+      route.arrivalLatitude, route.arrivalLongitude,
+      route.arrivalLocation, landingHour
+    );
 
     if (kind === 'takeoff') {
-      const depLocal = await localContextFor(
-        '臺北', '臺灣', 'TW',
-        route.departureLatitude, route.departureLongitude,
-        route.departureLocation, null
-      );
       const takeoffBroadcast = await generateBroadcastWithBudget(
         {
           phase: 'takeoff',
@@ -1150,15 +1212,9 @@ app.post('/api/review/generate', async (req, res) => {
         )
       );
       sample = await updateReviewSample(sample.sampleId, { takeoffBroadcast, phase: 'takeoff' });
-      res.json({ sample, review: await getReviewStoreStatus() });
+      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
-
-    const arrLocal = await localContextFor(
-      route.arrivalCity, route.arrivalCountry, route.arrivalIso,
-      route.arrivalLatitude, route.arrivalLongitude,
-      route.arrivalLocation, landingHour
-    );
 
     if (kind === 'landing') {
       const morning = await generateMorningArrival({
@@ -1174,46 +1230,49 @@ app.post('/api/review/generate', async (req, res) => {
         arrivalLocation: route.arrivalLocation,
         phase: 'landing',
       });
-      res.json({ sample, destination: route.arrivalLocation, review: await getReviewStoreStatus() });
+      res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
-    if (!openAiApiKey()) {
-      res.status(400).json({ error: '尚未設定 OPENAI_API_KEY，無法生圖。' });
-      return;
-    }
-    const generated = await withTimeout(
-      generateLandingScenery(
-        route.arrivalCity,
-        route.arrivalCountry,
-        route.arrivalLocation,
-        sample.sampleId,
+    const [takeoffBroadcast, morning] = await Promise.all([
+      generateBroadcastWithBudget(
         {
-          landingTime: route.landingTime,
-          timezone: route.arrivalTimezone,
-          alignedPrompt: sample.imagePrompt,
-        }
+          phase: 'takeoff',
+          passengerName: '旅客',
+          departureLocation: route.departureLocation,
+          arrivalLocation: null,
+          narrativeRegion: 'departure_clouds',
+          flightDurationMinutes: null,
+          flightProgress: 0,
+          estimatedDistanceKm: null,
+          routeDirection,
+          socialCue: SOLO_SOCIAL_CUE,
+          style: 'formal_captain',
+          localContext: depLocal,
+          locale: 'zh',
+        },
+        () => fallbackCaptainBroadcast(
+          'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
+          SOLO_SOCIAL_CUE.cueText, depLocal, 'zh'
+        )
       ),
-      90_000,
-      () => null
-    );
-    if (!generated) {
-      res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample });
-      return;
-    }
-    const imageUrl = await attachReviewImage(
-      sample,
-      generated.imageBuffer,
-      generated.filename,
-      generated.contentType
-    );
+      generateMorningArrival({
+        country: route.arrivalCountry,
+        city: route.arrivalCity,
+        localGreeting: arrLocal?.morningGreeting,
+        weatherSummary: arrLocal?.weatherSummary,
+        localTimeLabel: arrLocal?.localTimeLabel,
+      }),
+    ]);
+
     sample = await updateReviewSample(sample.sampleId, {
-      imagePrompt: generated.imagePrompt,
-      imageUrl,
+      takeoffBroadcast,
+      landingBroadcast: morning.voiceText,
+      imagePrompt: morning.imagePrompt,
       arrivalLocation: route.arrivalLocation,
-      phase: 'scenery',
+      phase: 'landing',
     });
-    res.json({ sample, review: await getReviewStoreStatus() });
+    res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失敗' });
   }

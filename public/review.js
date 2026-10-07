@@ -27,6 +27,7 @@ const state = {
   sampleId: '',
   busy: false,
   samples: [],
+  preview: null,
 };
 
 function toast(message) {
@@ -65,15 +66,17 @@ function paintControls() {
   const hour = Number($('hour-bar').value);
   $('hour-readout').textContent = hourLabel(hour);
   if (!state.sampleId) {
-    $('route-line').textContent = `臺北出發 · ${dir.name} · ${formatDuration(minutes)} · ${hourLabel(hour)}`;
+    const dest = state.preview?.to?.name || '預覽中';
+    $('route-line').textContent = `臺北出發 · ${dir.name} · ${formatDuration(minutes)} · ${hourLabel(hour)} · ${dest}`;
   }
+  schedulePreview();
 }
 
 function setBusy(busy, message) {
   state.busy = busy;
-  ['btn-takeoff', 'btn-landing', 'btn-scenery', 'btn-comment', 'btn-new'].forEach((id) => {
-    $(id).disabled = busy;
-  });
+  $('btn-flight').disabled = busy;
+  $('btn-scenery').disabled = busy || !state.sampleId;
+  $('btn-comment').disabled = busy;
   if (message) toast(message);
 }
 
@@ -96,9 +99,11 @@ function renderSample(sample) {
   if (sample.imageUrl) {
     frame.innerHTML = `<img alt="降落風景" src="${sample.imageUrl}">`;
   } else {
-    frame.innerHTML = '<p>需要對照畫面時再按生圖。</p>';
+    frame.innerHTML = '<p>需要對照畫面時，再對這一筆按生圖。</p>';
   }
   $('comments').textContent = sample.comments || '還沒有評論。';
+  $('btn-scenery').disabled = state.busy;
+  renderList();
 }
 
 function renderList() {
@@ -120,9 +125,8 @@ function renderList() {
 function upsertSample(sample) {
   if (!sample) return;
   const rest = state.samples.filter((item) => item.sampleId !== sample.sampleId);
-  state.samples = [sample, ...rest].slice(0, 24);
+  state.samples = [sample, ...rest].slice(0, 40);
   renderSample(sample);
-  renderList();
 }
 
 function applyStore(review) {
@@ -140,6 +144,64 @@ function applyStore(review) {
   banner.textContent = review?.hint || '';
 }
 
+function globeFromRoute(route) {
+  if (!route?.from || !route?.to || !window.FlightGlobe) return null;
+  return route;
+}
+
+async function drawGlobe(route, progress = 1) {
+  const points = globeFromRoute(route);
+  if (!points) return;
+  const caption = `${points.from.name} → ${points.to.name}`;
+  $('globe-caption').textContent = caption;
+  try { await window.FlightGlobe.ready; } catch { /* still draw the sphere */ }
+  window.FlightGlobe.draw(points.from, points.to, progress);
+}
+
+async function flyGlobe(route) {
+  const points = globeFromRoute(route);
+  if (!points) return;
+  $('globe-caption').textContent = `${points.from.name} → ${points.to.name}`;
+  try {
+    await window.FlightGlobe.ready;
+    await window.FlightGlobe.animate(points.from, points.to);
+  } catch {
+    drawGlobe(route, 1);
+  }
+}
+
+let previewTimer = 0;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(loadPreview, 220);
+}
+
+async function loadPreview() {
+  try {
+    const params = new URLSearchParams({
+      routeDirection: currentDirection().key,
+      durationMinutes: String($('duration-bar').value),
+      landingHour: String($('hour-bar').value),
+    });
+    const res = await fetch(`/api/review/preview?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '預覽失敗');
+    state.preview = data.route;
+    if (!state.sampleId) {
+      $('route-line').textContent = [
+        '臺北出發',
+        currentDirection().name,
+        formatDuration(Number($('duration-bar').value)),
+        hourLabel(Number($('hour-bar').value)),
+        data.route?.to?.name || '',
+      ].filter(Boolean).join(' · ');
+    }
+    drawGlobe(data.route, 1);
+  } catch {
+    $('globe-caption').textContent = '航線預覽暫時無法載入';
+  }
+}
+
 async function loadSamples() {
   try {
     const res = await fetch('/api/review/samples');
@@ -147,38 +209,62 @@ async function loadSamples() {
     if (!res.ok) throw new Error(data.error || '讀取失敗');
     state.samples = data.samples || [];
     applyStore(data);
-    if (state.samples[0]) renderSample(state.samples[0]);
     renderList();
   } catch (err) {
     toast(err.message || '讀取測試內容失敗');
   }
 }
 
-function payload() {
+function controlsPayload() {
   return {
-    sampleId: state.sampleId,
     routeDirection: currentDirection().key,
     durationMinutes: Number($('duration-bar').value),
     landingHour: Number($('hour-bar').value),
   };
 }
 
-async function generate(kind, waitText) {
+async function generateFlight() {
   if (state.busy) return;
-  setBusy(true, waitText);
+  setBusy(true, '正在生成起飛與降落…');
   try {
     const res = await fetch('/api/review/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload(), kind }),
+      body: JSON.stringify({ ...controlsPayload(), kind: 'flight' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '生成失敗');
     applyStore(data.review);
     upsertSample(data.sample);
-    toast(kind === 'scenery' ? '風景圖已寫入' : '文字已寫入');
+    toast('已新增一筆紀錄');
+    await flyGlobe(data.route || state.preview);
   } catch (err) {
     toast(err.message || '生成失敗');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function generateScenery() {
+  if (state.busy) return;
+  if (!state.sampleId) {
+    toast('請先生成一筆起飛與降落。');
+    return;
+  }
+  setBusy(true, '生圖中，可能需要半分鐘…');
+  try {
+    const res = await fetch('/api/review/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'scenery', sampleId: state.sampleId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '生圖失敗');
+    applyStore(data.review);
+    upsertSample(data.sample);
+    toast('風景圖已寫入這一筆');
+  } catch (err) {
+    toast(err.message || '生圖失敗');
   } finally {
     setBusy(false);
   }
@@ -210,24 +296,12 @@ async function saveComment() {
     if (!res.ok) throw new Error(data.error || '評論寫入失敗');
     upsertSample(data.sample);
     $('comment').value = '';
-    toast('評論已寫回');
+    toast('評論已寫回這一筆');
   } catch (err) {
     toast(err.message || '評論寫入失敗');
   } finally {
     setBusy(false);
   }
-}
-
-function startNew() {
-  state.sampleId = '';
-  $('sample-id').textContent = '尚未生成';
-  $('takeoff-copy').textContent = '按「生成起飛文字」即可，不會播語音。';
-  $('landing-copy').textContent = '按「生成降落文字」會依方向與飛行時間算出目的地。';
-  $('image-frame').innerHTML = '<p>需要對照畫面時再按生圖。</p>';
-  $('image-prompt').textContent = '';
-  $('comments').textContent = '還沒有評論。';
-  paintControls();
-  renderList();
 }
 
 function setDirectionFromAngle(angle) {
@@ -266,12 +340,10 @@ function bindDial() {
 
 $('duration-bar').addEventListener('input', paintControls);
 $('hour-bar').addEventListener('input', paintControls);
-$('btn-takeoff').addEventListener('click', () => generate('takeoff', '正在寫起飛文字…'));
-$('btn-landing').addEventListener('click', () => generate('landing', '正在寫降落文字…'));
-$('btn-scenery').addEventListener('click', () => generate('scenery', '生圖中，可能需要半分鐘…'));
+$('btn-flight').addEventListener('click', generateFlight);
+$('btn-scenery').addEventListener('click', generateScenery);
 $('btn-comment').addEventListener('click', saveComment);
-$('btn-new').addEventListener('click', startNew);
-$('sample-list').addEventListener('click', (event) => {
+$('sample-list').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-id]');
   if (!button) return;
   const sample = state.samples.find((item) => item.sampleId === button.dataset.id);
@@ -282,9 +354,10 @@ $('sample-list').addEventListener('click', (event) => {
   $('hour-bar').value = String(sample.landingHour == null ? -1 : sample.landingHour);
   paintControls();
   renderSample(sample);
-  renderList();
+  await loadPreview();
 });
 
 bindDial();
 paintControls();
 loadSamples();
+loadPreview();

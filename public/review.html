@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">Review Lab · 不進體驗流程</p>
         <h1>內容審查台</h1>
-        <p class="lede">給心理師與小隊快速抽樣：轉方向、調飛行時間、生起飛／降落文字，需要時再生圖，評論會寫進獨立的 Notion 審查庫。</p>
+        <p class="lede">先轉方向、調飛行時間，地球儀會預覽目的地。按一次會同時生成起飛與降落文字，並新增一筆紀錄；生圖可之後再補。</p>
       </div>
       <div class="mast-side">
         <span class="pill" id="store-pill">讀取中</span>
@@ -29,7 +29,7 @@
         <section>
           <div class="section-head">
             <small>01</small>
-            <h2>轉方向</h2>
+            <h2>起飛前調整</h2>
           </div>
           <div class="dial-wrap">
             <div class="dial-ticks"></div>
@@ -47,43 +47,36 @@
         </section>
 
         <section>
-          <div class="section-head">
-            <small>02</small>
-            <h2>飛多久</h2>
-          </div>
           <label class="slider-label" for="duration-bar">
             <span>飛行時間</span>
-            <strong id="duration-readout">90 分鐘</strong>
+            <strong id="duration-readout">1 小時 30 分</strong>
           </label>
           <input id="duration-bar" type="range" min="30" max="720" step="15" value="90">
-          <p class="hint">用這個快速換不同距離，不必真的等到降落。</p>
         </section>
 
         <section>
-          <div class="section-head">
-            <small>03</small>
-            <h2>降落時刻</h2>
-          </div>
           <label class="slider-label" for="hour-bar">
-            <span>當地時間</span>
+            <span>降落當地時間</span>
             <strong id="hour-readout">現在</strong>
           </label>
           <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
-          <p class="hint">測深夜、清晨、午後等不同光線與問候。</p>
         </section>
 
+        <div class="globe-stage">
+          <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
+          <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
+        </div>
+
         <section class="actions">
-          <button type="button" class="primary" id="btn-takeoff">生成起飛文字</button>
-          <button type="button" class="primary alt" id="btn-landing">生成降落文字</button>
-          <button type="button" class="secondary" id="btn-scenery">生圖（可選）</button>
-          <button type="button" class="ghost-btn" id="btn-new">開新的一筆</button>
+          <button type="button" class="primary" id="btn-flight">生成起飛＋降落</button>
+          <button type="button" class="secondary" id="btn-scenery" disabled>生圖（可選）</button>
         </section>
       </aside>
 
       <main class="sheet">
         <div class="meta-row">
           <span id="sample-id">尚未生成</span>
-          <span id="route-line">臺北出發 · 向東 · 90 分鐘</span>
+          <span id="route-line">臺北出發 · 向東 · 1 小時 30 分</span>
         </div>
 
         <article class="card">
@@ -91,7 +84,7 @@
             <small>Takeoff</small>
             <h3>起飛文字</h3>
           </header>
-          <p class="copy" id="takeoff-copy">按「生成起飛文字」即可，不會播語音。</p>
+          <p class="copy" id="takeoff-copy">調整左側條件後，按一次會同時寫起飛與降落，並新增一筆歷史。</p>
         </article>
 
         <article class="card">
@@ -99,7 +92,7 @@
             <small>Landing</small>
             <h3>降落文字</h3>
           </header>
-          <p class="copy" id="landing-copy">按「生成降落文字」會依方向與飛行時間算出目的地。</p>
+          <p class="copy" id="landing-copy">目的地由方向與飛行時間決定，不會覆蓋舊的紀錄。</p>
         </article>
 
         <article class="card image-card">
@@ -108,7 +101,7 @@
             <h3>降落風景</h3>
           </header>
           <div class="image-frame" id="image-frame">
-            <p>需要對照畫面時再按生圖。</p>
+            <p>需要對照畫面時，再對這一筆按生圖。</p>
           </div>
           <p class="prompt" id="image-prompt"></p>
         </article>
@@ -134,14 +127,16 @@
       <aside class="ledger">
         <div class="section-head">
           <small>Archive</small>
-          <h2>最近樣本</h2>
+          <h2>歷史紀錄</h2>
         </div>
-        <p class="hint">建議先看 10–20 筆不同方向與時段，再判斷內容是否穩定。</p>
+        <p class="hint">每一次生成都會新增一列，點選可回看，不會覆蓋舊內容。</p>
         <div class="sample-list" id="sample-list"></div>
       </aside>
     </div>
   </div>
   <div class="toast" id="toast" hidden></div>
+  <script src="/vendor/d3.min.js"></script>
+  <script src="/globe.js"></script>
   <script src="/review.js"></script>
 </body>
 </html>
