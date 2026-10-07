@@ -1272,6 +1272,55 @@ app.post('/api/review/generate', async (req, res) => {
       arrivalLocation: route.arrivalLocation,
       phase: 'landing',
     });
+
+    const includeImage = Boolean(req.body?.includeImage);
+    if (includeImage) {
+      if (!openAiApiKey()) {
+        res.json({
+          sample,
+          route: globePoints(route),
+          review: await getReviewStoreStatus(),
+          warning: '文字已存檔，但尚未設定 OPENAI_API，這次沒有生圖。',
+        });
+        return;
+      }
+      const generated = await withTimeout(
+        generateLandingScenery(
+          route.arrivalCity,
+          route.arrivalCountry,
+          route.arrivalLocation,
+          sample.sampleId,
+          {
+            landingTime: route.landingTime,
+            timezone: route.arrivalTimezone,
+            alignedPrompt: morning.imagePrompt,
+          }
+        ),
+        90_000,
+        () => null
+      );
+      if (!generated) {
+        res.json({
+          sample,
+          route: globePoints(route),
+          review: await getReviewStoreStatus(),
+          warning: '文字已存檔，生圖失敗，請再試一次。',
+        });
+        return;
+      }
+      const imageUrl = await attachReviewImage(
+        sample,
+        generated.imageBuffer,
+        generated.filename,
+        generated.contentType
+      );
+      sample = await updateReviewSample(sample.sampleId, {
+        imagePrompt: generated.imagePrompt,
+        imageUrl,
+        phase: 'scenery',
+      });
+    }
+
     res.json({ sample, route: globePoints(route), review: await getReviewStoreStatus() });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失敗' });

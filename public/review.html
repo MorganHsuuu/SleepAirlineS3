@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">Review Lab · 不進體驗流程</p>
         <h1>內容審查台</h1>
-        <p class="lede">先轉方向、調飛行時間，地球儀會預覽目的地。按一次會同時生成起飛與降落文字，並新增一筆紀錄；生圖可之後再補。</p>
+        <p class="lede">先轉方向、調飛行時間，再選擇只要文字，或文字加上圖片。按一次會新增一筆紀錄，不會覆蓋舊的。</p>
       </div>
       <div class="mast-side">
         <span class="pill" id="store-pill">讀取中</span>
@@ -67,9 +67,21 @@
           <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
         </div>
 
+        <fieldset class="mode-switch">
+          <legend>這次要生成</legend>
+          <div class="mode-options">
+            <label class="mode-option">
+              <input type="radio" name="generate-mode" value="text" checked>
+              <span>生成文字</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="generate-mode" value="image">
+              <span>文字＋圖片</span>
+            </label>
+          </div>
+        </fieldset>
         <section class="actions">
-          <button type="button" class="primary" id="btn-flight">生成起飛＋降落</button>
-          <button type="button" class="secondary" id="btn-scenery" disabled>生圖（可選）</button>
+          <button type="button" class="primary" id="btn-flight">開始生成</button>
         </section>
       </aside>
 
@@ -84,7 +96,7 @@
             <small>Takeoff</small>
             <h3>起飛文字</h3>
           </header>
-          <p class="copy" id="takeoff-copy">調整左側條件後，按一次會同時寫起飛與降落，並新增一筆歷史。</p>
+          <p class="copy" id="takeoff-copy">調整左側條件，選擇生成文字或文字＋圖片，再按開始生成。</p>
         </article>
 
         <article class="card">
@@ -101,7 +113,7 @@
             <h3>降落風景</h3>
           </header>
           <div class="image-frame" id="image-frame">
-            <p>需要對照畫面時，再對這一筆按生圖。</p>
+            <p>選擇「文字＋圖片」時會一起生成風景。</p>
           </div>
           <p class="prompt" id="image-prompt"></p>
         </article>

@@ -230,7 +230,52 @@ input[type=range] {
   letter-spacing: .04em;
   text-shadow: 0 1px 8px #061018;
 }
-.actions { display: grid; gap: 8px; margin-top: 18px; }
+.mode-switch {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+.mode-switch legend {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+.mode-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mode-option {
+  margin: 0;
+  cursor: pointer;
+}
+.mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mode-option span {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  background: #f7f1e2;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.mode-option input:checked + span {
+  background: var(--deep);
+  border-color: var(--deep);
+  color: #fff;
+}
+.mode-option input:focus-visible + span {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.actions { display: grid; gap: 8px; margin-top: 12px; }
 .primary, .secondary {
   min-height: 46px;
   padding: 0 14px;

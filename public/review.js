@@ -75,8 +75,10 @@ function paintControls() {
 function setBusy(busy, message) {
   state.busy = busy;
   $('btn-flight').disabled = busy;
-  $('btn-scenery').disabled = busy || !state.sampleId;
   $('btn-comment').disabled = busy;
+  document.querySelectorAll('input[name="generate-mode"]').forEach((input) => {
+    input.disabled = busy;
+  });
   if (message) toast(message);
 }
 
@@ -99,10 +101,9 @@ function renderSample(sample) {
   if (sample.imageUrl) {
     frame.innerHTML = `<img alt="降落風景" src="${sample.imageUrl}">`;
   } else {
-    frame.innerHTML = '<p>需要對照畫面時，再對這一筆按生圖。</p>';
+    frame.innerHTML = '<p>選擇「文字＋圖片」時會一起生成風景。</p>';
   }
   $('comments').textContent = sample.comments || '還沒有評論。';
-  $('btn-scenery').disabled = state.busy;
   renderList();
 }
 
@@ -223,48 +224,28 @@ function controlsPayload() {
   };
 }
 
+function wantsImage() {
+  return document.querySelector('input[name="generate-mode"]:checked')?.value === 'image';
+}
+
 async function generateFlight() {
   if (state.busy) return;
-  setBusy(true, '正在生成起飛與降落…');
+  const includeImage = wantsImage();
+  setBusy(true, includeImage ? '正在生成文字與圖片…' : '正在生成起飛與降落文字…');
   try {
     const res = await fetch('/api/review/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...controlsPayload(), kind: 'flight' }),
+      body: JSON.stringify({ ...controlsPayload(), kind: 'flight', includeImage }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '生成失敗');
     applyStore(data.review);
     upsertSample(data.sample);
-    toast('已新增一筆紀錄');
+    toast(data.warning || (includeImage ? '已新增文字與圖片' : '已新增一筆文字紀錄'));
     await flyGlobe(data.route || state.preview);
   } catch (err) {
     toast(err.message || '生成失敗');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function generateScenery() {
-  if (state.busy) return;
-  if (!state.sampleId) {
-    toast('請先生成一筆起飛與降落。');
-    return;
-  }
-  setBusy(true, '生圖中，可能需要半分鐘…');
-  try {
-    const res = await fetch('/api/review/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'scenery', sampleId: state.sampleId }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '生圖失敗');
-    applyStore(data.review);
-    upsertSample(data.sample);
-    toast('風景圖已寫入這一筆');
-  } catch (err) {
-    toast(err.message || '生圖失敗');
   } finally {
     setBusy(false);
   }
@@ -341,7 +322,6 @@ function bindDial() {
 $('duration-bar').addEventListener('input', paintControls);
 $('hour-bar').addEventListener('input', paintControls);
 $('btn-flight').addEventListener('click', generateFlight);
-$('btn-scenery').addEventListener('click', generateScenery);
 $('btn-comment').addEventListener('click', saveComment);
 $('sample-list').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-id]');
