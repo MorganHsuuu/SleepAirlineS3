@@ -11,6 +11,7 @@
     "start": "tsx server.ts",
     "build": "node scripts/build-vercel.mjs",
     "setup": "tsx scripts/setup-notion.ts",
+    "setup:review": "tsx scripts/setup-review-notion.ts",
     "notion:verify": "node scripts/verify-notion-landscape.mjs",
     "check:contract": "node scripts/check-workshop-contract.mjs",
     "check:share-card": "node scripts/check-share-card-dom.mjs",

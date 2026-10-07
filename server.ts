@@ -18,6 +18,17 @@ import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-con
 import { resolveGroupSocialCue } from './src/lib/flight/social';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
 import { generateMorningArrival } from './src/lib/ai/morning-content';
+import { generateLandingScenery } from './src/lib/ai/scenery';
+import {
+  appendReviewComment,
+  attachReviewImage,
+  createReviewSample,
+  getReviewSample,
+  getReviewStoreStatus,
+  listReviewSamples,
+  updateReviewSample,
+} from './src/lib/notion/reviews';
+import { localContextFor, simulateRoute } from './src/lib/review/simulate';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
@@ -137,7 +148,13 @@ function logReminderCleanup(err: unknown) {
 app.get('/api/config', async (_req, res) => {
   try {
     const status = await getDataModeStatus();
-    res.json({ ...status, openaiReady: Boolean(openAiApiKey()) });
+    const review = await getReviewStoreStatus();
+    res.json({
+      ...status,
+      openaiReady: Boolean(openAiApiKey()),
+      reviewReady: review.ready,
+      reviewHint: review.hint,
+    });
   } catch (err) {
     res.status(500).json({ error: formatNotionError(err) });
   }
@@ -1041,6 +1058,178 @@ app.post('/api/scenery/backfill', async (req, res) => {
     res.json({ results });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
+  }
+});
+
+// ── 心理師快速測試：不走完整體驗，也不寫入 Flight Log 主庫 ────────────────
+
+const REVIEW_DIRECTIONS = new Set([
+  'eastbound', 'westbound', 'northbound', 'southbound',
+  'northeast', 'northwest', 'southeast', 'southwest',
+]);
+
+function parseReviewDirection(value: unknown): RouteDirection {
+  const key = String(value || 'eastbound');
+  return (REVIEW_DIRECTIONS.has(key) ? key : 'eastbound') as RouteDirection;
+}
+
+app.get('/review', (_req, res) => {
+  res.sendFile(join(process.cwd(), 'public', 'review.html'));
+});
+
+app.get('/api/review/samples', async (_req, res) => {
+  try {
+    const [samples, review] = await Promise.all([listReviewSamples(24), getReviewStoreStatus()]);
+    res.json({ samples, ...review, openaiReady: Boolean(openAiApiKey()) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '讀取測試內容失敗' });
+  }
+});
+
+app.post('/api/review/generate', async (req, res) => {
+  try {
+    const kind = String(req.body?.kind || '');
+    if (!['takeoff', 'landing', 'scenery'].includes(kind)) {
+      res.status(400).json({ error: '請選擇起飛文字、降落文字或生圖。' });
+      return;
+    }
+
+    const routeDirection = parseReviewDirection(req.body?.routeDirection);
+    const durationMinutes = Number(req.body?.durationMinutes) || 90;
+    const rawHour = req.body?.landingHour;
+    const landingHour = rawHour === '' || rawHour == null || Number(rawHour) < 0
+      ? null
+      : Math.max(0, Math.min(23, Number(rawHour)));
+    const route = simulateRoute(routeDirection, durationMinutes, landingHour);
+    const existingId = String(req.body?.sampleId || '');
+    let sample = existingId ? await getReviewSample(existingId) : null;
+    if (!sample) {
+      sample = await createReviewSample({
+        routeDirection,
+        durationMinutes: route.durationMinutes,
+        landingHour,
+        departureLocation: route.departureLocation,
+        arrivalLocation: route.arrivalLocation,
+        phase: 'draft',
+      });
+    } else {
+      sample = await updateReviewSample(sample.sampleId, {
+        routeDirection,
+        durationMinutes: route.durationMinutes,
+        landingHour,
+        departureLocation: route.departureLocation,
+        arrivalLocation: route.arrivalLocation,
+      });
+    }
+
+    if (kind === 'takeoff') {
+      const depLocal = await localContextFor(
+        '臺北', '臺灣', 'TW',
+        route.departureLatitude, route.departureLongitude,
+        route.departureLocation, null
+      );
+      const takeoffBroadcast = await generateBroadcastWithBudget(
+        {
+          phase: 'takeoff',
+          passengerName: '旅客',
+          departureLocation: route.departureLocation,
+          arrivalLocation: null,
+          narrativeRegion: 'departure_clouds',
+          flightDurationMinutes: null,
+          flightProgress: 0,
+          estimatedDistanceKm: null,
+          routeDirection,
+          socialCue: SOLO_SOCIAL_CUE,
+          style: 'formal_captain',
+          localContext: depLocal,
+          locale: 'zh',
+        },
+        () => fallbackCaptainBroadcast(
+          'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
+          SOLO_SOCIAL_CUE.cueText, depLocal, 'zh'
+        )
+      );
+      sample = await updateReviewSample(sample.sampleId, { takeoffBroadcast, phase: 'takeoff' });
+      res.json({ sample, review: await getReviewStoreStatus() });
+      return;
+    }
+
+    const arrLocal = await localContextFor(
+      route.arrivalCity, route.arrivalCountry, route.arrivalIso,
+      route.arrivalLatitude, route.arrivalLongitude,
+      route.arrivalLocation, landingHour
+    );
+
+    if (kind === 'landing') {
+      const morning = await generateMorningArrival({
+        country: route.arrivalCountry,
+        city: route.arrivalCity,
+        localGreeting: arrLocal?.morningGreeting,
+        weatherSummary: arrLocal?.weatherSummary,
+        localTimeLabel: arrLocal?.localTimeLabel,
+      });
+      sample = await updateReviewSample(sample.sampleId, {
+        landingBroadcast: morning.voiceText,
+        imagePrompt: morning.imagePrompt,
+        arrivalLocation: route.arrivalLocation,
+        phase: 'landing',
+      });
+      res.json({ sample, destination: route.arrivalLocation, review: await getReviewStoreStatus() });
+      return;
+    }
+
+    if (!openAiApiKey()) {
+      res.status(400).json({ error: '尚未設定 OPENAI_API_KEY，無法生圖。' });
+      return;
+    }
+    const generated = await withTimeout(
+      generateLandingScenery(
+        route.arrivalCity,
+        route.arrivalCountry,
+        route.arrivalLocation,
+        sample.sampleId,
+        {
+          landingTime: route.landingTime,
+          timezone: route.arrivalTimezone,
+          alignedPrompt: sample.imagePrompt,
+        }
+      ),
+      90_000,
+      () => null
+    );
+    if (!generated) {
+      res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample });
+      return;
+    }
+    const imageUrl = await attachReviewImage(
+      sample,
+      generated.imageBuffer,
+      generated.filename,
+      generated.contentType
+    );
+    sample = await updateReviewSample(sample.sampleId, {
+      imagePrompt: generated.imagePrompt,
+      imageUrl,
+      arrivalLocation: route.arrivalLocation,
+      phase: 'scenery',
+    });
+    res.json({ sample, review: await getReviewStoreStatus() });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '生成失敗' });
+  }
+});
+
+app.post('/api/review/comment', async (req, res) => {
+  try {
+    const sampleId = String(req.body?.sampleId || '');
+    const comment = String(req.body?.comment || '').trim();
+    const reviewer = String(req.body?.reviewer || '').trim();
+    if (!sampleId) { res.status(400).json({ error: '請先選一筆測試內容。' }); return; }
+    if (!comment) { res.status(400).json({ error: '請先寫評論。' }); return; }
+    const sample = await appendReviewComment(sampleId, comment, reviewer);
+    res.json({ sample });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '評論寫入失敗' });
   }
 });
 

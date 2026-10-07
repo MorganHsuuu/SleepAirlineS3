@@ -224,9 +224,9 @@
     const en = locale === 'en';
     if (phase === 'takeoff') {
       if (en) {
-        return `Welcome aboard Sleep Airline, this is your captain. Passengers, we are departing ${departure}. ${name}, fasten your seatbelt, dim the window, and rest.`;
+        return `Welcome aboard Sleep Airline, this is your captain. Passengers, we are departing ${departure}. ${name}, fasten your seatbelt, dim the window, and rest. We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.`;
       }
-      return `歡迎搭乘 Sleep Airline，這裡是機長。各位乘客，本班即將自 ${departure} 起飛。${name}，請繫好安全帶、調暗舷窗，安心入睡。`;
+      return `歡迎搭乘 Sleep Airline，這裡是機長。各位乘客，本班即將自 ${departure} 起飛。${name}，請繫好安全帶、調暗舷窗，安心入睡。我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。`;
     }
     const h = durationMinutes ? Math.floor(durationMinutes / 60) : 0;
     const m = durationMinutes ? durationMinutes % 60 : 0;

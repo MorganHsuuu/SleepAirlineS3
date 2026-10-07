@@ -6,6 +6,8 @@
     { "source": "/classic", "destination": "/classic/", "permanent": false }
   ],
   "rewrites": [
+    { "source": "/review", "destination": "/review.html" },
+    { "source": "/review/", "destination": "/review.html" },
     { "source": "/api/(.*)", "destination": "/api" }
   ],
   "crons": [

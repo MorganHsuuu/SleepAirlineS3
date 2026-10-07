@@ -696,7 +696,7 @@ async function doTakeoff() {
   window.BroadcastAudio?.primeFromUserGesture?.();
   $('window-caption').textContent = '舷窗已關閉 · 準備起飛';
   const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][Math.floor(Math.random() * 3)];
-  const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。${sleepCue}祝你有一段舒服的旅程。`;
+  const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。${sleepCue}我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。`;
   // 塔台聲循環到廣播文字＋語音備妥 → captain.mp3 → captain 一結束立刻接語音
   let markSpeechReady = () => {};
   const speechReady = new Promise((resolve) => { markSpeechReady = resolve; });

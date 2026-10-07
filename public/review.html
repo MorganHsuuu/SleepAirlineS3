@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12262a">
+  <title>甦醒航班｜內容審查台</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link rel="stylesheet" href="/review.css">
+</head>
+<body>
+  <div class="desk">
+    <header class="mast">
+      <div>
+        <p class="eyebrow">Review Lab · 不進體驗流程</p>
+        <h1>內容審查台</h1>
+        <p class="lede">給心理師與小隊快速抽樣：轉方向、調飛行時間、生起飛／降落文字，需要時再生圖，評論會寫進獨立的 Notion 審查庫。</p>
+      </div>
+      <div class="mast-side">
+        <span class="pill" id="store-pill">讀取中</span>
+        <a class="ghost" href="/">回主體驗</a>
+      </div>
+    </header>
+
+    <p class="banner" id="store-banner" hidden></p>
+
+    <div class="board">
+      <aside class="console">
+        <section>
+          <div class="section-head">
+            <small>01</small>
+            <h2>轉方向</h2>
+          </div>
+          <div class="dial-wrap">
+            <div class="dial-ticks"></div>
+            <button type="button" class="dial" id="direction-dial" aria-label="航向旋鈕">
+              <span class="dial-inner"></span>
+              <span class="dial-pointer" id="dial-pointer"></span>
+              <span class="dial-center">✈</span>
+            </button>
+            <span class="cardinal n">N</span>
+            <span class="cardinal e">E</span>
+            <span class="cardinal s">S</span>
+            <span class="cardinal w">W</span>
+          </div>
+          <p class="readout"><strong id="direction-name">向東 · 090°</strong></p>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <small>02</small>
+            <h2>飛多久</h2>
+          </div>
+          <label class="slider-label" for="duration-bar">
+            <span>飛行時間</span>
+            <strong id="duration-readout">90 分鐘</strong>
+          </label>
+          <input id="duration-bar" type="range" min="30" max="720" step="15" value="90">
+          <p class="hint">用這個快速換不同距離，不必真的等到降落。</p>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <small>03</small>
+            <h2>降落時刻</h2>
+          </div>
+          <label class="slider-label" for="hour-bar">
+            <span>當地時間</span>
+            <strong id="hour-readout">現在</strong>
+          </label>
+          <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
+          <p class="hint">測深夜、清晨、午後等不同光線與問候。</p>
+        </section>
+
+        <section class="actions">
+          <button type="button" class="primary" id="btn-takeoff">生成起飛文字</button>
+          <button type="button" class="primary alt" id="btn-landing">生成降落文字</button>
+          <button type="button" class="secondary" id="btn-scenery">生圖（可選）</button>
+          <button type="button" class="ghost-btn" id="btn-new">開新的一筆</button>
+        </section>
+      </aside>
+
+      <main class="sheet">
+        <div class="meta-row">
+          <span id="sample-id">尚未生成</span>
+          <span id="route-line">臺北出發 · 向東 · 90 分鐘</span>
+        </div>
+
+        <article class="card">
+          <header>
+            <small>Takeoff</small>
+            <h3>起飛文字</h3>
+          </header>
+          <p class="copy" id="takeoff-copy">按「生成起飛文字」即可，不會播語音。</p>
+        </article>
+
+        <article class="card">
+          <header>
+            <small>Landing</small>
+            <h3>降落文字</h3>
+          </header>
+          <p class="copy" id="landing-copy">按「生成降落文字」會依方向與飛行時間算出目的地。</p>
+        </article>
+
+        <article class="card image-card">
+          <header>
+            <small>Scenery</small>
+            <h3>降落風景</h3>
+          </header>
+          <div class="image-frame" id="image-frame">
+            <p>需要對照畫面時再按生圖。</p>
+          </div>
+          <p class="prompt" id="image-prompt"></p>
+        </article>
+
+        <article class="card comment-card">
+          <header>
+            <small>Comment</small>
+            <h3>對照評論</h3>
+          </header>
+          <div class="comments" id="comments">還沒有評論。</div>
+          <label>
+            你的名字
+            <input id="reviewer" type="text" maxlength="40" placeholder="心理師／小隊成員">
+          </label>
+          <label>
+            這筆內容的評論
+            <textarea id="comment" rows="4" maxlength="1200" placeholder="語氣是否合適、會不會讓旅客不舒服、圖文是否一致……"></textarea>
+          </label>
+          <button type="button" class="primary" id="btn-comment">寫回 Notion</button>
+        </article>
+      </main>
+
+      <aside class="ledger">
+        <div class="section-head">
+          <small>Archive</small>
+          <h2>最近樣本</h2>
+        </div>
+        <p class="hint">建議先看 10–20 筆不同方向與時段，再判斷內容是否穩定。</p>
+        <div class="sample-list" id="sample-list"></div>
+      </aside>
+    </div>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/review.js"></script>
+</body>
+</html>
