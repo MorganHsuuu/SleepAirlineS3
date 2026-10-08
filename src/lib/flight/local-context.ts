@@ -8,7 +8,7 @@ export interface LocalContext {
   countryName: string;
   cityName: string;
   culture: string;
-  /** 抵達地當地語言的「早安」，供降落廣播開頭 */
+  /** 抵達地當地語言的「你好」（不限時段），供降落廣播開頭 */
   morningGreeting: string;
   /** 例：氣溫 28°C，晴朗 */
   weatherSummary: string | null;
@@ -72,67 +72,67 @@ const CULTURE_BY_ISO: Record<string, { name: string; culture: string }> = {
   RE: { name: '留尼旺', culture: '見面先說「Bonjour」；克里奧料理與火山景觀是當地特色。' },
 };
 
-/** 各國／地區「早安」問候（供降落廣播開頭） */
-const MORNING_GREETING_BY_ISO: Record<string, string> = {
-  JP: 'おはようございます',
+/** 各國／地區「你好」問候（不綁早安，避免當地白天問候配上中文晚安） */
+const LOCAL_HELLO_BY_ISO: Record<string, string> = {
+  JP: 'こんにちは',
   KR: '안녕하세요',
-  CN: '早上好',
-  TW: '早安',
-  HK: '早晨',
-  TH: 'สวัสดีตอนเช้า',
-  VN: 'Xin chào buổi sáng',
-  SG: 'Good morning',
-  MY: 'Selamat pagi',
-  ID: 'Selamat pagi',
-  PH: 'Magandang umaga',
+  CN: '你好',
+  TW: '你好',
+  HK: '你好',
+  TH: 'สวัสดี',
+  VN: 'Xin chào',
+  SG: 'Hello',
+  MY: 'Helo',
+  ID: 'Halo',
+  PH: 'Kumusta',
   IN: 'Namaste',
-  AE: 'صباح الخير',
-  TR: 'Günaydın',
-  RU: 'Доброе утро',
-  GB: 'Good morning',
+  AE: 'مرحبا',
+  TR: 'Merhaba',
+  RU: 'Здравствуйте',
+  GB: 'Hello',
   FR: 'Bonjour',
   RE: 'Bonjour',
   GP: 'Bonjour',
   MQ: 'Bonjour',
   GF: 'Bonjour',
-  DE: 'Guten Morgen',
-  IT: 'Buongiorno',
-  ES: 'Buenos días',
-  PT: 'Bom dia',
-  NL: 'Goedemorgen',
-  CH: 'Guten Morgen',
-  SE: 'God morgon',
-  NO: 'God morgen',
-  FI: 'Hyvää huomenta',
-  DK: 'God morgen',
-  GR: 'Καλημέρα',
-  PL: 'Dzień dobry',
-  CZ: 'Dobré ráno',
-  AT: 'Guten Morgen',
-  IE: 'Good morning',
-  IS: 'Góðan daginn',
-  US: 'Good morning',
-  CA: 'Good morning',
-  MX: 'Buenos días',
-  BR: 'Bom dia',
-  AR: 'Buenos días',
-  CL: 'Buenos días',
-  PE: 'Buenos días',
-  CO: 'Buenos días',
-  AU: 'Good morning',
-  NZ: 'Good morning',
-  ZA: 'Good morning',
-  EG: 'صباح الخير',
-  MA: 'Bonjour',
-  KE: 'Habari za asubuhi',
-  PG: 'Good morning',
+  DE: 'Hallo',
+  IT: 'Ciao',
+  ES: 'Hola',
+  PT: 'Olá',
+  NL: 'Hallo',
+  CH: 'Hallo',
+  SE: 'Hej',
+  NO: 'Hei',
+  FI: 'Hei',
+  DK: 'Hej',
+  GR: 'Γεια σας',
+  PL: 'Cześć',
+  CZ: 'Ahoj',
+  AT: 'Hallo',
+  IE: 'Hello',
+  IS: 'Halló',
+  US: 'Hello',
+  CA: 'Hello',
+  MX: 'Hola',
+  BR: 'Olá',
+  AR: 'Hola',
+  CL: 'Hola',
+  PE: 'Hola',
+  CO: 'Hola',
+  AU: 'Hello',
+  NZ: 'Hello',
+  ZA: 'Hello',
+  EG: 'مرحبا',
+  MA: 'Salam',
+  KE: 'Jambo',
+  PG: 'Hello',
 };
 
 function morningGreetingForIso(iso: string): string {
   const key = iso.toUpperCase();
-  if (MORNING_GREETING_BY_ISO[key]) return MORNING_GREETING_BY_ISO[key];
+  if (LOCAL_HELLO_BY_ISO[key]) return LOCAL_HELLO_BY_ISO[key];
   if (['NC', 'PF', 'YT', 'PM', 'BL', 'MF', 'WF', 'TF'].includes(key)) return 'Bonjour';
-  return 'Good morning';
+  return 'Hello';
 }
 
 const WMO_LABELS: Record<number, string> = {

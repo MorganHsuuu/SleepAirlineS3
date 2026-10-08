@@ -213,11 +213,11 @@
   };
 
   const MORNING_GREETING = {
-    JP: 'おはようございます', KR: '안녕하세요', CN: '早上好', TW: '早安', HK: '早晨',
-    TH: 'สวัสดีตอนเช้า', VN: 'Xin chào buổi sáng', FR: 'Bonjour', RE: 'Bonjour',
-    NL: 'Goedemorgen', DE: 'Guten Morgen', IT: 'Buongiorno', ES: 'Buenos días',
-    PT: 'Bom dia', GB: 'Good morning', US: 'Good morning', AU: 'Good morning',
-    IN: 'Namaste', BR: 'Bom dia', MX: 'Buenos días', RU: 'Доброе утро',
+    JP: 'こんにちは', KR: '안녕하세요', CN: '你好', TW: '你好', HK: '你好',
+    TH: 'สวัสดี', VN: 'Xin chào', FR: 'Bonjour', RE: 'Bonjour',
+    NL: 'Hallo', DE: 'Hallo', IT: 'Ciao', ES: 'Hola',
+    PT: 'Olá', GB: 'Hello', US: 'Hello', AU: 'Hello',
+    IN: 'Namaste', BR: 'Olá', MX: 'Hola', RU: 'Здравствуйте', IS: 'Halló',
   };
 
   function fallbackBroadcast(phase, name, departure, arrival, durationMinutes, iso, locale) {

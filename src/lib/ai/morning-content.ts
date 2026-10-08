@@ -21,7 +21,7 @@ export interface MorningContent {
 export interface MorningContentInput {
   country: string;
   city: string;
-  /** 已知的當地語言早安；模型沒給時用這個 */
+  /** 已知的當地語言「你好」；模型沒給時用這個 */
   localGreeting?: string | null;
   /** 例如「氣溫 18°C，大致晴朗」 */
   weatherSummary?: string | null;
@@ -431,24 +431,104 @@ function voiceMatchesWeather(voiceText: string, weatherSummary?: string | null):
   return !weatherTerm || voiceText.includes(weatherTerm);
 }
 
-function arrivalHello(localTimeLabel?: string | null): string {
+export function arrivalHello(localTimeLabel?: string | null): string {
   const label = (localTimeLabel || '').trim();
   if (/晚上|夜間|夜晚|入夜|午夜|深夜|凌晨|night|evening|midnight|\bpm\b/.test(label)) return '晚安';
   if (/黃昏|傍晚|日落|sunset|dusk/.test(label)) return '傍晚好';
-  if (/中午|下午|afternoon|noon/.test(label)) return '午安';
+  if (/午後|中午|下午|afternoon|noon/.test(label)) return '午安';
   return '早安';
 }
 
-function timeAdjustedGreeting(localGreeting: string, localTimeLabel?: string | null): string {
+const MORNING_LOCAL_GREETINGS = [
+  'Góðan daginn',
+  'Góðan morgun',
+  'Good morning',
+  'Bonjour',
+  'Guten Morgen',
+  'Buenos días',
+  'Buongiorno',
+  'Bom dia',
+  'Goedemorgen',
+  'God morgon',
+  'God morgen',
+  'Hyvää huomenta',
+  'Καλημέρα',
+  'Dobré ráno',
+  'Günaydın',
+  'Доброе утро',
+  'Selamat pagi',
+  'Magandang umaga',
+  'Xin chào buổi sáng',
+  'สวัสดีตอนเช้า',
+  'صباح الخير',
+  'Habari za asubuhi',
+  'おはようございます',
+  '早上好',
+  '早安',
+  '早晨',
+];
+
+export function timeAdjustedGreeting(localGreeting: string, localTimeLabel?: string | null): string {
   const hello = arrivalHello(localTimeLabel);
-  const greeting = (localGreeting || hello).replace(/[。！!]+$/g, '');
-  if (hello === '晚安') {
-    if (/おはよう/.test(greeting)) return 'こんばんは';
+  const greeting = (localGreeting || '你好').replace(/[。！!]+$/g, '');
+  if (hello === '晚安' || hello === '傍晚好') {
+    if (/おはよう|こんにちは/.test(greeting)) return 'こんばんは';
     if (/^bonjour$/i.test(greeting)) return 'Bonsoir';
-    if (/早安/.test(greeting)) return '晚安';
+    if (/早安|早上好|早晨/.test(greeting)) return hello;
   }
   if ((hello === '午安' || hello === '傍晚好') && /おはよう/.test(greeting)) return 'こんにちは';
+  if (MORNING_LOCAL_GREETINGS.some((item) => item.toLowerCase() === greeting.toLowerCase())) {
+    if (/^bonjour$/i.test(greeting)) return 'Bonjour';
+    if (/おはよう/.test(greeting)) return 'こんにちは';
+    if (/早安|早上好|早晨/.test(greeting)) return '你好';
+    if (/^good morning$/i.test(greeting)) return 'Hello';
+    if (/^guten morgen$/i.test(greeting)) return 'Hallo';
+    if (/^buenos días$/i.test(greeting)) return 'Hola';
+    if (/^buongiorno$/i.test(greeting)) return 'Ciao';
+    if (/^bom dia$/i.test(greeting)) return 'Olá';
+    if (/^goedemorgen$/i.test(greeting)) return 'Hallo';
+    if (/^góðan /i.test(greeting)) return 'Halló';
+    if (/^günaydın$/i.test(greeting)) return 'Merhaba';
+    if (/^доброе утро$/i.test(greeting)) return 'Здравствуйте';
+    if (/^selamat pagi$/i.test(greeting)) return 'Halo';
+    if (/^xin chào buổi sáng$/i.test(greeting)) return 'Xin chào';
+    return 'Hello';
+  }
   return greeting;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function alignArrivalVoice(voiceText: string, localGreeting: string, hello: string): string {
+  let text = voiceText.trim();
+  const leading = MORNING_LOCAL_GREETINGS.concat([
+    localGreeting,
+    'Halló',
+    'Hello',
+    'こんにちは',
+    'こんばんは',
+    'Bonsoir',
+    'Hallo',
+    'Hola',
+    'Ciao',
+    'Olá',
+    'Merhaba',
+    '你好',
+  ]).filter(Boolean);
+  const unique = [...new Set(leading)].sort((a, b) => b.length - a.length);
+  for (const item of unique) {
+    text = text.replace(new RegExp(`^${escapeRegExp(item)}[。！!]?\\s*`, 'i'), '');
+  }
+  text = text.replace(/^(早安|午安|傍晚好|晚安)[，,。！!\s]*/, '');
+  if (!text.startsWith('Sleep Airline') && !text.startsWith(hello)) {
+    return `${localGreeting}。${hello}，${text}`;
+  }
+  if (text.startsWith('Sleep Airline')) {
+    return `${localGreeting}。${hello}，${text}`;
+  }
+  return `${localGreeting}。${text}`;
 }
 
 const VOICE_BOILERPLATE =
@@ -461,7 +541,7 @@ function fallbackMorning(
   const city = input.city.trim() || input.country.trim() || '今天的目的地';
   const country = input.country.trim() || city;
   const subject = resolveSceneSubject({ ...input, city, country }, theme);
-  const greeting = timeAdjustedGreeting(input.localGreeting || arrivalHello(input.localTimeLabel), input.localTimeLabel);
+  const greeting = timeAdjustedGreeting(input.localGreeting || '你好', input.localTimeLabel);
   const hello = arrivalHello(input.localTimeLabel);
   const weather = (input.weatherSummary || '').trim();
   const time = fallbackTimeContext(input.localTimeLabel);
@@ -553,12 +633,14 @@ export function parseMorningResponse(
 
   const city = inputCity;
   const country = inputCountry;
-  const localGreeting = clean(data.localGreeting) || (input.localGreeting || '早安').replace(/[。！!]+$/g, '');
+  const localGreeting = timeAdjustedGreeting(
+    clean(data.localGreeting) || input.localGreeting || '你好',
+    input.localTimeLabel
+  );
+  const hello = arrivalHello(input.localTimeLabel);
   let voiceText = clean(data.voiceText);
   if (!voiceText) return null;
-  if (localGreeting && !voiceText.startsWith(localGreeting)) {
-    voiceText = `${localGreeting}。${voiceText}`;
-  }
+  voiceText = alignArrivalVoice(voiceText, localGreeting, hello);
   const zh = chineseCount(voiceText);
   if (zh < 24 || zh > 180 || !city || !voiceText.includes(city) || UNSAFE_VOICE.test(voiceText)) return null;
   if (!voiceMatchesWeather(voiceText, input.weatherSummary)) return null;
@@ -612,13 +694,13 @@ const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛
 
 voiceText 主體必須是繁體中文口語，約 40–80 個中文字，念出來大約 15–30 秒。
 結構：
-A. 抵達：先放當地語言問候（localGreeting，並依 localTimeLabel 改成對應時段，例如日文深夜用こんばんは、下午用こんにちは），再接中文時段問候（早安／午安／傍晚好／晚安），然後「Sleep Airline 已抵達今天的目的地——{城市}。」
+A. 抵達：第一句用當地語言的「你好」（localGreeting，例如 Halló、こんにちは、Hola），不要用早安／Good morning／Góðan daginn 這類綁時段的問候。第二句再用中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel），然後「Sleep Airline 已抵達今天的目的地——{城市}。」禁止出現「當地白天問候 + 中文晚安」這種互相打架的開頭。
 B. 嚴格採用 user message 的 sceneTheme，只選一個確實屬於這座城市、有名字的具體主題：著名景點、自然地貌、地方料理、街區市集或日常文化場景。像在介紹窗外那張照片。
 C. 同一個主題再補一個具體、看得見的細節（顏色、材料、氣味、地形或活動），不要發明地標、料理、傳統、節慶或歷史。
 D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
 開頭可以先放當地語言問候，後面全部用繁體中文，不要翻譯那句問候，也不要改成英文廣播。
 若有提供天氣，voiceText 必須用一句話自然說出溫度與晴雨，例如「現在氣溫 18 度，天空大致晴朗」。
-若有提供 localTimeLabel，語音與 imagePrompt 的光線、天空和城市活動必須符合該當地時間，不可一律改成日出，也不可在深夜仍說早安。
+若有提供 localTimeLabel，語音與 imagePrompt 的光線、天空和城市活動必須符合該當地時間，不可一律改成日出，也不可在深夜仍說早安。中文問候與當地語言問候都不可互相矛盾。
 內容必須能對上這個城市，不能是任何城市都適用的空話。
 voiceText、localFeature、imagePrompt 必須描述 sceneTheme 下的同一個具體主題，只能抽選一次，不可各自換題。
 回傳 sceneTheme.themeId 必須逐字等於 user message 的 sceneTheme.id。sceneTheme.subject.zh 與 sceneTheme.subject.en 是同一主題的中英文名稱；voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en，供程式驗證同步。
@@ -642,7 +724,7 @@ async function requestMorning(
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   const city = input.city.trim();
   const country = input.country.trim();
-  const greeting = (input.localGreeting || '').trim();
+  const greeting = timeAdjustedGreeting(input.localGreeting || '你好', input.localTimeLabel);
   const subject = resolveSceneSubject(input, theme);
   const completion = await client.chat.completions.create({
     model,
@@ -655,6 +737,7 @@ async function requestMorning(
           city,
           language: '繁體中文',
           localGreeting: greeting || undefined,
+          chineseTimeGreeting: arrivalHello(input.localTimeLabel),
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
           localTimeLabel: (input.localTimeLabel || '').trim() || undefined,
           sceneTheme: {

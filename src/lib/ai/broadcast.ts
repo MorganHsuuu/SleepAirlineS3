@@ -3,6 +3,7 @@ import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { SocialCue } from '../../types';
 import type { LocalContext } from '../flight/local-context';
+import { arrivalHello, timeAdjustedGreeting } from './morning-content';
 
 export type UiLocale = 'zh' | 'en';
 
@@ -146,7 +147,7 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
       `local culture / social note: ${ctx.culture}`,
     ];
     if (phase === 'landing' && ctx.morningGreeting) {
-      lines.push(`local-language good morning (must be first sentence): ${ctx.morningGreeting}`);
+      lines.push(`local-language hello, not good morning (must be first sentence): ${ctx.morningGreeting}`);
     }
     if (ctx.weatherSummary) lines.push(`local weather: ${ctx.weatherSummary}`);
     if (ctx.localTimeLabel) lines.push(`time of day: ${ctx.localTimeLabel}`);
@@ -163,7 +164,7 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
     `當地文化／社交特色：${ctx.culture}`,
   ];
   if (phase === 'landing' && ctx.morningGreeting) {
-    lines.push(`當地語言早安（廣播第一句必須使用）：${ctx.morningGreeting}`);
+    lines.push(`當地語言「你好」（廣播第一句必須使用，不要用早安）：${ctx.morningGreeting}`);
   }
   if (ctx.weatherSummary) lines.push(`當地天氣：${ctx.weatherSummary}`);
   if (ctx.localTimeLabel) lines.push(`時段：${ctx.localTimeLabel}`);
@@ -182,7 +183,7 @@ ${STYLE_DESCRIPTIONS.en[style]}
 
 Identity (critical):
 - You are the captain speaking to the passenger; the passenger name is the addressee, never your name
-- The first sentence must naturally include “Welcome aboard Sleep Airline” and “this is your captain” (do not drop “Welcome”)${isTakeoff ? '' : '; if a local-language good morning is provided, that is sentence one, and “Welcome aboard Sleep Airline, this is your captain” must open sentence two'}
+- The first sentence must naturally include “Welcome aboard Sleep Airline” and “this is your captain” (do not drop “Welcome”)${isTakeoff ? '' : '; if a local-language hello is provided, that is sentence one, and “Welcome aboard Sleep Airline, this is your captain” must open sentence two'}
 - Never say “I am Captain {passenger name}”
 - Never speak as the passenger
 - Address them as “passengers” or “${pax}”; never call yourself by the passenger name
@@ -205,7 +206,7 @@ Geography (critical):
 ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 - Culture/weather in [local context] are for rewriting only — never copy lists
 - Landing: weave one natural culture tip and a light weather beat
-- Landing: sentence one must be the local-language morning greeting; continue in English afterward without translating the greeting
+- Landing: sentence one must be the local-language hello (not “good morning”); continue in English afterward without translating the greeting. Do not mix a daytime local greeting with “good night”.
 - Takeoff: at most one departure weather beat
 ` : ''}
 Writing:
@@ -223,7 +224,7 @@ ${STYLE_DESCRIPTIONS.zh[style]}
 
 身分（非常重要）：
 - 你是機長，在對「乘客」說話；乘客姓名只是對象，不是你的名字
-- 第一句必須自然包含「歡迎搭乘 Sleep Airline」與「這裡是機長」（「歡迎」二字不可省略，禁止只寫「搭乘 Sleep Airline」）${isTakeoff ? '' : '；若有當地語言早安，早安為第一句，「歡迎搭乘 Sleep Airline，這裡是機長」必須完整出現在第二句開頭'}
+- 第一句必須自然包含「歡迎搭乘 Sleep Airline」與「這裡是機長」（「歡迎」二字不可省略，禁止只寫「搭乘 Sleep Airline」）${isTakeoff ? '' : '；若有當地語言「你好」，該問候為第一句，「歡迎搭乘 Sleep Airline，這裡是機長」必須完整出現在第二句開頭'}
 - 禁止寫「我是機長〇〇」若〇〇是乘客姓名
 - 禁止冒充乘客、禁止用第一人稱代替乘客說話
 - 用「各位乘客」或「${pax}」稱呼對方；不要稱自己為乘客姓名
@@ -247,8 +248,9 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 【當地資訊】中的文化、天氣僅供改寫融入，禁止整段照搬或列點
 - 降落廣播：必須用一兩句自然帶出當地文化特色或社交習俗，並點一下當地天氣（溫度、晴雨），
   像機長提醒乘客下機前的心理準備，不要像氣象報告或旅遊手冊
-- 降落廣播：第一句必須以【當地語言早安】開頭（使用 morningGreeting，如 Bonjour、おはようございます），
-  緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
+- 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
+  不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
+- 降落廣播：當地語言問候之後，緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
 - 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主
 ` : ''}
 寫作：
@@ -335,7 +337,7 @@ ${input.localContext ? `\n[local context · arrival]\n${buildLocalBlock(input.lo
 [squad social]
 ${buildSocialBlock(input.socialCue, locale)}
 
-Announce waking up at arrival, how long you flew, and from/to. Sentence one = local-language good morning; sentence two must begin with “Welcome aboard Sleep Airline, this is your captain”.
+Announce waking up at arrival, how long you flew, and from/to. Sentence one = local-language hello (not good morning); sentence two must begin with “Welcome aboard Sleep Airline, this is your captain”.
 Weave one culture/weather beat; one social beat; fluent paragraph, no bullets.
 If [squad social] is not solo: within the first two sentences after the greeting, say what happened with which teammate/squad.`
     : `【降落廣播】
@@ -351,7 +353,7 @@ ${input.localContext ? `\n【當地資訊 · 抵達地】\n${buildLocalBlock(inp
 【同組社交】
 ${buildSocialBlock(input.socialCue, locale)}
 
-請宣布：醒來抵達、飛了多久、從哪到哪；第一句以當地語言早安開頭，第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
+請宣布：醒來抵達、飛了多久、從哪到哪；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
 必須融入一筆當地文化或天氣（改寫）；用一句話點出社交情境，合併成一段流暢廣播，勿列點、勿照搬。
 若【同組社交】不是 solo：必須在開場問候後的前兩句內明確說出「你與哪位隊友或小隊發生了什麼關係」
 （例如共享夜空、接力、靠近、同向、分頭飛、先後降落），不要只把社交資訊放在結尾。`;
@@ -481,7 +483,9 @@ export function fallbackCaptainBroadcast(
       return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${social} ${TAKEOFF_CLOSING_EN}`;
     }
     const dur = formatDuration(durationMinutes, locale);
-    const greet = localContext?.morningGreeting ? `${localContext.morningGreeting}! ` : '';
+    const greet = localContext?.morningGreeting
+      ? `${timeAdjustedGreeting(localContext.morningGreeting, localContext.localTimeLabel)}! `
+      : '';
     const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}, ` : 'Local morning, ';
     const wxBit = localContext?.weatherSummary ? `outside it’s ${localContext.weatherSummary}. ` : '';
     const cultureBit = localContext?.culture
@@ -499,6 +503,8 @@ export function fallbackCaptainBroadcast(
     const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][(departureLabel.length + direction.length) % 3];
     return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}${sleepCue}${social}${TAKEOFF_CLOSING_ZH}`;
   }
-  const greet = (localContext?.morningGreeting || '早安').replace(/[。！!]+$/g, '');
-  return `${greet}。早安，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。清晨的街道正慢慢亮起來，晨光落在這裡的日常風景上。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
+  const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
+  const hello = arrivalHello(localContext?.localTimeLabel);
+  const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}，` : '';
+  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${timeBit}窗外的風景正慢慢展開。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }
