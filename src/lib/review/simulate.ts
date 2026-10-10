@@ -1,8 +1,9 @@
 import { CITIES } from '../../data/cities';
 import { calculateFlightDistance } from '../flight/distance';
-import { findArrivalDestination } from '../flight/direction';
+import { haversineDistance, calculateBearing } from '../utils/haversine';
+import { bearingToDirectionLabel, directionCenterBearing, moveAlongBearing } from '../flight/geo';
 import { fetchLocalContext, resolveCountryIso } from '../flight/local-context';
-import type { Destination, RouteDirection } from '../../types';
+import type { Destination, DestinationResult, RouteDirection } from '../../types';
 
 const DEFAULT_DEPARTURE = {
   displayName: '臺北, 臺灣',
@@ -39,13 +40,73 @@ export interface GlobeRoute {
   departureLocation: string;
   durationMinutes: number;
   routeDirection: RouteDirection;
+  bearing: number;
+  bearingLabel: string;
 }
 
 function shortPlace(displayName: string) {
   return displayName.split(',')[0].trim() || displayName;
 }
 
+function angularDifference(a: number, b: number) {
+  return Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+}
+
+function hopHeading(fromLat: number, fromLon: number, toLat: number, toLon: number) {
+  const bearing = Math.round(calculateBearing(fromLat, fromLon, toLat, toLon));
+  return { bearing, bearingLabel: bearingToDirectionLabel(bearing) };
+}
+
+function findReviewArrival(
+  departureLat: number,
+  departureLng: number,
+  distanceKm: number,
+  routeDirection: RouteDirection,
+  destinations: Destination[],
+  departureLocation: string
+): DestinationResult {
+  const available = destinations.filter(
+    (dest) => dest.availableForLanding && dest.displayName !== departureLocation
+  );
+  const tipBearing = directionCenterBearing(routeDirection) ?? 90;
+  const tip = moveAlongBearing(departureLat, departureLng, tipBearing, Math.max(distanceKm, 1));
+  const scored = available.map((dest) => {
+    const actualDistance = haversineDistance(
+      departureLat, departureLng, dest.latitude, dest.longitude
+    );
+    const bearing = calculateBearing(
+      departureLat, departureLng, dest.latitude, dest.longitude
+    );
+    return {
+      ...dest,
+      distanceKm: actualDistance,
+      tipDistanceKm: haversineDistance(tip.latitude, tip.longitude, dest.latitude, dest.longitude),
+      headingError: angularDifference(bearing, tipBearing),
+    };
+  });
+
+  for (const maxErr of [28, 40, 55, 90]) {
+    const pool = scored.filter((item) => item.headingError <= maxErr);
+    if (!pool.length) continue;
+    pool.sort((a, b) => {
+      const tipDiff = a.tipDistanceKm - b.tipDistanceKm;
+      if (Math.abs(tipDiff) > 40) return tipDiff;
+      return a.headingError - b.headingError;
+    });
+    return pool[0];
+  }
+
+  scored.sort((a, b) => a.tipDistanceKm - b.tipDistanceKm);
+  return scored[0] || available[0] || destinations[0];
+}
+
 export function globePoints(route: SimulatedRoute): GlobeRoute {
+  const heading = hopHeading(
+    route.departureLatitude,
+    route.departureLongitude,
+    route.arrivalLatitude,
+    route.arrivalLongitude
+  );
   return {
     from: {
       name: shortPlace(route.departureLocation),
@@ -61,6 +122,7 @@ export function globePoints(route: SimulatedRoute): GlobeRoute {
     departureLocation: route.departureLocation,
     durationMinutes: route.durationMinutes,
     routeDirection: route.routeDirection,
+    ...heading,
   };
 }
 
@@ -111,6 +173,7 @@ export function findOriginByLocation(displayName?: string | null): Destination |
 export function globeHop(fromLocation: string, toLocation: string): GlobeRoute {
   const from = findOriginByLocation(fromLocation);
   const to = findCityByLocation(toLocation) || findOriginByLocation(toLocation);
+  const heading = hopHeading(from.latitude, from.longitude, to.latitude, to.longitude);
   return {
     from: {
       name: shortPlace(from.displayName),
@@ -126,6 +189,7 @@ export function globeHop(fromLocation: string, toLocation: string): GlobeRoute {
     departureLocation: from.displayName,
     durationMinutes: 0,
     routeDirection: 'eastbound',
+    ...heading,
   };
 }
 
@@ -138,7 +202,7 @@ export function simulateRoute(
   const minutes = Math.max(30, Math.min(720, Math.round(durationMinutes || 90)));
   const origin = findOriginByLocation(originLocation);
   const distanceKm = calculateFlightDistance(minutes);
-  const arrival = findArrivalDestination(
+  const arrival = findReviewArrival(
     origin.latitude,
     origin.longitude,
     distanceKm,

@@ -199,11 +199,33 @@ function globeFromRoute(route) {
   return route;
 }
 
+function hopCaption(route) {
+  if (!route?.from || !route?.to) return '';
+  const base = `${route.from.name} → ${route.to.name}`;
+  if (route.bearing == null) return base;
+  const deg = String(Math.round(route.bearing)).padStart(3, '0');
+  return `${base} · ${deg}° ${route.bearingLabel || ''}`.trim();
+}
+
+function paintBearing(route, chosenName) {
+  if (!route || route.bearing == null) {
+    $('bearing-note').textContent = '實際航向會顯示在地球儀上';
+    return;
+  }
+  const deg = String(Math.round(route.bearing)).padStart(3, '0');
+  const actual = route.bearingLabel || '';
+  const chosen = chosenName || currentDirection().name;
+  const same = actual === chosen;
+  $('bearing-note').textContent = same
+    ? `實際出發航向 ${deg}°，與旋鈕「${chosen}」相符`
+    : `實際出發航向 ${deg}° ${actual}，旋鈕是「${chosen}」`;
+}
+
 async function drawGlobe(route, progress = 1) {
   const points = globeFromRoute(route);
   if (!points) return;
-  const caption = `${points.from.name} → ${points.to.name}`;
-  $('globe-caption').textContent = caption;
+  $('globe-caption').textContent = hopCaption(points);
+  paintBearing(points);
   try { await window.FlightGlobe.ready; } catch { /* still draw the sphere */ }
   window.FlightGlobe.draw(points.from, points.to, progress);
 }
@@ -211,7 +233,8 @@ async function drawGlobe(route, progress = 1) {
 async function flyGlobe(route) {
   const points = globeFromRoute(route);
   if (!points) return;
-  $('globe-caption').textContent = `${points.from.name} → ${points.to.name}`;
+  $('globe-caption').textContent = hopCaption(points);
+  paintBearing(points);
   try {
     await window.FlightGlobe.ready;
     await window.FlightGlobe.animate(points.from, points.to);
@@ -230,6 +253,9 @@ async function loadHop(fromLocation, toLocation) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '航線載入失敗');
     drawGlobe(data.route, 1);
+    const sample = state.samples.find((item) => item.sampleId === state.sampleId);
+    const dir = directions.find((item) => item.key === sample?.routeDirection)?.name;
+    paintBearing(data.route, dir);
   } catch {
     $('globe-caption').textContent = '航線暫時無法載入';
   }
