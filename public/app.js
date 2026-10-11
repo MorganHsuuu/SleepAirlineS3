@@ -1319,6 +1319,8 @@ function restart({ keepShade = false } = {}) {
   render();
 }
 
+const SLEEP_FACE_IDLE = 70;
+
 function paintSleep(percent) {
   const p = Math.max(0, Math.min(100, percent));
   const t = p / 100;
@@ -1361,8 +1363,8 @@ function offerSleepDial() {
     document.querySelector('.direction-heading > span').textContent = '轉動旋鈕';
     $('direction-dial').style.opacity = '1';
     $('direction-dial').setAttribute('aria-disabled', 'false');
-    $('direction-dial')._sleepValue = 0;
-    paintSleep(0);
+    $('direction-dial')._sleepValue = SLEEP_FACE_IDLE;
+    paintSleep(SLEEP_FACE_IDLE);
     const timer = setTimeout(finish, 10000);
     function finish() {
       clearTimeout(timer);
