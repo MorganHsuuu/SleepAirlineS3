@@ -31,6 +31,7 @@ import {
   updateReviewSample,
 } from './src/lib/notion/reviews';
 import { findOriginByLocation, globeHop, globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
+import { listRecentLiveFlights } from './src/lib/review/live-flights';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
@@ -1081,9 +1082,14 @@ app.get('/review', (_req, res) => {
 
 app.get('/api/review/samples', async (_req, res) => {
   try {
-    const [samples, review] = await Promise.all([listReviewSamples(40), getReviewStoreStatus()]);
+    const [samples, review, flights] = await Promise.all([
+      listReviewSamples(40),
+      getReviewStoreStatus(),
+      listRecentLiveFlights(16).catch(() => []),
+    ]);
     res.json({
       samples: samples.map(toReviewClient),
+      flights,
       ...review,
       openaiReady: Boolean(openAiApiKey()),
     });

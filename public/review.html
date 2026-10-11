@@ -3,18 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#12262a">
+  <meta name="theme-color" content="#d7e3ec">
   <title>甦醒航班｜內容審查台</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/review.css">
 </head>
 <body>
+  <div class="orb orb-a" aria-hidden="true"></div>
+  <div class="orb orb-b" aria-hidden="true"></div>
+  <div class="orb orb-c" aria-hidden="true"></div>
+
   <div class="desk">
     <header class="mast">
       <div>
-        <p class="eyebrow">Review Lab · 不進體驗流程</p>
+        <p class="eyebrow">Review Lab</p>
         <h1>內容審查台</h1>
-        <p class="lede">下一班會接著上一站飛。中間對照起飛、降落與風景，右側是歷史。</p>
       </div>
       <div class="mast-side">
         <span class="pill" id="store-pill">讀取中</span>
@@ -25,95 +31,99 @@
     <p class="banner" id="store-banner" hidden></p>
 
     <div class="board">
-      <aside class="console">
-        <section>
-          <div class="section-head">
-            <small>01</small>
-            <h2>起飛前調整</h2>
+      <aside class="console pane">
+        <div class="pane-scroll">
+          <section>
+            <div class="section-head">
+              <small>01</small>
+              <h2>起飛前調整</h2>
+            </div>
+            <div class="dial-wrap">
+              <div class="dial-ticks"></div>
+              <button type="button" class="dial" id="direction-dial" aria-label="航向旋鈕">
+                <span class="dial-inner"></span>
+                <span class="dial-pointer" id="dial-pointer"></span>
+                <span class="dial-center">✈</span>
+              </button>
+              <span class="cardinal n">N</span>
+              <span class="cardinal e">E</span>
+              <span class="cardinal s">S</span>
+              <span class="cardinal w">W</span>
+            </div>
+            <p class="readout"><strong id="direction-name">向東 · 090°</strong></p>
+          </section>
+
+          <section>
+            <label class="slider-label" for="duration-bar">
+              <span>飛行時間</span>
+              <strong id="duration-readout">1 小時 30 分</strong>
+            </label>
+            <input id="duration-bar" type="range" min="30" max="720" step="15" value="90">
+          </section>
+
+          <section>
+            <label class="slider-label" for="hour-bar">
+              <span>降落當地時間</span>
+              <strong id="hour-readout">現在</strong>
+            </label>
+            <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
+          </section>
+
+          <p class="origin-note" id="origin-note">下一班從臺北出發</p>
+          <p class="bearing-note" id="bearing-note">實際航向會顯示在地球儀上</p>
+
+          <div class="globe-stage">
+            <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
+            <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
           </div>
-          <div class="dial-wrap">
-            <div class="dial-ticks"></div>
-            <button type="button" class="dial" id="direction-dial" aria-label="航向旋鈕">
-              <span class="dial-inner"></span>
-              <span class="dial-pointer" id="dial-pointer"></span>
-              <span class="dial-center">✈</span>
-            </button>
-            <span class="cardinal n">N</span>
-            <span class="cardinal e">E</span>
-            <span class="cardinal s">S</span>
-            <span class="cardinal w">W</span>
-          </div>
-          <p class="readout"><strong id="direction-name">向東 · 090°</strong></p>
-        </section>
-
-        <section>
-          <label class="slider-label" for="duration-bar">
-            <span>飛行時間</span>
-            <strong id="duration-readout">1 小時 30 分</strong>
-          </label>
-          <input id="duration-bar" type="range" min="30" max="720" step="15" value="90">
-        </section>
-
-        <section>
-          <label class="slider-label" for="hour-bar">
-            <span>降落當地時間</span>
-            <strong id="hour-readout">現在</strong>
-          </label>
-          <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
-        </section>
-
-        <p class="origin-note" id="origin-note">下一班從臺北出發</p>
-        <p class="bearing-note" id="bearing-note">實際航向會顯示在地球儀上</p>
-
-        <div class="globe-stage">
-          <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
-          <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
         </div>
 
-        <fieldset class="mode-switch">
-          <legend>這次要生成</legend>
-          <div class="mode-options">
-            <label class="mode-option">
-              <input type="radio" name="generate-mode" value="text" checked>
-              <span>生成文字</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="generate-mode" value="image">
-              <span>文字＋圖片</span>
-            </label>
-          </div>
-        </fieldset>
-        <section class="actions">
+        <div class="console-dock">
+          <fieldset class="mode-switch">
+            <legend>這次要生成</legend>
+            <div class="mode-options">
+              <label class="mode-option">
+                <input type="radio" name="generate-mode" value="text" checked>
+                <span>生成文字</span>
+              </label>
+              <label class="mode-option">
+                <input type="radio" name="generate-mode" value="image">
+                <span>文字＋圖片</span>
+              </label>
+            </div>
+          </fieldset>
           <button type="button" class="primary" id="btn-flight">開始生成</button>
-        </section>
+        </div>
       </aside>
 
-      <main class="sheet">
+      <main class="sheet pane">
         <div class="meta-row">
-          <span id="sample-id">尚未生成</span>
-          <span id="route-line">臺北出發 · 向東 · 1 小時 30 分</span>
+          <h2 id="route-line">臺北出發 · 向東 · 1 小時 30 分</h2>
+          <div class="meta-tags">
+            <span class="chip" id="source-chip">手動生成</span>
+            <span id="sample-id">尚未生成</span>
+          </div>
         </div>
 
-        <div class="read-grid">
-          <div class="texts">
-            <article class="card">
+        <div class="hero">
+          <div class="voice">
+            <article class="voice-card">
               <header>
                 <small>Takeoff</small>
-                <h3>起飛文字</h3>
+                <h3>起飛廣播</h3>
               </header>
-              <p class="copy" id="takeoff-copy">調整左側條件，選擇生成文字或文字＋圖片，再按開始生成。</p>
+              <p class="copy" id="takeoff-copy">調整左側條件後開始生成。語音文字與風景會顯示在這裡。</p>
             </article>
-
-            <article class="card">
+            <article class="voice-card">
               <header>
                 <small>Landing</small>
-                <h3>降落文字</h3>
+                <h3>降落廣播</h3>
               </header>
               <p class="copy" id="landing-copy">目的地會接著上一站，不會覆蓋舊的紀錄。</p>
             </article>
           </div>
 
-          <article class="card image-card">
+          <article class="picture">
             <header>
               <small>Scenery</small>
               <h3>降落風景</h3>
@@ -125,33 +135,35 @@
           </article>
         </div>
 
-        <article class="card comment-card">
-          <header>
-            <small>Comment</small>
-            <h3>對照評論</h3>
-          </header>
+        <article class="comment-bar" id="comment-bar">
           <div class="comments" id="comments">還沒有評論。</div>
           <div class="comment-form">
-            <label>
-              你的名字
-              <input id="reviewer" type="text" maxlength="40" placeholder="心理師／小隊成員">
-            </label>
-            <label>
-              這筆內容的評論
-              <textarea id="comment" rows="2" maxlength="1200" placeholder="語氣是否合適、圖文是否一致……"></textarea>
-            </label>
+            <input id="reviewer" type="text" maxlength="40" placeholder="名字">
+            <textarea id="comment" rows="1" maxlength="1200" placeholder="對這段語音／圖片的評論"></textarea>
+            <button type="button" class="primary" id="btn-comment">寫回</button>
           </div>
-          <button type="button" class="primary" id="btn-comment">寫回 Notion</button>
         </article>
       </main>
 
-      <aside class="ledger">
-        <div class="section-head">
-          <small>Archive</small>
-          <h2>歷史紀錄</h2>
-        </div>
-        <p class="hint">點一筆可回看。新生成會從前一站接著飛。</p>
-        <div class="sample-list" id="sample-list"></div>
+      <aside class="ledger pane">
+        <section class="archive">
+          <div class="section-head">
+            <small>Live</small>
+            <h2>真實飛行</h2>
+            <span class="count" id="live-count">0</span>
+          </div>
+          <p class="hint">掃航線、有沒有圖、缺不缺廣播。</p>
+          <div class="sample-list" id="live-list"></div>
+        </section>
+        <section class="archive">
+          <div class="section-head">
+            <small>Lab</small>
+            <h2>手動生成</h2>
+            <span class="count" id="lab-count">0</span>
+          </div>
+          <p class="hint">審查台手動產的測試，按生成時間排列。</p>
+          <div class="sample-list" id="sample-list"></div>
+        </section>
       </aside>
     </div>
   </div>

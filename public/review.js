@@ -25,8 +25,10 @@ const $ = (id) => document.getElementById(id);
 const state = {
   direction: 2,
   sampleId: '',
+  source: 'lab',
   busy: false,
   samples: [],
+  flights: [],
   preview: null,
 };
 
@@ -81,8 +83,12 @@ function originLabel() {
 }
 
 function sampleImageSrc(sample) {
+  if (sample?.imageUrl) return sample.imageUrl;
   if (!sample?.sampleId) return '';
-  if (sample.hasImage || sample.imageUrl) {
+  if (sample.source === 'live' && sample.hasImage) {
+    return `/api/scenery-image?flightId=${encodeURIComponent(sample.flightId || sample.sampleId)}`;
+  }
+  if (sample.hasImage) {
     return `/api/review/image?sampleId=${encodeURIComponent(sample.sampleId)}`;
   }
   return '';
@@ -113,24 +119,72 @@ function paintControls() {
 function setBusy(busy, message) {
   state.busy = busy;
   $('btn-flight').disabled = busy;
-  $('btn-comment').disabled = busy;
+  $('btn-comment').disabled = busy || state.source === 'live';
   document.querySelectorAll('input[name="generate-mode"]').forEach((input) => {
     input.disabled = busy;
   });
   if (message) toast(message);
 }
 
+function formatWhen(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (mins < 1) return '剛剛';
+  if (mins < 60) return `${mins} 分鐘前`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} 小時前`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} 天前`;
+  return new Date(t).toLocaleString('zh-Hant', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function recordWhen(sample) {
+  return formatWhen(sample.updatedAt || sample.generatedAt || sample.createdAt || sample.landingTime || sample.takeoffTime);
+}
+
+function renderRecordButton(sample, kind) {
+  const dir = directions.find((item) => item.key === sample.routeDirection)?.name || '';
+  const active = sample.sampleId === state.sampleId && state.source === kind ? ' active' : '';
+  const from = shortPlace(sample.departureLocation || '臺北');
+  const to = shortPlace(sample.arrivalLocation || '尚未降落');
+  const bits = [];
+  if (sample.hasImage || sample.imageUrl) bits.push('<em class="ok">有圖</em>');
+  else bits.push('<em class="warn">沒圖</em>');
+  if (!sample.takeoffBroadcast) bits.push('<em class="warn">缺起飛</em>');
+  if (!sample.landingBroadcast) bits.push('<em class="warn">缺降落</em>');
+  if (kind === 'live' && sample.phase === 'in_flight') bits.push('飛行中');
+  if (dir) bits.push(escapeHtml(dir));
+  if (sample.durationMinutes) bits.push(escapeHtml(formatDuration(sample.durationMinutes)));
+  if (kind === 'lab' && sample.comments) bits.push('有評論');
+  const when = recordWhen(sample);
+  if (when) bits.push(escapeHtml(when));
+  return `<button type="button" class="sample-item${active}" data-id="${escapeHtml(sample.sampleId)}" data-source="${kind}">
+      <strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong>
+      <small>${bits.join(' · ')}</small>
+    </button>`;
+}
+
 function renderSample(sample) {
   if (!sample) return;
   state.sampleId = sample.sampleId;
+  state.source = sample.source === 'live' ? 'live' : 'lab';
   const dir = directions.find((item) => item.key === sample.routeDirection) || currentDirection();
   const hour = sample.landingHour == null ? -1 : Number(sample.landingHour);
+  $('source-chip').textContent = state.source === 'live' ? '真實飛行' : '手動生成';
+  $('source-chip').className = state.source === 'live' ? 'chip live' : 'chip';
   $('sample-id').textContent = sample.sampleId;
   $('route-line').textContent = [
     `${shortPlace(sample.departureLocation || '臺北')} → ${shortPlace(sample.arrivalLocation || dir.name)}`,
-    formatDuration(sample.durationMinutes || Number($('duration-bar').value)),
-    hourLabel(hour),
-  ].join(' · ');
+    sample.durationMinutes ? formatDuration(sample.durationMinutes) : '',
+    state.source === 'lab' ? hourLabel(hour) : (sample.passengerName || ''),
+  ].filter(Boolean).join(' · ');
   $('takeoff-copy').textContent = sample.takeoffBroadcast || '還沒有起飛文字。';
   $('landing-copy').textContent = sample.landingBroadcast || '還沒有降落文字。';
   $('image-prompt').textContent = sample.imagePrompt || '';
@@ -142,34 +196,39 @@ function renderSample(sample) {
     img.src = src;
     img.onload = () => { img.dataset.ok = '1'; };
     img.onerror = () => {
-      frame.innerHTML = '<p>圖片暫時無法載入。通常是 Notion 網址過期，請再點一次這筆紀錄。</p>';
+      frame.innerHTML = '<p>這筆還沒有風景圖，或圖片暫時無法載入。</p>';
     };
     frame.replaceChildren(img);
   } else {
-    frame.innerHTML = '<p>選擇「文字＋圖片」時會一起生成風景。</p>';
+    frame.innerHTML = state.source === 'live'
+      ? '<p>這班真實飛行還沒有降落風景。</p>'
+      : '<p>選擇「文字＋圖片」時會一起生成風景。</p>';
   }
-  $('comments').textContent = sample.comments || '還沒有評論。';
+  const bar = $('comment-bar');
+  if (state.source === 'live') {
+    bar.classList.add('is-locked');
+    $('comments').textContent = '真實航班只供對照閱讀，評論請寫在手動生成。';
+    $('btn-comment').disabled = true;
+  } else {
+    bar.classList.remove('is-locked');
+    $('comments').textContent = sample.comments || '還沒有評論。';
+    $('btn-comment').disabled = state.busy;
+  }
   $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   renderList();
 }
 
 function renderList() {
-  const box = $('sample-list');
-  if (!state.samples.length) {
-    box.innerHTML = '<p class="hint">生成第一筆後會出現在這裡。</p>';
-    return;
-  }
-  box.innerHTML = state.samples.map((sample) => {
-    const dir = directions.find((item) => item.key === sample.routeDirection)?.name || sample.routeDirection;
-    const active = sample.sampleId === state.sampleId ? ' active' : '';
-    const from = shortPlace(sample.departureLocation || '臺北');
-    const to = shortPlace(sample.arrivalLocation || '尚未降落');
-    const pic = sample.hasImage || sample.imageUrl ? ' · 有圖' : '';
-    return `<button type="button" class="sample-item${active}" data-id="${escapeHtml(sample.sampleId)}">
-      <strong>${escapeHtml(sample.sampleId)}</strong>
-      <small>${escapeHtml(from)} → ${escapeHtml(to)} · ${escapeHtml(dir)} · ${escapeHtml(formatDuration(sample.durationMinutes))}${pic}</small>
-    </button>`;
-  }).join('');
+  const liveBox = $('live-list');
+  const labBox = $('sample-list');
+  $('live-count').textContent = String(state.flights.length);
+  $('lab-count').textContent = String(state.samples.length);
+  liveBox.innerHTML = state.flights.length
+    ? state.flights.map((item) => renderRecordButton(item, 'live')).join('')
+    : '<p class="hint">還沒有從 Flight Log 讀到航班。</p>';
+  labBox.innerHTML = state.samples.length
+    ? state.samples.map((item) => renderRecordButton(item, 'lab')).join('')
+    : '<p class="hint">生成第一筆後會出現在這裡。</p>';
 }
 
 function upsertSample(sample) {
@@ -300,6 +359,7 @@ async function loadSamples() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '讀取失敗');
     state.samples = data.samples || [];
+    state.flights = data.flights || [];
     applyStore(data);
     renderList();
     $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
@@ -346,8 +406,8 @@ async function generateFlight() {
 
 async function saveComment() {
   if (state.busy) return;
-  if (!state.sampleId) {
-    toast('請先生成一筆內容。');
+  if (!state.sampleId || state.source === 'live') {
+    toast(state.source === 'live' ? '真實航班只供對照，請改選手動生成再寫評論。' : '請先生成一筆內容。');
     return;
   }
   const comment = $('comment').value.trim();
@@ -416,14 +476,13 @@ $('duration-bar').addEventListener('input', paintControls);
 $('hour-bar').addEventListener('input', paintControls);
 $('btn-flight').addEventListener('click', generateFlight);
 $('btn-comment').addEventListener('click', saveComment);
-$('sample-list').addEventListener('click', async (event) => {
-  const button = event.target.closest('[data-id]');
-  if (!button) return;
-  const sample = state.samples.find((item) => item.sampleId === button.dataset.id);
+async function openRecord(sample) {
   if (!sample) return;
   const index = directions.findIndex((item) => item.key === sample.routeDirection);
   if (index >= 0) state.direction = index;
-  $('duration-bar').value = String(Math.max(30, Math.min(720, sample.durationMinutes || 90)));
+  if (sample.durationMinutes) {
+    $('duration-bar').value = String(Math.max(30, Math.min(720, sample.durationMinutes)));
+  }
   $('hour-bar').value = String(sample.landingHour == null ? -1 : sample.landingHour);
   renderSample(sample);
   $('dial-pointer').style.transform = `translate(-50%,-100%) rotate(${currentDirection().angle}deg)`;
@@ -431,7 +490,22 @@ $('sample-list').addEventListener('click', async (event) => {
   $('duration-readout').textContent = formatDuration(Number($('duration-bar').value));
   $('hour-readout').textContent = hourLabel(Number($('hour-bar').value));
   await loadHop(sample.departureLocation, sample.arrivalLocation);
-});
+}
+
+function bindArchive(box) {
+  box.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-id]');
+    if (!button) return;
+    const source = button.dataset.source || 'lab';
+    const sample = source === 'live'
+      ? state.flights.find((item) => item.sampleId === button.dataset.id)
+      : state.samples.find((item) => item.sampleId === button.dataset.id);
+    await openRecord(sample);
+  });
+}
+
+bindArchive($('sample-list'));
+bindArchive($('live-list'));
 
 bindDial();
 paintControls();

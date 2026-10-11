@@ -250,6 +250,7 @@ export function toReviewClient(sample: ReviewSample) {
   const hasImage = Boolean(sample.imageUrl);
   return {
     ...sample,
+    source: 'lab' as const,
     hasImage,
     imageUrl: hasImage ? `/api/review/image?sampleId=${encodeURIComponent(sample.sampleId)}` : '',
   };
