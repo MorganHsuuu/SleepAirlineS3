@@ -3,7 +3,6 @@
 // S2 direction and audio behavior are retained. The independent visual prototype
 // stays in preview mode until the new data connections are ready.
 const FRONTEND_PREVIEW_ONLY = false;
-const REED_BRIDGE_ENABLED = new URLSearchParams(window.location.search).get('reed') === '1';
 const $ = (id) => document.getElementById(id);
 const directions = [
   { key: 'northbound', name: '向北', angle: 0 },
@@ -42,7 +41,7 @@ const demoCities = [
   { name: '高雄', code: 'KHH', country: '臺灣', lat: 22.6273, lon: 120.3014 },
 ];
 const state = {
-  mode: 'preview', stage: 'ready', direction: 2, sound: true,
+  mode: 'preview', researchFlight: false, stage: 'ready', direction: 2, sound: true,
   profile: null, activeFlight: null, lastFlight: null, takeoffAt: null,
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
@@ -315,7 +314,6 @@ function render() {
   $('to-city').textContent = state.destination?.name || '未知的遠方';
   $('to-code').textContent = state.destination?.code || '???';
   paintLeg();
-  syncPairCard();
   const labels = {
     ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],
     takeoff: ['正在起飛', '機長廣播中。窗外的故事即將開始。', 'TAKEOFF', '起飛中', 'DEPARTING'],
@@ -392,64 +390,6 @@ function applyPassengerOrigin(passenger) {
   };
   $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
 }
-function pairProfile() {
-  ensureGuestProfile();
-  const passengerId = $('input-pid')?.value.trim() || state.profile.passengerId;
-  const name = $('input-name')?.value.trim() || state.profile.name;
-  const rawGroup = $('input-group')?.value.trim() || state.profile.groupId;
-  const groupId = /^[0-9]{4}$/.test(rawGroup) ? rawGroup : (state.profile.groupId || '0001');
-  return { passengerId, name, groupId };
-}
-function pairUrl(profile) {
-  const url = new URL(location.href);
-  url.search = '';
-  url.hash = '';
-  url.searchParams.set('pair', '1');
-  url.searchParams.set('pid', profile.passengerId);
-  url.searchParams.set('name', profile.name);
-  url.searchParams.set('group', profile.groupId);
-  if ($('research-consent')?.checked) url.searchParams.set('consent', '1');
-  return url.toString();
-}
-let pairText = '';
-function syncPairCard() {
-  const profile = pairProfile();
-  const text = pairUrl(profile);
-  const paired = localStorage.getItem('sleepAirlineS3Paired') === profile.passengerId;
-  const show = !paired && state.stage === 'ready';
-  const card = $('pair-pass');
-  if (card) {
-    card.hidden = !show;
-    card.classList.toggle('is-out', show);
-  }
-  const idNode = $('pair-id');
-  if (idNode) idNode.textContent = `${profile.name} · ${profile.passengerId}`;
-  if (text === pairText || !window.QRCode) return;
-  pairText = text;
-  document.querySelectorAll('canvas.pair-qr').forEach((canvas) => {
-    window.QRCode.toCanvas(canvas, text, {
-      width: 148,
-      margin: 1,
-      color: { dark: '#163238', light: '#f6f4ee' },
-    }, () => {});
-  });
-}
-function readPairQuery() {
-  const params = new URLSearchParams(location.search);
-  if (params.get('pair') !== '1') return null;
-  const passengerId = params.get('pid')?.trim() || '';
-  const name = params.get('name')?.trim() || '';
-  const rawGroup = params.get('group')?.trim() || '';
-  const groupId = /^[0-9]{4}$/.test(rawGroup) ? rawGroup : '0001';
-  if (!passengerId || !name) return null;
-  return { passengerId, name, groupId, consent: params.get('consent') === '1' };
-}
-function clearPairQuery() {
-  const url = new URL(location.href);
-  ['pair', 'pid', 'name', 'group', 'consent'].forEach((key) => url.searchParams.delete(key));
-  const next = `${url.pathname}${url.search}${url.hash}`;
-  history.replaceState({}, '', next || '/');
-}
 function ensureGuestProfile() {
   if (state.profile?.passengerId && state.profile?.name && state.profile?.groupId) return;
   let guest = null;
@@ -477,13 +417,13 @@ async function doLogin(event) {
   $('input-pid').value = passengerId;
   $('input-name').value = name;
   $('input-group').value = groupId;
-  $('research-consent').checked = true;
+  const researchConsent = $('research-consent').checked;
   $('btn-login').disabled = true;
   try {
-    if (state.mode === 'live') {
+    if (state.mode === 'live' && researchConsent) {
       const result = await api('POST', '/api/passenger', {
-        passengerId, name, groupId, researchConsent: true,
-        researchConsentAt: new Date().toISOString(),
+        passengerId, name, groupId, researchConsent,
+        researchConsentAt: researchConsent ? new Date().toISOString() : undefined,
       });
       state.profile = { passengerId, name, groupId };
       await restoreNotionFlight(result);
@@ -492,9 +432,7 @@ async function doLogin(event) {
     }
     localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
     localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
-    localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
     $('profile-dialog').close();
-    syncPairCard();
     $('profile-hint').textContent = '';
     render();
     if (state.stage === 'ready') showToast(`歡迎登機，${name}。`);
@@ -502,16 +440,17 @@ async function doLogin(event) {
   finally { $('btn-login').disabled = false; }
 }
 async function fetchBoard() {
-  if (state.mode !== 'live' || !state.profile) return null;
+  if (!state.researchFlight || !state.profile) return null;
   return api('GET', `/api/board?groupId=${encodeURIComponent(state.profile.groupId)}`);
 }
 async function refreshProgress() {
-  if (state.mode !== 'live' || !state.profile) return null;
+  if (!state.researchFlight || !state.profile) return null;
   const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(state.profile.passengerId)}`);
   if (data.activeFlight) adoptInFlight(data.activeFlight);
   return data;
 }
 function adoptInFlight(flight) {
+  state.researchFlight = true;
   state.activeFlight = flight;
   state.lastFlight = null;
   state.stage = 'cruise';
@@ -526,6 +465,7 @@ function adoptInFlight(flight) {
   render();
 }
 function adoptLanded(flight) {
+  state.researchFlight = true;
   const arrival = locationFromFlight(flight, 'arrival');
   const departure = locationFromFlight(flight, 'departure');
   state.lastFlight = flight;
@@ -555,7 +495,7 @@ function whenImageReady(img) {
   });
 }
 async function applyStoredScenery(flight) {
-  if (!flight?.flightId || state.mode !== 'live') return;
+  if (!flight?.flightId || !state.researchFlight) return;
   try {
     const data = await api('GET', `/api/scenery?flightId=${encodeURIComponent(flight.flightId)}`, undefined, 4000);
     const url = data?.scenery?.imageUrl;
@@ -688,6 +628,7 @@ async function playBroadcast(text, speechBase64, {
 async function doTakeoff() {
   if (state.busy || state.stage !== 'ready') return;
   ensureGuestProfile();
+  state.researchFlight = state.mode === 'live' && $('research-consent').checked;
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
   setInflightStandby(true);
@@ -705,11 +646,12 @@ async function doTakeoff() {
     : Promise.resolve(false);
   try {
     let text, speech;
-    if (state.mode === 'live') {
+    if (state.researchFlight) {
       const data = await api('POST', '/api/flight/takeoff', {
         ...flightBody(), routeDirection: $('tk-direction').value,
         clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        researchConsent: true, researchConsentAt: new Date().toISOString(),
+        researchConsent: $('research-consent').checked,
+        researchConsentAt: $('research-consent').checked ? new Date().toISOString() : undefined,
       }, 60000);
       state.activeFlight = data.flight;
       state.origin = locationFromFlight(data.flight, 'departure');
@@ -749,18 +691,18 @@ async function doTakeoff() {
     void applyDestinationSky(state.destination || destinationFor(state.direction));
     $('window-caption').textContent = '雲層上方 · 飛行中';
     hideCeremony();
-    if (state.mode === 'live') { void fetchBoard().catch(() => {}); }
+    if (state.researchFlight) { void fetchBoard().catch(() => {}); }
   } catch (error) {
     markSpeechReady(false);
     window.BroadcastAudio?.stopTowerSignalLoop?.();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
     await BroadcastAudio?.stopCaptainIntro?.();
-    hideCeremony(); setInflightStandby(false); setShade('open'); state.stage = 'ready'; render();
+    hideCeremony(); setInflightStandby(false); setShade('open'); state.stage = 'ready'; state.researchFlight = false; render();
     showToast(`起飛失敗：${error.message}`);
   } finally { state.busy = false; }
 }
 async function requestScenery(flightId) {
-  if (!flightId || state.mode !== 'live' || !state.openaiReady) return null;
+  if (!flightId || !state.researchFlight || !state.openaiReady) return null;
   const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     try {
@@ -1103,7 +1045,7 @@ async function doLand() {
         $('window-caption').textContent = `${state.origin.name} → ${place.name}`;
       }
     };
-    if (state.mode === 'live') {
+    if (state.researchFlight) {
       ensureGuestProfile();
       const landPromise = api('POST', '/api/flight/land', flightBody(), 110000)
         .then((data) => {
@@ -1227,7 +1169,7 @@ async function doLand() {
         preferWebAudio: true,
       })
       : delay(1900);
-    if (state.mode === 'live' && state.profile && state.lastFlight?.flightId && spoken) {
+    if (state.researchFlight && state.profile && state.lastFlight?.flightId && spoken) {
       void api('POST', '/api/flight/captain-broadcast', {
         passengerId: state.profile.passengerId,
         flightId: state.lastFlight.flightId,
@@ -1242,7 +1184,7 @@ async function doLand() {
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
-    if (moodAfter != null && state.mode === 'live' && state.profile && state.lastFlight?.flightId) {
+    if (moodAfter != null && state.researchFlight && state.profile && state.lastFlight?.flightId) {
       void api('POST', '/api/flight/sleep-report', {
         passengerId: state.profile.passengerId,
         flightId: state.lastFlight.flightId,
@@ -1252,7 +1194,7 @@ async function doLand() {
     await showWeatherCard(state.destination, weather);
     if (state.sound) void BroadcastAudio?.fadeOutLandingMusic?.({ ms: 4500 });
     state.nextOrigin = state.destination;
-    if (state.mode === 'live') void fetchBoard().catch(() => {});
+    if (state.researchFlight) void fetchBoard().catch(() => {});
   } catch (error) {
     $('window-glass').classList.remove('cloud-entering', 'destination-zoom', 'arc-dive', 'arrival-flash');
     hideGlassPanel('glass-route');
@@ -1283,7 +1225,7 @@ async function submitSleepReport(event) {
   button.disabled = true;
   $('sleep-report-hint').textContent = '';
   try {
-    if (state.mode === 'live') {
+    if (state.researchFlight) {
       if (!state.profile || !state.lastFlight?.flightId) throw new Error('目前沒有可回報的航班。');
       await api('POST', '/api/flight/sleep-report', {
         passengerId: state.profile.passengerId,
@@ -1310,6 +1252,7 @@ function restart({ keepShade = false } = {}) {
   state.origin = state.nextOrigin || state.origin;
   state.nextOrigin = null;
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
+  state.researchFlight = false;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null; state.landedLegReady = false;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('is-inflight', 'developing');
@@ -1606,70 +1549,19 @@ function bindDial() {
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
-function startReedBridge() {
-  if (!REED_BRIDGE_ENABLED) return;
-  const url = 'http://127.0.0.1:8765/state';
-  let observedClosed = null;
-  let pending = false;
-  let connected = false;
-  let warned = false;
-
-  // A browser gesture may be needed before sensor-triggered audio can play.
-  document.addEventListener('pointerdown', () => {
-    window.BroadcastAudio?.primeFromUserGesture?.();
-  }, { once: true, capture: true });
-
-  const poll = async () => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1500);
-      let response;
-      try {
-        response = await fetch(url, {
-          cache: 'no-store',
-          signal: controller.signal,
-          targetAddressSpace: 'loopback',
-        });
-      } finally { clearTimeout(timeout); }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (typeof data.closed !== 'boolean') throw new Error('Invalid reed state');
-      if (!connected) showToast('磁簧控制已連線');
-      connected = true;
-      warned = false;
-
-      if (data.closed !== observedClosed) {
-        observedClosed = data.closed;
-        pending = true;
-      }
-      if (pending && !state.busy) {
-        if (observedClosed && (state.stage === 'ready' || state.stage === 'landed')) {
-          pending = false;
-          if (state.stage === 'landed') restart();
-          void doTakeoff();
-        } else if (!observedClosed && state.stage === 'cruise') {
-          pending = false;
-          void doLand();
-        } else if ((observedClosed && state.stage === 'cruise')
-          || (!observedClosed && (state.stage === 'ready' || state.stage === 'landed'))) {
-          pending = false;
-        }
-      }
-    } catch {
-      if (!warned) showToast('無法連接磁簧，請檢查樹莓派程式與瀏覽器權限');
-      warned = true;
-      connected = false;
-    } finally {
-      setTimeout(poll, connected ? 350 : 2000);
-    }
-  };
-  void poll();
-}
-
 function startDeviceControls() {
   window.FlightDeviceControls?.start({
     getState: () => state,
     setDirection: (index) => setDirection(index),
+    setPassenger: (passengerId) => {
+      if (state.profile?.passengerId === passengerId) return;
+      state.profile = { passengerId, name: '旅人', groupId: '0001' };
+      localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
+      localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
+      $('input-pid').value = passengerId;
+      $('input-name').value = state.profile.name;
+      $('input-group').value = state.profile.groupId;
+    },
     takeoff: () => {
       if (state.stage === 'landed') restart();
       void doTakeoff();
@@ -1680,18 +1572,6 @@ function startDeviceControls() {
 }
 
 async function init() {
-  const incomingPair = readPairQuery();
-  if (incomingPair) {
-    const profile = {
-      passengerId: incomingPair.passengerId,
-      name: incomingPair.name,
-      groupId: incomingPair.groupId,
-    };
-    localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(profile));
-    localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(profile));
-    localStorage.removeItem('sleepAirlineS3View');
-    clearPairQuery();
-  }
   try {
     const profile = JSON.parse(localStorage.getItem('sleepAirlineS3Profile') || 'null');
     if (profile?.passengerId && profile?.name && profile?.groupId) {
@@ -1705,7 +1585,7 @@ async function init() {
   if (!$('input-pid').value) $('input-pid').value = state.profile.passengerId;
   if (!$('input-name').value) $('input-name').value = state.profile.name;
   if (!$('input-group').value) $('input-group').value = state.profile.groupId;
-  if ($('research-consent')) $('research-consent').checked = true;
+  if ($('research-consent')) $('research-consent').checked = false;
   if (!FRONTEND_PREVIEW_ONLY) {
     void fetch('country-iso.json').then((res) => res.json()).then((data) => { countryIsoMap = data; }).catch(() => { countryIsoMap = {}; });
   }
@@ -1722,10 +1602,6 @@ async function init() {
   $('profile-open').addEventListener('click', () => $('profile-dialog').showModal());
   $('profile-close').addEventListener('click', () => $('profile-dialog').close());
   $('login-form').addEventListener('submit', doLogin);
-  ['input-pid', 'input-name', 'input-group'].forEach((id) => {
-    $(id)?.addEventListener('input', () => { pairText = ''; syncPairCard(); });
-  });
-  $('research-consent')?.addEventListener('change', () => { pairText = ''; syncPairCard(); });
   $('btn-takeoff').addEventListener('click', doTakeoff);
   $('btn-land').addEventListener('click', doLand);
   $('btn-restart').addEventListener('click', restart);
@@ -1758,38 +1634,7 @@ async function init() {
     } catch { /* 已經先把窗戶打開 */ }
   }
   preloadApproachVoice();
-  if (incomingPair?.consent && state.mode === 'live' && state.profile) {
-    try {
-      const result = await api('POST', '/api/passenger', {
-        ...state.profile,
-        researchConsent: true,
-        researchConsentAt: new Date().toISOString(),
-      }, 12000);
-      localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
-      syncPairCard();
-      showToast('登機資料已寫入你的 Notion。');
-      await restoreNotionFlight(result);
-    } catch (error) {
-      showToast(`配對未寫入：${error.message}`);
-    }
-  } else if (incomingPair) {
-    localStorage.setItem('sleepAirlineS3Paired', state.profile.passengerId);
-    syncPairCard();
-    showToast(incomingPair.consent ? '這台已配對。連線後會寫入 Notion。' : '請先同意研究資料，再掃描配對。');
-  }
-  if (state.mode === 'live' && state.profile && !incomingPair) {
-    try {
-      const result = await api('POST', '/api/passenger', {
-        ...state.profile,
-        researchConsent: true,
-        researchConsentAt: new Date().toISOString(),
-        stampConsent: false,
-      }, 12000);
-      await restoreNotionFlight(result);
-    } catch { showToast('暫時無法恢復航班進度。'); }
-  }
-  if (window.FlightDeviceControls?.enabled) startDeviceControls();
-  else startReedBridge();
+  startDeviceControls();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
 void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });

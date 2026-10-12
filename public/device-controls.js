@@ -1,8 +1,10 @@
 'use strict';
 
-// Shared by the full-screen and classic pages. Capture before pairing clears queries.
+// Shared by the full-screen and classic pages. A Pi bridge is discovered on the
+// same browser; ordinary visitors continue to use the page without device UI.
 (function (root) {
-  const enabled = new URLSearchParams(root.location?.search || '').get('device') === '1';
+  const explicit = new URLSearchParams(root.location?.search || '').get('device') === '1';
+  const enabled = true;
 
   function validSample(data) {
     return data?.version === 2 && typeof data.session === 'string' && data.session.length > 0
@@ -56,7 +58,6 @@
   }
 
   function start(adapter) {
-    if (!enabled) return;
     const controller = createController(adapter);
     let connected = false;
     let warned = false;
@@ -75,14 +76,20 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (!validSample(data)) throw new Error('請啟動新版 device_bridge.py');
+        if (typeof data.passengerId === 'string' && /^PAX-[A-Z0-9]{8,32}$/.test(data.passengerId)) {
+          adapter.setPassenger?.(data.passengerId);
+        } else if (data.passengerId === null) {
+          root.location.replace('http://127.0.0.1:8766/device');
+          return;
+        }
         if (!connected) adapter.notify('裝置控制已連線，移開磁鐵後再靠近即可觸發');
         controller.accept(data);
         connected = true;
         warned = false;
       } catch (error) {
         controller.reset();
-        if (!warned) adapter.notify('裝置未連線，請啟動 device_bridge.py 並允許瀏覽器存取本機裝置');
-        if (!warned) console.warn('Device controls:', error);
+        if (!warned && (connected || explicit)) adapter.notify('裝置未連線，請檢查樹莓派橋接程式與瀏覽器本機存取權限');
+        if (!warned && explicit) console.warn('Device controls:', error);
         warned = true;
         connected = false;
       } finally {

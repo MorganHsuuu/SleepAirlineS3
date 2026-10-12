@@ -9,6 +9,7 @@ from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
+from pathlib import Path
 from threading import Event, Lock, Thread
 import time
 import uuid
@@ -109,7 +110,7 @@ def sample_adc(state, stop, args):
             stop.wait(1)
 
 
-def make_handler(state, origin):
+def make_handler(state, origin, identity_path=None):
     class Handler(BaseHTTPRequestHandler):
         def end_headers(self):
             if self.headers.get("Origin") == origin:
@@ -139,7 +140,15 @@ def make_handler(state, origin):
         def do_GET(self):
             if not self.allowed():
                 return
-            body = json.dumps(state.snapshot(), allow_nan=False).encode("utf-8")
+            snapshot = state.snapshot()
+            if identity_path:
+                try:
+                    identity = json.loads(Path(identity_path).read_text())
+                    passenger_id = identity.get("passengerId")
+                    snapshot["passengerId"] = passenger_id if isinstance(passenger_id, str) else None
+                except (OSError, ValueError):
+                    snapshot["passengerId"] = None
+            body = json.dumps(snapshot, allow_nan=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -162,6 +171,7 @@ def main():
     parser.add_argument("--max-voltage", type=float, default=3.3)
     parser.add_argument("--reverse", action="store_true", help="Reverse knob direction")
     parser.add_argument("--origin", default=SITE_ORIGIN, help="One allowed website origin, no trailing slash")
+    parser.add_argument("--identity-file", default=None, help="Kiosk identity file; omit for standalone sensor testing")
     args = parser.parse_args()
     if (not all(math.isfinite(v) for v in (args.min_voltage, args.max_voltage))
             or not 0 <= args.min_voltage < args.max_voltage <= 3.3):
@@ -182,12 +192,12 @@ def main():
                 state.reed(name, reed.is_pressed, initial=True)
                 reed.when_pressed = lambda name=name: state.reed(name, True)
                 reed.when_released = lambda name=name: state.reed(name, False)
-            server = ThreadingHTTPServer(("127.0.0.1", 8765), make_handler(state, args.origin))
+            server = ThreadingHTTPServer(("127.0.0.1", 8765), make_handler(state, args.origin, args.identity_file))
             resources.callback(server.server_close)
             worker = Thread(target=sample_adc, args=(state, stop, args), daemon=True)
             worker.start()
             print("Device bridge: http://127.0.0.1:8765/state", flush=True)
-            print(f"Open {args.origin}/?device=1 on this Pi. Ctrl+C stops the bridge.", flush=True)
+            print(f"Open {args.origin}/ on this Pi. Ctrl+C stops the bridge.", flush=True)
             try:
                 server.serve_forever()
             finally:

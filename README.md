@@ -43,4 +43,23 @@ npm run build
 
 ## 樹莓派實體控制
 
-全螢幕與 `/classic/` 均可使用 `?device=1`，以 GPIO17 起飛磁簧、GPIO27 降落磁簧和 ADS1115 A0 方位旋鈕控制網頁。安裝與接線請見 [裝置控制說明](hardware/DEVICE_CONTROLS.md)。
+全螢幕主頁會自動偵測同一台樹莓派的 `device_bridge.py`，不需要 `?device=1` 或額外分頁。GPIO17 磁簧起飛、GPIO27 磁簧降落、ADS1115 A0 旋鈕選方位。首次配網與單一 kiosk 啟動方式見 [樹莓派專案](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test)。
+
+## 裝置綁定 API
+
+手機 APP 和樹莓派共用 `/api/pairing`：旅客建立／恢復、短效綁定授權、裝置確認、狀態查詢與解除綁定。手機僅在後端確認綁定後顯示完成。儲存使用支援 Redis `EVAL` 的持久 Redis REST 服務；未設定時 API 回 `503 pairing_not_configured`，不會以 Vercel Function 記憶體假裝已綁定。
+
+部署前須在 S3 Vercel 專案設定以下環境變數，並於設定後重新部署：
+
+| 名稱 | 內容 |
+| --- | --- |
+| `PAIRING_REDIS_REST_URL` | Redis REST API URL；也可沿用已設定的 `KV_REST_API_URL` 或 `UPSTASH_REDIS_REST_URL` |
+| `PAIRING_REDIS_REST_TOKEN` | 對應 token；也可沿用 `KV_REST_API_TOKEN` 或 `UPSTASH_REDIS_REST_TOKEN` |
+| `PAIRING_SIGNING_SECRET` | 至少 32 字元的隨機字串，用於簽發 15 分鐘、單次使用的綁定授權 |
+| `PAIRING_APP_ORIGIN` | 預設 `https://night-departures.vercel.app`；若 APP 正式網域不同須改設定 |
+
+建立私密金鑰可用 `openssl rand -base64 48`。金鑰與 Redis token 只放 Vercel 環境變數，勿提交版本庫。Redis 使用獨立前綴 `sleep-airline:pairing:v1`，必要時可用 `PAIRING_REDIS_PREFIX` 更改。研究資料同意與裝置綁定分開，舊版 `?pair=1&pid=...` QR 匯入已移除。
+
+研究同意預設不勾選。未同意時仍可用磁簧完成本機體驗航班，航班及睡眠回報不會寫入 S3 研究資料庫；明確勾選後的航班才使用原有即時紀錄與生成風景流程。
+
+目前 Passenger ID／恢復碼只用來保護新綁定與解除綁定；既有航班 API 尚未改成需要旅客憑證。公開部署前需另外檢查旅程資料的存取規則。舊版未發放恢復碼的 Passenger ID 無法直接安全恢復，需另設人工驗證與遷移流程。
