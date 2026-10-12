@@ -1,4 +1,5 @@
 import { getNotionClient, isNotionConfigured } from '../notion/client';
+import { resolveDashboardDbId } from '../notion/ensure-dashboard';
 import { parseFlight } from '../notion/flights';
 import type { Flight } from '../../types';
 
@@ -22,9 +23,21 @@ export interface LiveReviewFlight {
   generatedAt: string;
 }
 
-function dashboardId(): string | null {
+function dashboardIdFromEnv(): string | null {
   const raw = process.env.NOTION_DASHBOARD_DB_ID?.replace(/-/g, '').trim();
   return raw && raw.length >= 32 ? raw : null;
+}
+
+async function resolveLiveDashboardId(): Promise<string | null> {
+  const fromEnv = dashboardIdFromEnv();
+  if (fromEnv) return fromEnv;
+  try {
+    const resolved = await resolveDashboardDbId();
+    return resolved?.replace(/-/g, '').trim() || null;
+  } catch (err) {
+    console.error('[review/live-flights] resolve dashboard failed', err);
+    return null;
+  }
 }
 
 export function toLiveReviewFlight(flight: Flight): LiveReviewFlight {
@@ -51,25 +64,55 @@ export function toLiveReviewFlight(flight: Flight): LiveReviewFlight {
   };
 }
 
-export async function listRecentLiveFlights(limit = 16): Promise<LiveReviewFlight[]> {
-  const dbId = dashboardId();
-  if (!isNotionConfigured() || !dbId) return [];
+function keepLiveFlight(flight: Flight): boolean {
+  return Boolean(flight.takeoffBroadcast || flight.captainBroadcast || flight.arrivalLocation);
+}
 
+function parseLivePage(page: Record<string, unknown>): LiveReviewFlight | null {
+  try {
+    const flight = parseFlight(page);
+    return keepLiveFlight(flight) ? toLiveReviewFlight(flight) : null;
+  } catch (err) {
+    console.error('[review/live-flights] skip page', err);
+    return null;
+  }
+}
+
+async function queryFlightPages(dbId: string, limit: number) {
   const client = getNotionClient();
-  const result = await client.databases.query({
-    database_id: dbId,
-    filter: {
-      or: [
-        { property: 'Status', select: { equals: 'landed' } },
-        { property: 'Status', select: { equals: 'in_flight' } },
-      ],
-    },
-    sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-    page_size: Math.min(limit, 24),
-  });
+  const pageSize = Math.min(Math.max(limit, 1), 40);
+  try {
+    return await client.databases.query({
+      database_id: dbId,
+      filter: {
+        or: [
+          { property: 'Status', select: { equals: 'landed' } },
+          { property: 'Status', select: { equals: 'in_flight' } },
+        ],
+      },
+      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      page_size: pageSize,
+    });
+  } catch (err) {
+    console.error('[review/live-flights] filtered query failed, retrying open query', err);
+    return client.databases.query({
+      database_id: dbId,
+      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      page_size: pageSize,
+    });
+  }
+}
 
+export async function listRecentLiveFlights(limit = 24): Promise<LiveReviewFlight[]> {
+  if (!isNotionConfigured()) return [];
+
+  const dbId = await resolveLiveDashboardId();
+  if (!dbId) {
+    throw new Error('找不到 Flight Log。請確認 Vercel 已填 NOTION_DASHBOARD_DB_ID。');
+  }
+
+  const result = await queryFlightPages(dbId, limit);
   return result.results
-    .map((page) => parseFlight(page as unknown as Record<string, unknown>))
-    .filter((flight) => flight.takeoffBroadcast || flight.captainBroadcast || flight.arrivalLocation)
-    .map(toLiveReviewFlight);
+    .map((page) => parseLivePage(page as unknown as Record<string, unknown>))
+    .filter((item): item is LiveReviewFlight => Boolean(item));
 }

@@ -218,14 +218,14 @@ function renderSample(sample) {
   renderList();
 }
 
-function renderList() {
+function renderList(flightsError = '') {
   const liveBox = $('live-list');
   const labBox = $('sample-list');
   $('live-count').textContent = String(state.flights.length);
   $('lab-count').textContent = String(state.samples.length);
   liveBox.innerHTML = state.flights.length
     ? state.flights.map((item) => renderRecordButton(item, 'live')).join('')
-    : '<p class="hint">還沒有從 Flight Log 讀到航班。</p>';
+    : `<p class="hint">${escapeHtml(flightsError || '還沒有從 Flight Log 讀到航班。')}</p>`;
   labBox.innerHTML = state.samples.length
     ? state.samples.map((item) => renderRecordButton(item, 'lab')).join('')
     : '<p class="hint">生成第一筆後會出現在這裡。</p>';
@@ -361,7 +361,7 @@ async function loadSamples() {
     state.samples = data.samples || [];
     state.flights = data.flights || [];
     applyStore(data);
-    renderList();
+    renderList(data.flightsError || '');
     $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   } catch (err) {
     toast(err.message || '讀取測試內容失敗');

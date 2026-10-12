@@ -1082,14 +1082,23 @@ app.get('/review', (_req, res) => {
 
 app.get('/api/review/samples', async (_req, res) => {
   try {
-    const [samples, review, flights] = await Promise.all([
+    const [samples, review, live] = await Promise.all([
       listReviewSamples(40),
       getReviewStoreStatus(),
-      listRecentLiveFlights(16).catch(() => []),
+      listRecentLiveFlights(32)
+        .then((flights) => ({ flights, flightsError: '' }))
+        .catch((err) => {
+          console.error('[review] live flights', err);
+          return {
+            flights: [] as Awaited<ReturnType<typeof listRecentLiveFlights>>,
+            flightsError: err instanceof Error ? err.message : '真實航班讀取失敗',
+          };
+        }),
     ]);
     res.json({
       samples: samples.map(toReviewClient),
-      flights,
+      flights: live.flights,
+      flightsError: live.flightsError,
       ...review,
       openaiReady: Boolean(openAiApiKey()),
     });
