@@ -3,8 +3,22 @@
 // Shared by the full-screen and classic pages. A Pi bridge is discovered on the
 // same browser; ordinary visitors continue to use the page without device UI.
 (function (root) {
-  const explicit = new URLSearchParams(root.location?.search || '').get('device') === '1';
   const enabled = true;
+  const kioskStatusUrl = 'http://127.0.0.1:8766/api/status';
+
+  function showError(message) {
+    if (!root.document) return;
+    let panel = root.document.getElementById('device-error');
+    if (!panel) {
+      panel = root.document.createElement('div');
+      panel.id = 'device-error';
+      panel.className = 'device-error';
+      panel.setAttribute('role', 'alert');
+      root.document.body.appendChild(panel);
+    }
+    panel.textContent = message || '';
+    panel.hidden = !message;
+  }
 
   function validSample(data) {
     return data?.version === 2 && typeof data.session === 'string' && data.session.length > 0
@@ -13,7 +27,7 @@
       && (data.direction === null || (Number.isInteger(data.direction) && data.direction >= 0 && data.direction < 8));
   }
 
-  function createController({ getState, setDirection, takeoff, land, notify }) {
+  function createController({ getState, setDirection, takeoff, land, notify, setError }) {
     let previous = null;
     let pendingLand = false;
     let adcFailed = false;
@@ -27,6 +41,9 @@
           setDirection(data.direction);
         }
         if (data.direction === null && !adcFailed) notify('旋鈕暫時無法讀取，請檢查 ADS1115 接線');
+        setError?.('adc', data.direction === null
+          ? `ADS1115 讀取失敗：${data.adcError || '無法取得旋鈕讀值'}。請檢查 I2C、供電與接線。`
+          : '');
         adcFailed = data.direction === null;
 
         // First contact, a reconnect or a restarted Python process establishes a baseline.
@@ -58,9 +75,36 @@
   }
 
   function start(adapter) {
-    const controller = createController(adapter);
+    const errors = { bridge: '', adc: '' };
+    const setError = (kind, message) => {
+      errors[kind] = message;
+      showError(errors.bridge || errors.adc);
+    };
+    const controller = createController({ ...adapter, setError });
     let connected = false;
-    let warned = false;
+    let kioskDetected = false;
+    let bridgeExitCode = null;
+    async function probeKiosk() {
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), 2500);
+      try {
+        const response = await fetch(kioskStatusUrl, {
+          cache: 'no-store', signal: abort.signal, targetAddressSpace: 'loopback',
+        });
+        if (!response.ok) return;
+        const status = await response.json();
+        kioskDetected = true;
+        bridgeExitCode = status.bridgeExitCode;
+      } catch {
+        bridgeExitCode = null;
+        /* Ordinary web visitors have no local kiosk. */
+      }
+      finally {
+        clearTimeout(timeout);
+        setTimeout(probeKiosk, 3000);
+      }
+    }
+    void probeKiosk();
     // A real gesture is still required by browsers for audio playback.
     root.document.addEventListener('pointerdown', () => {
       root.BroadcastAudio?.primeFromUserGesture?.();
@@ -85,12 +129,16 @@
         if (!connected) adapter.notify('裝置控制已連線，移開磁鐵後再靠近即可觸發');
         controller.accept(data);
         connected = true;
-        warned = false;
+        setError('bridge', '');
       } catch (error) {
         controller.reset();
-        if (!warned && (connected || explicit)) adapter.notify('裝置未連線，請檢查樹莓派橋接程式與瀏覽器本機存取權限');
-        if (!warned && explicit) console.warn('Device controls:', error);
-        warned = true;
+        if (connected || kioskDetected) {
+          const detail = bridgeExitCode === null || bridgeExitCode === undefined
+            ? error.message || '瀏覽器無法存取本機程式'
+            : `橋接程式已結束，代碼 ${bridgeExitCode}`;
+          setError('bridge', `裝置感測器未連線：${detail}。請查看樹莓派終端機與瀏覽器的本機網路權限。`);
+          setError('adc', '');
+        }
         connected = false;
       } finally {
         clearTimeout(timeout);

@@ -206,7 +206,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except OSError as error:
-        parser.exit(1, f"Cannot start bridge: {error}. Stop reed_bridge.py if port 8765 is in use.\n")
+        parser.exit(1, f"Cannot start bridge: {error}. Stop another bridge process if port 8765 is in use.\n")
 
 
 if __name__ == "__main__":

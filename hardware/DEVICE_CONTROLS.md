@@ -1,86 +1,16 @@
-# 樹莓派：兩個磁簧與方位旋鈕
+# 樹莓派實體控制
 
-本版透過樹莓派上的 `device_bridge.py`，讓同一台樹莓派的瀏覽器讀取元件狀態，再呼叫網頁原有的起飛、降落與方位功能。新版正式流程請使用[磁簧專案的 `device_kiosk.py`](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test)：它會一起啟動橋接、本機配網頁和同一個全螢幕畫面，免去手動開第二個分頁。
+正式裝置由 [樹莓派專案的 `device_kiosk.py`](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test) 啟動。它在同一台樹莓派上執行感測器橋接、首次配網頁及 Chromium。此網站的全螢幕主頁直接讀取本機橋接，沒有獨立感測器測試頁，也不需 `?device=1`。
 
-## 接線（接線前先關機）
+| 元件 | 接線與動作 |
+| --- | --- |
+| 起飛磁簧 | BCM GPIO17（Pin 11）與 GND；磁鐵靠近時起飛 |
+| 降落磁簧 | BCM GPIO27（Pin 13）與 GND；磁鐵靠近時降落 |
+| ADS1115 | VDD 接 3.3V、GND 與 ADDR 接 GND、SDA 接 Pin 3、SCL 接 Pin 5；I2C 位址 `0x48` |
+| 可變電阻 | 兩側接 3.3V 和 GND，中間腳接 ADS1115 A0；起飛前選八個方向 |
 
-| 元件 | 接線 | Raspberry Pi 實體腳位 |
-| --- | --- | --- |
-| 起飛磁簧 | 一端 BCM GPIO17，另一端 GND | Pin 11、Pin 6 或其他 GND |
-| 降落磁簧 | 一端 BCM GPIO27，另一端 GND | Pin 13、共用 GND |
-| ADS1115 VDD | 3.3V | Pin 1 |
-| ADS1115 GND | GND | Pin 6 或其他 GND |
-| ADS1115 SDA | BCM GPIO2 / SDA | Pin 3 |
-| ADS1115 SCL | BCM GPIO3 / SCL | Pin 5 |
-| ADS1115 ADDR | GND，I2C 位址為 `0x48` | 共用 GND |
-| ADS1115 ALRT | 不接 | — |
-| 可變電阻兩個外側腳 | 一端 3.3V，另一端 GND | 共用電源與 GND |
-| 可變電阻中間腳 | ADS1115 A0 | — |
+磁簧使用內建 pull-up。接線前先關機，GPIO 和旋鈕都不要接 5V。
 
-磁簧為兩線、常開型，使用內建 pull-up。GPIO 與這組旋鈕電路使用 3.3V，不接 5V。
+主頁從 `http://127.0.0.1:8765/state` 讀取磁簧次數、方位和 ADC 錯誤，再呼叫現有的 `setDirection`、`doTakeoff`、`doLand`。本機 kiosk 的 `http://127.0.0.1:8766/api/status` 用於識別實體裝置和橋接程式狀態。連線或 ADC 失敗會在正式畫面保留錯誤資訊，恢復後清除；普通訪客在非樹莓派的瀏覽器不會看到感測器錯誤。
 
-## 第一次安裝
-
-在樹莓派執行：
-
-```bash
-sudo apt update
-sudo apt install python3-gpiozero python3-smbus i2c-tools
-sudo raspi-config
-```
-
-選 **Interface Options → I2C → Enable**。依畫面提示重新啟動後，檢查：
-
-```bash
-i2cdetect -y 1
-```
-
-應在表格中看到 `48`。沒有時，先確認 ADS1115 的供電、SDA、SCL、ADDR 接線。
-
-## 啟動與操作
-
-1. 若原本正在執行 `reed_test.py` 或 `reed_bridge.py`，在它的終端機按 Ctrl+C 停止，以釋放 GPIO17 和連接埠 8765。
-2. 在此專案根目錄執行：
-
-   ```bash
-   python3 hardware/device_bridge.py
-   ```
-
-   若使用原本的 [磁簧測試 repo](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test)，先 `git pull`，再執行根目錄的 `python3 device_bridge.py`。兩份啟動方式擇一，程式內容相同。
-
-3. 這是單獨測試橋接的舊式啟動方式。保持終端機開啟，在**同一台樹莓派**的 Chromium 開 [全螢幕裝置頁](https://sleep-airline-s3.vercel.app/)。允許網頁存取本機裝置；先點一下畫面啟用聲音。正式首次設定請改用上方的 `device_kiosk.py`。
-4. 看到「裝置控制已連線」後，移開兩個磁鐵。轉動旋鈕會在窗內顯示方位：北 → 東北 → 東 → 東南 → 南 → 西南 → 西 → 西北。
-5. 磁鐵靠近 **GPIO17 起飛磁簧**：以目前方位起飛。移開它不會觸發降落。
-6. 磁鐵靠近 **GPIO27 降落磁簧**：降落。如果起飛動畫仍在進行，這次降落要求會等待到巡航後執行。
-7. 降落與原有心情回報流程結束後，可以轉動旋鈕選下一趟方位，再移開、重新靠近起飛磁簧。
-
-開網頁或斷線重連時，只記住磁簧目前狀態，不會因磁鐵已靠近就自動起飛／降落。每次動作需重新靠近；兩個磁簧同時觸發會忽略該次操作。起飛、巡航、降落動畫和心情回報期間，實體旋鈕不更改航向；它不填寫心情資料。
-
-一次只開一個裝置主畫面，避免同一組元件驅動多個航班。全螢幕主頁會自動偵測同機橋接；不必加 `?device=1` 或 `?reed=1`。
-
-## 排查與調整
-
-- 瀏覽器顯示未連線：確認執行的是新版 `device_bridge.py`，並允許網站存取本機裝置。
-- 先在樹莓派瀏覽器打開 `http://127.0.0.1:8765/state`。旋鈕會改變 `voltage` 和 `direction`；磁簧靠近會增加 `takeoffCount` 或 `landCount`。這個網址只供查看讀值，測試後回到 Vercel 分頁。
-- 出現 `Address already in use`：先停止舊的 bridge 程式。
-- 旋鈕反向：使用 `python3 hardware/device_bridge.py --reverse`（磁簧 repo 則去掉 `hardware/`）。
-- 旋鈕無法到最左／右方位：查看兩端實際電壓，再指定例如 `--min-voltage 0.05 --max-voltage 3.25`。
-- ADC 暫時斷線：網頁顯示提示並保留原方位，磁簧仍可運作；程式會自動重試 ADC。尚未開放／不支援本機裝置存取的瀏覽器，需要換用支援的 Chromium 並允許權限。
-
-## 維護者資訊
-
-- 合併 PR 後，確認 Vercel 正式部署已包含 `public/device-controls.js` 和兩個頁面的載入修改。
-- 前端共享控制器把硬體事件送進既有 `setDirection`、`doTakeoff`、`doLand` 流程。裝置綁定 API 的 Redis 與簽章環境變數見根目錄 README。
-- 感測器橋接只監聽 `127.0.0.1:8765`，CORS 限定正式網站；預覽網址須明確指定 `--origin https://你的預覽網域`。本機配網頁由 `device_kiosk.py` 另在 8766 提供。
-- `/state` protocol v2：`session` 是每次 Python 啟動的新識別碼；`takeoffCount`、`landCount` 是靠近次數，因此短暫靠近後移開也能被輪詢讀到；`direction` 為 0–7，ADC 異常時為 `null`。重連時丟棄離線期間的動作。
-- 方位輸入使用平滑與遲滯，降低方位邊界抖動。ADS1115 A0 使用 ±4.096V 量程、128 SPS、單次轉換；[TI 資料表](https://www.ti.com/lit/ds/symlink/ads1115.pdf)說明暫存器設定。
-- 本機程式測試（模擬輸入，不代表實際硬體驗收）：
-
-  ```bash
-  node --test tests/device-controls.test.cjs
-  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_device_bridge.py'
-  npm run check:contract
-  npm run build
-  ```
-
-最後請在實際樹莓派確認 ADC、GPIO、瀏覽器權限與音效播放。
+兩個磁簧同時觸發會忽略該次動作；重連後先建立基準，不重播斷線期間的事件。ADC 失敗時保留前一次方位，磁簧仍可操作。完整安裝、配網和維護方式請看樹莓派專案 README。

@@ -6,6 +6,7 @@ function fixture() {
   const state = { stage: 'ready', busy: false, sleepDial: false, direction: 2 };
   const actions = [];
   const messages = [];
+  const errors = [];
   const sample = { version: 2, session: 'one', takeoffCount: 0, landCount: 0,
     takeoffClosed: false, landClosed: false, direction: 2 };
   const controller = createController({
@@ -14,8 +15,9 @@ function fixture() {
     takeoff: () => { actions.push(['takeoff', state.direction]); state.stage = 'takeoff'; state.busy = true; },
     land: () => { actions.push(['land']); state.stage = 'landing'; state.busy = true; },
     notify: (message) => messages.push(message),
+    setError: (kind, message) => errors.push([kind, message]),
   });
-  return { state, actions, messages, controller,
+  return { state, actions, messages, errors, controller,
     send: (changes = {}) => { Object.assign(sample, changes); controller.accept(sample); } };
 }
 
@@ -84,6 +86,9 @@ test('ADC failure preserves heading and reed controls; invalid payloads are reje
   f.send({ direction: null }); f.send({ takeoffCount: 1 });
   assert.deepEqual(f.actions, [['takeoff', 2]]);
   assert.equal(f.messages.length, 1);
+  assert.match(f.errors.at(-1)[1], /ADS1115/);
+  f.send({ direction: 2 });
+  assert.deepEqual(f.errors.at(-1), ['adc', '']);
   assert.throws(() => f.send({ direction: 99 }));
   assert.throws(() => f.send({ version: 1, direction: 0 }));
 });
