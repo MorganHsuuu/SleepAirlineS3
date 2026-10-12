@@ -1234,7 +1234,7 @@ async function submitSleepReport(event) {
         sleepQuality: quality,
       });
       showToast('睡眠回報已儲存至 S3。');
-    } else showToast('體驗模式已記下你的選擇；連線模式才會同步至 Notion。');
+    } else showToast('本機體驗已完成，睡眠回報未上傳研究資料庫。');
     $('sleep-report-dialog').close();
   } catch (error) { $('sleep-report-hint').textContent = error.message; }
   finally { button.disabled = false; }
