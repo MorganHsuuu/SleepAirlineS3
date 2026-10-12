@@ -82,6 +82,52 @@ function originLabel() {
   return shortPlace(chainOriginLocation() || '臺北');
 }
 
+let scenerySeq = 0;
+
+function showSceneryLoading(message = '窗外漸漸亮了起來…') {
+  const frame = $('image-frame');
+  scenerySeq += 1;
+  frame.classList.add('is-loading');
+  frame.innerHTML = `<div class="image-veil" aria-busy="true"><span>${escapeHtml(message)}</span></div>`;
+}
+
+function paintScenery(src, emptyMessage) {
+  const frame = $('image-frame');
+  const seq = ++scenerySeq;
+  if (!src) {
+    frame.classList.remove('is-loading');
+    frame.innerHTML = `<p>${escapeHtml(emptyMessage)}</p>`;
+    return;
+  }
+  frame.classList.add('is-loading');
+  const veil = document.createElement('div');
+  veil.className = 'image-veil';
+  veil.setAttribute('aria-busy', 'true');
+  veil.innerHTML = '<span>窗外漸漸亮了起來…</span>';
+  const img = document.createElement('img');
+  img.alt = '降落風景';
+  const reveal = () => {
+    if (seq !== scenerySeq) return;
+    img.dataset.ok = '1';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (seq !== scenerySeq) return;
+        img.classList.add('is-in');
+        frame.classList.remove('is-loading');
+      });
+    });
+  };
+  img.onload = reveal;
+  img.onerror = () => {
+    if (seq !== scenerySeq) return;
+    frame.classList.remove('is-loading');
+    frame.innerHTML = '<p>這筆還沒有風景圖，或圖片暫時無法載入。</p>';
+  };
+  frame.replaceChildren(img, veil);
+  img.src = src;
+  if (img.complete && img.naturalWidth) reveal();
+}
+
 function sampleImageSrc(sample) {
   if (sample?.imageUrl) return sample.imageUrl;
   if (!sample?.sampleId) return '';
@@ -188,22 +234,12 @@ function renderSample(sample) {
   $('takeoff-copy').textContent = sample.takeoffBroadcast || '還沒有起飛文字。';
   $('landing-copy').textContent = sample.landingBroadcast || '還沒有降落文字。';
   $('image-prompt').textContent = sample.imagePrompt || '';
-  const frame = $('image-frame');
-  const src = sampleImageSrc(sample);
-  if (src) {
-    const img = document.createElement('img');
-    img.alt = '降落風景';
-    img.src = src;
-    img.onload = () => { img.dataset.ok = '1'; };
-    img.onerror = () => {
-      frame.innerHTML = '<p>這筆還沒有風景圖，或圖片暫時無法載入。</p>';
-    };
-    frame.replaceChildren(img);
-  } else {
-    frame.innerHTML = state.source === 'live'
-      ? '<p>這班真實飛行還沒有降落風景。</p>'
-      : '<p>選擇「文字＋圖片」時會一起生成風景。</p>';
-  }
+  paintScenery(
+    sampleImageSrc(sample),
+    state.source === 'live'
+      ? '這班真實飛行還沒有降落風景。'
+      : '選擇「文字＋圖片」時會一起生成風景。',
+  );
   const bar = $('comment-bar');
   if (state.source === 'live') {
     bar.classList.add('is-locked');
@@ -385,6 +421,7 @@ async function generateFlight() {
   if (state.busy) return;
   const includeImage = wantsImage();
   setBusy(true, includeImage ? '正在生成文字與圖片…' : '正在生成起飛與降落文字…');
+  if (includeImage) showSceneryLoading();
   try {
     const res = await fetch('/api/review/generate', {
       method: 'POST',
