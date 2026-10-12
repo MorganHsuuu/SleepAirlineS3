@@ -48,18 +48,33 @@ npm run build
 
 ## 裝置綁定 API
 
-手機 APP 和樹莓派共用 `/api/pairing`：旅客建立／恢復、短效綁定授權、裝置確認、狀態查詢與解除綁定。手機僅在後端確認綁定後顯示完成。儲存使用支援 Redis `EVAL` 的持久 Redis REST 服務；未設定時 API 回 `503 pairing_not_configured`，不會以 Vercel Function 記憶體假裝已綁定。
+手機 APP 和樹莓派共用 `/api/pairing`：旅客建立／恢復、短效綁定授權、裝置確認、狀態查詢與解除綁定。手機僅在後端確認綁定後顯示完成。配對資料保存在 S3 專用的 Notion 資料庫，與航班研究紀錄分開。未設定資料庫或金鑰時 API 回 `503 pairing_not_configured`，不會以 Vercel Function 記憶體假裝已綁定。
+
+請在 **Sleep Airline S3 睡眠體驗研究** 頁面內建立一個新的資料庫，名稱必須是 `Sleep Airline S3 Device Pairing`。欄位名稱和類型必須完全一致：
+
+| 欄位名稱 | Notion 類型 | 用途 |
+| --- | --- | --- |
+| `Name` | Title | 旅客 ID 或裝置 ID；Notion 預設的標題欄改名為 Name |
+| `Kind` | Select | 選項 `Passenger`、`Device` |
+| `Recovery Hash` | Text | 旅客恢復碼的雜湊值 |
+| `Device Secret Hash` | Text | 樹莓派裝置密鑰的雜湊值 |
+| `Passenger ID` | Text | 裝置目前綁定的旅客 ID |
+| `Last Grant Hash` | Text | 最近一次完成配對的授權碼雜湊值，防止重複提交 |
+| `Bound At` | Date | 完成綁定的時間 |
+
+在 Notion 將原本使用的 Integration 連接到這個新資料庫；資料庫請建立在 S3 頁面下，程式會檢查名稱、欄位類型與父頁面，避免寫到其他資料庫。資料庫 ID 可從資料庫網址取得，填入 Vercel 的 `NOTION_PAIRING_DB_ID`。不需要把恢復碼、裝置密鑰或任何旅客資料手動填進表格。
 
 部署前須在 S3 Vercel 專案設定以下環境變數，並於設定後重新部署：
 
 | 名稱 | 內容 |
 | --- | --- |
-| `PAIRING_REDIS_REST_URL` | Redis REST API URL；也可沿用已設定的 `KV_REST_API_URL` 或 `UPSTASH_REDIS_REST_URL` |
-| `PAIRING_REDIS_REST_TOKEN` | 對應 token；也可沿用 `KV_REST_API_TOKEN` 或 `UPSTASH_REDIS_REST_TOKEN` |
+| `NOTION_API_KEY` | 可存取 S3 頁面與新配對資料庫的 Notion Integration 金鑰；若研究資料已啟用，可沿用同一金鑰 |
+| `NOTION_PARENT_PAGE_ID` | S3 睡眠體驗研究頁面的 ID：`3e5a7f1b413c80f592e8ce14af8c2ec0` |
+| `NOTION_PAIRING_DB_ID` | 新配對資料庫的 ID |
 | `PAIRING_SIGNING_SECRET` | 至少 32 字元的隨機字串，用於簽發 15 分鐘、單次使用的綁定授權 |
 | `PAIRING_APP_ORIGIN` | 預設 `https://night-departures.vercel.app`；若 APP 正式網域不同須改設定 |
 
-建立私密金鑰可用 `openssl rand -base64 48`。金鑰與 Redis token 只放 Vercel 環境變數，勿提交版本庫。Redis 使用獨立前綴 `sleep-airline:pairing:v1`，必要時可用 `PAIRING_REDIS_PREFIX` 更改。研究資料同意與裝置綁定分開，舊版 `?pair=1&pid=...` QR 匯入已移除。
+建立簽章金鑰可用 `openssl rand -base64 48`。金鑰只放 Vercel 環境變數，勿提交版本庫。30 天手機登入憑證與 15 分鐘配對授權由後端簽章；Notion 只儲存恢復碼／裝置密鑰的雜湊值和綁定狀態。研究資料同意與裝置綁定分開，舊版 `?pair=1&pid=...` QR 匯入已移除。Notion 不提供 Redis 原子交易；若罕見的同時配對產生重複紀錄，API 會回 `409` 並停止讀寫該衝突紀錄，需在資料庫中人工排除重複列。
 
 研究同意預設不勾選。未同意時仍可用磁簧完成本機體驗航班，航班及睡眠回報不會寫入 S3 研究資料庫；明確勾選後的航班才使用原有即時紀錄與生成風景流程。
 

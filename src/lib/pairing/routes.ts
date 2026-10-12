@@ -1,39 +1,23 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { Router, type Request, type Response } from 'express';
+import {
+  PairingStoreError, bindDevice, createPassenger, devicesForPassenger, findDevice, findPassenger,
+  unbindDevice,
+} from './notion-store';
 
 const router = Router();
-const prefix = process.env.PAIRING_REDIS_PREFIX || 'sleep-airline:pairing:v1';
 const appOrigin = process.env.PAIRING_APP_ORIGIN || 'https://night-departures.vercel.app';
 const grantLifetimeSeconds = 15 * 60;
+const sessionLifetimeSeconds = 30 * 86400;
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
-const paxKey = (id: string) => `${prefix}:passenger:${id}`;
-const deviceKey = (id: string) => `${prefix}:device:${id}`;
-const sessionKey = (token: string) => `${prefix}:session:${sha(token)}`;
-const usedKey = (nonce: string) => `${prefix}:used:${sha(nonce)}`;
 const random = () => randomBytes(32).toString('base64url');
 const validId = (id: unknown, prefix: string) => typeof id === 'string' && new RegExp(`^${prefix}-[A-Z0-9]{8,32}$`).test(id);
 const validSecret = (value: unknown) => typeof value === 'string' && value.length >= 32 && value.length <= 128;
 
 function configured() {
-  return !!((process.env.PAIRING_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)
-    && (process.env.PAIRING_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)
-    && process.env.PAIRING_SIGNING_SECRET?.length && process.env.PAIRING_SIGNING_SECRET.length >= 32);
-}
-
-async function redis<T>(args: Array<string | number>): Promise<T> {
-  const url = process.env.PAIRING_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.PAIRING_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('Pairing Redis unavailable');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
-  });
-  if (!response.ok) throw new Error(`Pairing Redis HTTP ${response.status}`);
-  const data = await response.json() as { result: T; error?: string };
-  if (data.error) throw new Error(data.error);
-  return data.result;
+  return !!(process.env.NOTION_API_KEY && process.env.NOTION_PARENT_PAGE_ID && process.env.NOTION_PAIRING_DB_ID &&
+    process.env.PAIRING_SIGNING_SECRET && process.env.PAIRING_SIGNING_SECRET.length >= 32);
 }
 
 function sameHash(left: string, right: string) {
@@ -48,7 +32,7 @@ function sign(payload: Record<string, unknown>) {
   return `${body}.${mac}`;
 }
 
-function verify(token: unknown): { passengerId: string; deviceId: string; setupHash: string; expires: number; nonce: string } | null {
+function verifySigned(token: unknown): Record<string, unknown> | null {
   if (typeof token !== 'string' || token.length > 2048) return null;
   const [body, mac, extra] = token.split('.');
   if (!body || !mac || extra) return null;
@@ -57,18 +41,40 @@ function verify(token: unknown): { passengerId: string; deviceId: string; setupH
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
   try {
     const data = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (!validId(data.passengerId, 'PAX') || !validId(data.deviceId, 'SA') ||
-      typeof data.setupHash !== 'string' || typeof data.nonce !== 'string' ||
-      !Number.isInteger(data.expires) || data.expires < Date.now()) return null;
+    if (!data || typeof data !== 'object' || !Number.isInteger(data.expires) || data.expires < Date.now()) return null;
     return data;
   } catch { return null; }
 }
 
+function verifyGrant(token: unknown): { passengerId: string; deviceId: string; setupHash: string; nonce: string } | null {
+  const data = verifySigned(token);
+  if (!data || data.kind !== 'grant' || !validId(data.passengerId, 'PAX') || !validId(data.deviceId, 'SA') ||
+    typeof data.setupHash !== 'string' || typeof data.nonce !== 'string') return null;
+  return data as { passengerId: string; deviceId: string; setupHash: string; nonce: string };
+}
+
 function fail(res: Response, code: number, error: string) { res.status(code).json({ error }); }
+function storeFailure(res: Response, cause: unknown) {
+  if (cause instanceof PairingStoreError) {
+    const conflict = ['duplicate_pairing_record', 'pairing_record_mismatch', 'multiple_device_bindings'].includes(cause.code);
+    fail(res, conflict ? 409 : 503, cause.code);
+    return;
+  }
+  fail(res, 503, 'pairing_store_unavailable');
+}
+
 async function passenger(req: Request): Promise<string | null> {
   const token = req.get('authorization')?.replace(/^Bearer /, '') || '';
-  if (!validSecret(token)) return null;
-  return await redis<string | null>(['GET', sessionKey(token)]);
+  const data = verifySigned(token);
+  if (!data || data.kind !== 'session' || !validId(data.passengerId, 'PAX')) return null;
+  const id = data.passengerId as string;
+  return await findPassenger(id) ? id : null;
+}
+
+async function boundDevice(passengerId: string) {
+  const devices = await devicesForPassenger(passengerId);
+  if (devices.length > 1) throw new PairingStoreError('multiple_device_bindings');
+  return devices[0] || null;
 }
 
 router.use((req, res, next) => {
@@ -92,24 +98,21 @@ router.post('/passengers', async (req, res) => {
   try {
     const { passengerId, recoveryCode } = req.body || {};
     if (!validId(passengerId, 'PAX') || !validSecret(recoveryCode)) return fail(res, 400, 'invalid_identity');
-    const created = await redis<number>(['HSETNX', paxKey(passengerId), 'recovery', sha(recoveryCode)]);
-    if (created !== 1) return fail(res, 409, 'passenger_exists');
-    const session = random();
-    await redis(['SET', sessionKey(session), passengerId, 'EX', 30 * 86400]);
+    if (!await createPassenger(passengerId, sha(recoveryCode))) return fail(res, 409, 'passenger_exists');
+    const session = sign({ kind: 'session', passengerId, expires: Date.now() + sessionLifetimeSeconds * 1000, nonce: random() });
     res.status(201).json({ passengerId, session });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
 
 router.post('/sessions', async (req, res) => {
   try {
     const { passengerId, recoveryCode } = req.body || {};
     if (!validId(passengerId, 'PAX') || !validSecret(recoveryCode)) return fail(res, 400, 'invalid_identity');
-    const stored = await redis<string | null>(['HGET', paxKey(passengerId), 'recovery']);
-    if (!stored || !sameHash(stored, sha(recoveryCode))) return fail(res, 401, 'invalid_recovery_code');
-    const session = random();
-    await redis(['SET', sessionKey(session), passengerId, 'EX', 30 * 86400]);
+    const stored = await findPassenger(passengerId);
+    if (!stored || !sameHash(stored.recoveryHash, sha(recoveryCode))) return fail(res, 401, 'invalid_recovery_code');
+    const session = sign({ kind: 'session', passengerId, expires: Date.now() + sessionLifetimeSeconds * 1000, nonce: random() });
     res.json({ passengerId, session });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
 
 router.post('/grants', async (req, res) => {
@@ -118,81 +121,74 @@ router.post('/grants', async (req, res) => {
     if (!id) return fail(res, 401, 'session_expired');
     const { deviceId, setupCode } = req.body || {};
     if (!validId(deviceId, 'SA') || !validSecret(setupCode)) return fail(res, 400, 'invalid_setup_code');
-    const bound = await redis<string | null>(['HGET', paxKey(id), 'device']);
-    if (bound && bound !== deviceId) return fail(res, 409, 'passenger_already_bound');
-    const grant = sign({ passengerId: id, deviceId, setupHash: sha(setupCode), expires: Date.now() + grantLifetimeSeconds * 1000, nonce: random() });
+    const bound = await boundDevice(id);
+    if (bound && bound.deviceId !== deviceId) return fail(res, 409, 'passenger_already_bound');
+    const grant = sign({ kind: 'grant', passengerId: id, deviceId, setupHash: sha(setupCode), expires: Date.now() + grantLifetimeSeconds * 1000, nonce: random() });
     res.json({ grant, expiresIn: grantLifetimeSeconds });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
-
-const completeScript = `
-if redis.call('EXISTS', KEYS[2]) == 0 then return 'unknown_passenger' end
-if redis.call('EXISTS', KEYS[3]) == 1 then return 'grant_used' end
-local secret = redis.call('HGET', KEYS[1], 'secret')
-if secret and secret ~= ARGV[1] then return 'device_identity_mismatch' end
-local current = redis.call('HGET', KEYS[1], 'passenger')
-if current and current ~= ARGV[2] then return 'device_already_bound' end
-local prior = redis.call('HGET', KEYS[2], 'device')
-if prior and prior ~= ARGV[3] then return 'passenger_already_bound' end
-redis.call('HSET', KEYS[1], 'secret', ARGV[1], 'passenger', ARGV[2])
-redis.call('HSET', KEYS[2], 'device', ARGV[3])
-redis.call('SET', KEYS[3], '1', 'EX', 86400)
-return 'paired'`;
 
 router.post('/devices/complete', async (req, res) => {
   try {
     const { deviceId, deviceSecret, setupCode, grant } = req.body || {};
-    const data = verify(grant);
+    const data = verifyGrant(grant);
     if (!validId(deviceId, 'SA') || !validSecret(deviceSecret) || !validSecret(setupCode) ||
       !data || data.deviceId !== deviceId || !sameHash(data.setupHash, sha(setupCode))) {
       return fail(res, 401, 'invalid_grant');
     }
-    const outcome = await redis<string>(['EVAL', completeScript, 3,
-      deviceKey(deviceId), paxKey(data.passengerId), usedKey(data.nonce), sha(deviceSecret), data.passengerId, deviceId]);
-    if (outcome !== 'paired') return fail(res, 409, outcome);
+    if (!await findPassenger(data.passengerId)) return fail(res, 409, 'unknown_passenger');
+    const device = await findDevice(deviceId);
+    const secretHash = sha(deviceSecret);
+    const grantHash = sha(data.nonce);
+    if (device?.lastGrantHash === grantHash) return fail(res, 409, 'grant_used');
+    if (device?.deviceSecretHash && !sameHash(device.deviceSecretHash, secretHash)) return fail(res, 409, 'device_identity_mismatch');
+    if (device?.passengerId && device.passengerId !== data.passengerId) return fail(res, 409, 'device_already_bound');
+    const prior = await boundDevice(data.passengerId);
+    if (prior && prior.deviceId !== deviceId) return fail(res, 409, 'passenger_already_bound');
+    await bindDevice({ deviceId, deviceSecretHash: secretHash, passengerId: data.passengerId, grantHash, existing: device });
+    // Query again so concurrent edits or duplicate Notion rows fail closed.
+    const current = await findDevice(deviceId);
+    const bound = await boundDevice(data.passengerId);
+    if (!current || current.passengerId !== data.passengerId || bound?.deviceId !== deviceId) {
+      return fail(res, 409, 'binding_changed');
+    }
     res.json({ status: 'paired', passengerId: data.passengerId, deviceId });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
 
 router.get('/status', async (req, res) => {
   try {
     const id = await passenger(req);
     if (!id) return fail(res, 401, 'session_expired');
-    const deviceId = await redis<string | null>(['HGET', paxKey(id), 'device']);
+    const deviceId = (await boundDevice(id))?.deviceId || null;
     res.json({ passengerId: id, deviceId, status: deviceId ? 'paired' : 'unpaired' });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
 
 router.post('/devices/status', async (req, res) => {
   try {
     const { deviceId, deviceSecret } = req.body || {};
     if (!validId(deviceId, 'SA') || !validSecret(deviceSecret)) return fail(res, 400, 'invalid_device');
-    const stored = await redis<string | null>(['HGET', deviceKey(deviceId), 'secret']);
-    if (!stored || !sameHash(stored, sha(deviceSecret))) return fail(res, 404, 'device_not_registered');
-    const passengerId = await redis<string | null>(['HGET', deviceKey(deviceId), 'passenger']);
+    const stored = await findDevice(deviceId);
+    if (!stored || !sameHash(stored.deviceSecretHash, sha(deviceSecret))) return fail(res, 404, 'device_not_registered');
+    const passengerId = stored.passengerId;
+    if (passengerId && (await boundDevice(passengerId))?.deviceId !== deviceId) return fail(res, 409, 'binding_changed');
     res.json({ deviceId, passengerId, status: passengerId ? 'paired' : 'unpaired' });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
-
-const unbindScript = `
-local device = redis.call('HGET', KEYS[1], 'device')
-if not device then return 'unpaired' end
-if device ~= ARGV[1] then return 'changed' end
-if redis.call('HGET', KEYS[2], 'passenger') ~= ARGV[2] then return 'changed' end
-redis.call('HDEL', KEYS[1], 'device')
-redis.call('HDEL', KEYS[2], 'passenger')
-return 'unpaired'`;
 
 router.post('/unbind', async (req, res) => {
   try {
     const id = await passenger(req);
     if (!id) return fail(res, 401, 'session_expired');
-    const deviceId = await redis<string | null>(['HGET', paxKey(id), 'device']);
-    if (!deviceId) { res.json({ status: 'unpaired' }); return; }
-    const result = await redis<string>(['EVAL', unbindScript, 2, paxKey(id), deviceKey(deviceId), deviceId, id]);
-    if (result !== 'unpaired') return fail(res, 409, 'binding_changed');
+    const device = await boundDevice(id);
+    if (!device) { res.json({ status: 'unpaired' }); return; }
+    const current = await findDevice(device.deviceId);
+    if (!current || current.pageId !== device.pageId || current.passengerId !== id) return fail(res, 409, 'binding_changed');
+    await unbindDevice(current);
+    if (await boundDevice(id)) return fail(res, 409, 'binding_changed');
     res.json({ status: 'unpaired' });
-  } catch { fail(res, 503, 'pairing_store_unavailable'); }
+  } catch (cause) { storeFailure(res, cause); }
 });
 
 export default router;
