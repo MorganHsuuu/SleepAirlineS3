@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css?v=read-5">
+  <link rel="stylesheet" href="/review.css">
 </head>
 <body>
   <div class="orb orb-a" aria-hidden="true"></div>
@@ -24,14 +24,13 @@
       </div>
       <div class="mast-side">
         <span class="pill" id="store-pill">讀取中</span>
-        <button type="button" class="ghost" id="ledger-toggle" aria-expanded="false" aria-controls="ledger">紀錄</button>
         <a class="ghost" href="/">回主體驗</a>
       </div>
     </header>
 
     <p class="banner" id="store-banner" hidden></p>
 
-    <div class="board is-ledger-closed" id="board">
+    <div class="board">
       <aside class="console pane">
         <div class="pane-scroll">
           <section>
@@ -146,7 +145,7 @@
         </article>
       </main>
 
-      <aside class="ledger pane" id="ledger">
+      <aside class="ledger pane">
         <section class="archive">
           <div class="section-head">
             <small>Live</small>
@@ -171,6 +170,6 @@
   <div class="toast" id="toast" hidden></div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js?v=read-5"></script>
+  <script src="/review.js"></script>
 </body>
 </html>
