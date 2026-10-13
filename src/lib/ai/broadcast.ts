@@ -80,76 +80,6 @@ function normalizeLocale(locale?: string | null): UiLocale {
   return locale === 'en' ? 'en' : 'zh';
 }
 
-type SleepBand = 'unknown' | 'late-night' | 'morning' | 'midday' | 'afternoon' | 'dusk' | 'night';
-
-function sleepBandFromLabel(label?: string | null): SleepBand {
-  const t = (label || '').trim().toLocaleLowerCase();
-  if (!t) return 'unknown';
-  if (/深夜|凌晨|midnight|deep night/.test(t)) return 'late-night';
-  if (/清晨|黎明|dawn|sunrise/.test(t)) return 'morning';
-  if (/上午|早上|早晨|morning|\bam\b/.test(t)) return 'morning';
-  if (/中午|正午|midday|noon/.test(t)) return 'midday';
-  if (/下午|午後|afternoon/.test(t)) return 'afternoon';
-  if (/傍晚|黃昏|日落|sunset|dusk/.test(t)) return 'dusk';
-  if (/入夜|晚上|夜間|夜晚|night|evening|\bpm\b/.test(t)) return 'night';
-  return 'unknown';
-}
-
-/** 起飛時旅客可能在任何時段睡覺；回傳塞進 prompt 的時段／狀態說明。 */
-function takeoffSleepGuidance(label?: string | null, locale: UiLocale = 'zh'): {
-  band: SleepBand;
-  system: string;
-  user: string;
-  cue: string;
-} {
-  const band = sleepBandFromLabel(label);
-  const shown = (label || '').trim();
-  const cues: Record<SleepBand, { zh: string; en: string }> = {
-    unknown: { zh: '請輕輕閉上眼睛。', en: 'Close your eyes for a moment.' },
-    'late-night': { zh: '把今天留在地面。', en: 'Leave today on the ground.' },
-    morning: { zh: '讓眼睛先休息一下。', en: 'Let your eyes rest for a while.' },
-    midday: { zh: '讓身體先歇一會兒。', en: 'Let the body rest for a while.' },
-    afternoon: { zh: '把肩膀放下就好。', en: 'Let your shoulders drop.' },
-    dusk: { zh: '請輕輕閉上眼睛。', en: 'Close your eyes for a moment.' },
-    night: { zh: '把肩膀放下就好。', en: 'Let your shoulders drop.' },
-  };
-  const cue = locale === 'en' ? cues[band].en : cues[band].zh;
-
-  if (locale === 'en') {
-    const byBand: Record<SleepBand, string> = {
-      unknown: 'Sleep time is unknown. Do not assume night. Use neutral natural light; no stars, cabin night-lights, or “leave the day on the ground”.',
-      'late-night': 'This is a late-night / predawn sleep. Dim night imagery is fine; keep it quiet, not theatrical.',
-      morning: 'This is a morning sleep or nap. Window light should be dawn or morning. Forbidden: night sky, stars, good night, “leave today on the ground”, end-of-day tone.',
-      midday: 'This is a midday nap. Use daylight. Forbidden: night imagery or good night.',
-      afternoon: 'This is an afternoon rest. Soft daylight is right. Forbidden: night sky or treating this as the end of the day.',
-      dusk: 'This is dusk / early evening. Twilight is fine; it is not yet deep night. Do not write a starfield or midnight cabin.',
-      night: 'This is a night sleep. Night window light is fine. Still do not reuse “the night will keep our destination”.',
-    };
-    return {
-      band,
-      system: `Takeoff sleep state: the passenger is going to sleep NOW. That may be morning, a nap, evening or overnight — never default to a night flight. Window imagery and the sleep cue must match the local time of day. Do not say good night in daylight. Do not talk as if they have finished a whole day unless the time of day is actually night.`,
-      user: `[sleep period]\nlocal time of day: ${shown || 'unknown'}\n${byBand[band]}\nSleep cue should fit this period (one short action).`,
-      cue,
-    };
-  }
-
-  const byBand: Record<SleepBand, string> = {
-    unknown: '時段不明。不要預設夜航。窗外用中性自然光，禁止星空、夜燈、「把今天留在地面」、晚安。',
-    'late-night': '這是深夜或凌晨入睡。可以輕寫夜色與艙內燈光，但保持安靜，不要戲劇化。',
-    morning: '這是晨間入睡（補眠或早上睡覺）。窗外應是晨光或上午街景。禁止夜色、星空、晚安、夜燈、「把今天留在地面」或把這班寫成一天的結束。',
-    midday: '這是正午午睡。用白日光。禁止夜色、晚安。',
-    afternoon: '這是午後小睡。柔和日光即可。禁止夜空，也不要寫成像下班後的過夜航班。',
-    dusk: '這是傍晚入睡。黃昏光線可以，但還不是深夜。不要寫滿天星或午夜機艙。',
-    night: '這是夜間入睡。可以寫夜色與艙內燈光。仍禁止每次都說「夜色保管目的地」。',
-  };
-  return {
-    band,
-    system: '起飛時旅客的狀態是「現在要睡一覺」，不一定是晚上才睡。可能是清晨補眠、上午睡覺、午睡或過夜。窗外畫面與睡眠引導必須符合出發地當地時段；白天禁止說晚安、禁止夜色；不要預設對方剛熬完一整天。',
-    user: `【睡眠時段】\n當地時段：${shown || '未知'}\n${byBand[band]}\n睡眠引導只給一個短動作，且要符合這個時段。`,
-    cue,
-  };
-}
-
 function passengerLabel(name: string, locale: UiLocale): string {
   const trimmed = name.trim();
   if (!trimmed) return locale === 'en' ? 'passenger' : '這位乘客';
@@ -225,7 +155,7 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
     lines.push(
       phase === 'landing'
         ? 'Rewrite into one or two natural local tips for the passenger (greeting, food, etiquette). Do not copy verbatim.'
-        : 'At most one weather or atmosphere beat about departure. Match the local time of day. Do not hint at the destination.'
+        : 'At most one weather or atmosphere beat about departure. Do not hint at the destination.'
     );
     return lines.join('\n');
   }
@@ -240,27 +170,17 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
   if (ctx.weatherSummary) lines.push(`當地天氣：${ctx.weatherSummary}`);
   if (ctx.localTimeLabel) lines.push(`時段：${ctx.localTimeLabel}`);
   lines.push(
-      phase === 'landing'
+    phase === 'landing'
       ? '請改寫成抵達後給乘客的一兩句在地提示（問候、飲食、社交禮儀等），勿整段照搬。'
-      : '僅可改寫出發地的一筆天氣或在地氛圍，且須符合當地時段，勿暗示目的地。'
+      : '僅可改寫出發地的一筆天氣或在地氛圍，勿暗示目的地。'
   );
   return lines.join('\n');
 }
 
-function buildSystemPrompt(
-  locale: UiLocale,
-  style: BroadcastStyle,
-  isTakeoff: boolean,
-  pax: string,
-  hasLocal: boolean,
-  sleepGuide?: string
-): string {
+function buildSystemPrompt(locale: UiLocale, style: BroadcastStyle, isTakeoff: boolean, pax: string, hasLocal: boolean): string {
   if (locale === 'en') {
-    return `${isTakeoff
-      ? 'You are the captain of Sleep Airline, giving a PA to passengers who are about to sleep. The local clock may be morning, afternoon, evening or night — never assume a night flight.'
-      : 'You are the captain of Sleep Airline, giving a night-flight PA to passengers.'}
+    return `You are the captain of Sleep Airline, giving a night-flight PA to passengers.
 ${STYLE_DESCRIPTIONS.en[style]}
-${isTakeoff ? 'Even if the tone is calm, do not write this as a night-only flight.\n' : ''}
 
 Identity (critical):
 - You are the captain speaking to the passenger; the passenger name is the addressee, never your name
@@ -289,11 +209,11 @@ ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 - Landing: after naming the city, one locating sentence so nobody is left with a mystery place-name — continent or ocean + country + one obvious identity (capital / island / overseas territory). Example: Tokyo → “This is Asia, the capital of Japan.” Pacific islands → “This is the South Pacific, in New Caledonia.” Iceland → “This is the North Atlantic, the capital of Iceland.” Do not use subregions like Northeast Asia or Western Europe. No encyclopedia dump.
 - Landing: weave one natural culture tip and a light weather beat
 - Landing: sentence one must be the local-language hello (not “good morning”); continue in English afterward without translating the greeting. Do not mix a daytime local greeting with “good night”.
-- Takeoff: at most one departure weather beat; window light must match local time of day
+- Takeoff: at most one departure weather beat
 ` : ''}
-${isTakeoff && sleepGuide ? `${sleepGuide}\n` : ''}Writing:
+Writing:
 - English, ${isTakeoff ? '80–110' : '90–130'} words, hard cap ${isTakeoff ? '130' : '160'}
-- ${isTakeoff ? 'Takeoff: 4–5 sentences — ① welcome + captain + departure + heading ② one window image that matches the local time of day (dawn, daylight, dusk or night — never night sky in the morning) ③ exactly one short sleep cue: one action that fits this sleep period — never a meditation, breath count, step list, or an end-of-day line in daylight ④ at most one squad beat ⑤ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
+- ${isTakeoff ? 'Takeoff: 4–5 sentences — ① welcome + captain + departure + heading, with a different night image each time ② exactly one short sleep cue: one action only (close the eyes, drop the shoulders, or leave the day on the ground) — never a meditation, breath count, or step list ③ at most one squad beat ④ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
 - Cut stock phrases like “thank you for flying with us”${isTakeoff ? ', except the required closing sentence' : ''}
 - Never output a blunt slogan; write as a captain PA with imagery
 - Social info: one rewritten sentence max; never paste [squad social] verbatim
@@ -301,11 +221,8 @@ ${isTakeoff && sleepGuide ? `${sleepGuide}\n` : ''}Writing:
 - Output PA text only — no titles, quotes, or notes`;
   }
 
-  return `${isTakeoff
-    ? '你是「甦醒航班 Sleep Airline」的機長，正在對即將入睡的乘客廣播。旅客可能在清晨、上午、午後或夜晚睡覺，禁止預設這是夜間航班。'
-    : '你是「甦醒航班 Sleep Airline」的機長，正在對機上乘客做夜間廣播。'}
+  return `你是「甦醒航班 Sleep Airline」的機長，正在對機上乘客做夜間廣播。
 ${STYLE_DESCRIPTIONS.zh[style]}
-${isTakeoff ? '即使語氣沉穩，也不要寫成深夜專用；早上來睡覺一樣適合。\n' : ''}
 
 身分（非常重要）：
 - 你是機長，在對「乘客」說話；乘客姓名只是對象，不是你的名字
@@ -316,7 +233,7 @@ ${isTakeoff ? '即使語氣沉穩，也不要寫成深夜專用；早上來睡�
 - 稱呼乘客時直接使用名字，禁止附加「先生」「女士」「小姐」或「先生／女士」
 - 社交句只講隊友，禁止說正在聽廣播的乘客「已經起飛」
 ${isTakeoff
-    ? '- 起飛廣播：若【同組社交】是獨自（solo）／本次首班（first_of_night），整句社交完全省略；禁止出現「獨享」「獨自」「只有你」「夜空交給你」「天空交給你」等說法。只有真實隊友動態（已起飛、已降落）才可寫一句'
+    ? '- 起飛廣播：若【同組社交】是獨自（solo）／今晚第一班（first_of_night），整句社交完全省略；禁止出現「獨享」「獨自」「只有你」「夜空交給你」「天空交給你」等說法。只有真實隊友動態（已起飛、已降落）才可寫一句'
     : '- 若【同組社交】是獨自／今晚第一班：改說獨自享受這片天空，不要複誦本班乘客姓名＋已起飛'}
 
 地理（非常重要）：
@@ -337,11 +254,11 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
   不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
 - 降落廣播：當地語言問候之後，緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
-- 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主；窗外光線必須符合當地時段
+- 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主
 ` : ''}
-${isTakeoff && sleepGuide ? `${sleepGuide}\n` : ''}寫作：
+寫作：
 - 繁體中文，${isTakeoff ? '80–110' : '90–130'} 字，最多不超過 ${isTakeoff ? '130' : '160'} 字
-- ${isTakeoff ? '起飛廣播 4–5 句：①歡迎搭乘 Sleep Airline＋機長身分，緊接著必須原句說出「我們從{廣播用地名的城市}出發，航向{方向}」，城市名不可省略、不可改成「這裡」或「當地」 ②一句符合當地時段的窗外畫面（晨光、日光、黃昏或夜色擇一；白天禁止夜空／星空；禁止每次都說「夜色保管目的地」） ③剛好一句睡眠小引導，只給一個符合此時段的動作；白天不要「把今天留在地面」這種結束一天的說法；不要助眠課程、不要數息、不要列步驟 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
+- ${isTakeoff ? '起飛廣播 4–5 句：①歡迎搭乘 Sleep Airline＋機長身分，緊接著必須原句說出「我們從{廣播用地名的城市}出發，航向{方向}」，城市名不可省略、不可改成「這裡」或「當地」 ②每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ③剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
 - 刪掉「有任何需求」「祝您旅途愉快」「期待美好瞬間」等套話；起飛結尾固定句「Sleep Airline 感謝您的搭乘」除外
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
@@ -364,17 +281,14 @@ export async function generateCaptainBroadcast(input: BroadcastInput): Promise<s
   const hasLocal = !!input.localContext;
   const departureLabel = broadcastLocationLabel(input.departureLocation, locale, isTakeoff ? input.localContext : null);
   const arrivalLabel = broadcastLocationLabel(input.arrivalLocation, locale, !isTakeoff ? input.localContext : null);
-  const sleepGuide = isTakeoff
-    ? takeoffSleepGuidance(input.localContext?.localTimeLabel, locale)
-    : null;
 
-  const systemPrompt = buildSystemPrompt(locale, input.style, isTakeoff, pax, hasLocal, sleepGuide?.system);
+  const systemPrompt = buildSystemPrompt(locale, input.style, isTakeoff, pax, hasLocal);
 
   const noTeammateFacts = input.socialCue.cueType === 'solo' || input.socialCue.cueType === 'first_of_night';
   const socialLine = noTeammateFacts
     ? (locale === 'en'
-      ? '(No teammate facts this time — OMIT the squad sentence entirely. Do not mention being alone, only you, or having the sky to yourself.)'
-      : '（這次沒有隊友動態：整句社交完全省略，不要寫「獨享」「獨自」「只有你」「夜空交給你」）')
+      ? '(No teammate facts tonight — OMIT the squad sentence entirely. Do not mention being alone, only you, or having the sky to yourself.)'
+      : '（今晚沒有隊友動態：整句社交完全省略，不要寫「獨享」「獨自」「只有你」「夜空交給你」）')
     : buildSocialBlock(input.socialCue, locale);
 
   const takeoffUser = locale === 'en'
@@ -384,13 +298,12 @@ raw departure: ${input.departureLocation}
 broadcast place: ${departureLabel}
 heading: ${direction}
 ${input.localContext ? `\n[local context · departure]\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
-${sleepGuide?.user ?? ''}
 [squad social]
 ${socialLine}
 
 Write a fluent 4–5 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
-The window image must match the sleep period above; do not reuse “the night will keep our destination”, and do not write night sky in daylight.
-Include exactly one short sleep cue — one action that fits this period.
+Vary the night image; do not reuse “the night will keep our destination”.
+Include exactly one short sleep cue — one action only.
 The LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”
 ${noTeammateFacts
       ? 'No squad sentence at all this time.'
@@ -401,14 +314,12 @@ ${noTeammateFacts
 廣播用地名：${departureLabel}
 航線方向：${direction}
 ${input.localContext ? `\n【當地資訊 · 出發地】\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
-${sleepGuide?.user ?? ''}
 【同組社交】
 ${socialLine}
 
 請依「4–5 句」結構寫一段流暢口語廣播，第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
 緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，航向${direction}」，這兩個詞都要出現，不可省略出發地。
-窗外畫面必須符合上面的睡眠時段，不要在白天寫夜色，也不要每次都說「夜色保管目的地」。
-睡眠只給一個很短、符合此時段的動作，不要展開。
+每次換一種夜色畫面。睡眠只給一個很短的動作，不要展開。
 最後一句必須原句說「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫。
 ${noTeammateFacts
       ? '這次不寫任何同組社交句。'
@@ -572,7 +483,7 @@ export function fallbackCaptainBroadcast(
       const social = socialCueText?.trim() && !/alone|only you|to yourself|to themselves|獨享|獨自|只有你/i.test(socialCueText)
         ? ` ${socialCueText.replace(/[.!?\s]+$/g, '')}.`
         : '';
-      const sleepCue = takeoffSleepGuidance(localContext?.localTimeLabel, 'en').cue;
+      const sleepCue = ['Close your eyes for a moment.', 'Let your shoulders drop.', 'Leave today on the ground.'][(departureLabel.length + direction.length) % 3];
       return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${social} ${TAKEOFF_CLOSING_EN}`;
     }
     const dur = formatDuration(durationMinutes, locale);
@@ -600,7 +511,7 @@ export function fallbackCaptainBroadcast(
     const social = socialCueText?.trim() && !/獨享|獨自|只有你|天空先交給你|夜空交給你/.test(socialCueText)
       ? ` ${socialCueText.replace(/[。！？\s]+$/g, '')}。`
       : '';
-    const sleepCue = takeoffSleepGuidance(localContext?.localTimeLabel, 'zh').cue;
+    const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][(departureLabel.length + direction.length) % 3];
     return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}${sleepCue}${social}${TAKEOFF_CLOSING_ZH}`;
   }
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
