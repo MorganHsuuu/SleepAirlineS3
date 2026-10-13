@@ -84,9 +84,14 @@ function originLabel() {
 
 let scenerySeq = 0;
 
+function setPictureOpen(open) {
+  document.querySelector('.hero').classList.toggle('has-picture', Boolean(open));
+}
+
 function showSceneryLoading(message = '窗外漸漸亮了起來…') {
   const frame = $('image-frame');
   scenerySeq += 1;
+  setPictureOpen(true);
   frame.classList.add('is-loading');
   frame.innerHTML = `<div class="image-veil" aria-busy="true"><span>${escapeHtml(message)}</span></div>`;
 }
@@ -95,10 +100,12 @@ function paintScenery(src, emptyMessage) {
   const frame = $('image-frame');
   const seq = ++scenerySeq;
   if (!src) {
+    setPictureOpen(false);
     frame.classList.remove('is-loading');
     frame.innerHTML = `<p>${escapeHtml(emptyMessage)}</p>`;
     return;
   }
+  setPictureOpen(true);
   frame.classList.add('is-loading');
   const veil = document.createElement('div');
   veil.className = 'image-veil';
@@ -252,6 +259,24 @@ function renderSample(sample) {
   }
   $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
   renderList();
+  const reading = document.querySelector('.hero');
+  if (reading) reading.scrollTop = 0;
+}
+
+function isLedgerOpen() {
+  return $('ledger-toggle').getAttribute('aria-expanded') === 'true';
+}
+
+function paintLedgerToggle() {
+  const btn = $('ledger-toggle');
+  const n = state.flights.length + state.samples.length;
+  btn.textContent = isLedgerOpen() ? '收起紀錄' : (n ? `紀錄 ${n}` : '紀錄');
+}
+
+function setLedgerOpen(open) {
+  $('board').classList.toggle('is-ledger-closed', !open);
+  $('ledger-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  paintLedgerToggle();
 }
 
 function renderList(flightsError = '') {
@@ -265,6 +290,7 @@ function renderList(flightsError = '') {
   labBox.innerHTML = state.samples.length
     ? state.samples.map((item) => renderRecordButton(item, 'lab')).join('')
     : '<p class="hint">生成第一筆後會出現在這裡。</p>';
+  paintLedgerToggle();
 }
 
 function upsertSample(sample) {
@@ -515,6 +541,7 @@ $('btn-flight').addEventListener('click', generateFlight);
 $('btn-comment').addEventListener('click', saveComment);
 async function openRecord(sample) {
   if (!sample) return;
+  setLedgerOpen(false);
   const index = directions.findIndex((item) => item.key === sample.routeDirection);
   if (index >= 0) state.direction = index;
   if (sample.durationMinutes) {
@@ -541,8 +568,13 @@ function bindArchive(box) {
   });
 }
 
+$('ledger-toggle').addEventListener('click', () => {
+  setLedgerOpen(!isLedgerOpen());
+});
+
 bindArchive($('sample-list'));
 bindArchive($('live-list'));
+setLedgerOpen(isLedgerOpen());
 
 bindDial();
 paintControls();
