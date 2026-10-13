@@ -899,17 +899,18 @@ function helloForPlace(place) {
   return HELLO_BY_ISO[iso] || 'Hello';
 }
 function showWeatherCard(place, weather, { kicker } = {}) {
+  const forecast = weather ?? climateGuess(place?.lat ?? 25);
   hideGlassPanel('glass-compass');
   if (state.stage === 'landed') {
     state.landedLegReady = false;
     paintLeg();
   }
   document.body.classList.add('weather-focus');
-  if ($('wx-temp')) $('wx-temp').textContent = String(weather.temp);
+  if ($('wx-temp')) $('wx-temp').textContent = String(forecast.temp);
   if ($('wx-city')) $('wx-city').textContent = place.name;
   if ($('wx-place')) $('wx-place').textContent = kicker || place.country || '';
   if ($('wx-hello')) $('wx-hello').textContent = helloForPlace(place);
-  if ($('wx-icon')) $('wx-icon').dataset.kind = weather.kind;
+  if ($('wx-icon')) $('wx-icon').dataset.kind = forecast.kind;
   const panel = $('glass-weather');
   panel.hidden = false;
   panel.classList.remove('is-on', 'is-leaving');
@@ -1030,7 +1031,7 @@ async function doLand() {
   try {
     let sceneryJob = Promise.resolve(null);
     let voiceJob = Promise.resolve(null);
-    let weatherJob = Promise.resolve(null);
+    let weatherJob = null;
     const paintDestCopy = (place) => {
       syncLandingDestination(place);
       if (!place?.name) return;
@@ -1205,8 +1206,17 @@ async function doLand() {
     stopLandingVideos();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
     await BroadcastAudio?.fadeOutLandingMusic?.({ ms: 500 });
-    state.stage = 'cruise'; setInflightStandby(true); setScene('clouds'); setShade('closed'); render();
-    showToast(`降落失敗：${error.message}`);
+    if (state.stage === 'landed') {
+      state.sleepDial = false;
+      document.body.classList.remove('weather-focus');
+      state.landedLegReady = true;
+      setShade('open');
+      render();
+      showToast(`降落後資訊顯示失敗：${error.message}`);
+    } else {
+      state.stage = 'cruise'; setInflightStandby(true); setScene('clouds'); setShade('closed'); render();
+      showToast(`降落失敗：${error.message}`);
+    }
   } finally { state.busy = false; }
 }
 async function submitSleepReport(event) {
