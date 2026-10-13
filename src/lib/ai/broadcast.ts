@@ -4,6 +4,7 @@ import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { SocialCue } from '../../types';
 import type { LocalContext } from '../flight/local-context';
 import { arrivalHello, timeAdjustedGreeting } from './morning-content';
+import { placeOrientationLine } from '../flight/local-context';
 
 export type UiLocale = 'zh' | 'en';
 
@@ -205,6 +206,7 @@ Geography (critical):
 
 ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 - Culture/weather in [local context] are for rewriting only — never copy lists
+- Landing: after naming the city, one locating sentence so nobody is left with a mystery place-name — region + country + one obvious identity (capital / island / overseas territory). Example: Tokyo → “This is Northeast Asia, the capital of Japan.” Obscure towns must still be anchored to a known country/region. No encyclopedia dump.
 - Landing: weave one natural culture tip and a light weather beat
 - Landing: sentence one must be the local-language hello (not “good morning”); continue in English afterward without translating the greeting. Do not mix a daytime local greeting with “good night”.
 - Takeoff: at most one departure weather beat
@@ -246,6 +248,7 @@ ${isTakeoff
 
 ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 【當地資訊】中的文化、天氣僅供改寫融入，禁止整段照搬或列點
+- 降落廣播：說出城市名之後，必須用一句話幫旅客把這個地方放到地圖上——大區域＋國家＋一個幾乎不會錯的身份（首都／島國／海外領地／某國城市）。例如東京：「這裡是東北亞，日本的首都」；少見的島嶼城市更要掛上區域與國家，例如「這裡是南太平洋，新喀里多尼亞」。禁止人口數字、冷門歷史、百科條列。
 - 降落廣播：必須用一兩句自然帶出當地文化特色或社交習俗，並點一下當地天氣（溫度、晴雨），
   像機長提醒乘客下機前的心理準備，不要像氣象報告或旅遊手冊
 - 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
@@ -338,7 +341,7 @@ ${input.localContext ? `\n[local context · arrival]\n${buildLocalBlock(input.lo
 ${buildSocialBlock(input.socialCue, locale)}
 
 Announce waking up at arrival, how long you flew, and from/to. Sentence one = local-language hello (not good morning); sentence two must begin with “Welcome aboard Sleep Airline, this is your captain”.
-Weave one culture/weather beat; one social beat; fluent paragraph, no bullets.
+Right after naming the city, locate it in one sentence (region + country + capital/island if true). Weave one culture/weather beat; one social beat; fluent paragraph, no bullets.
 If [squad social] is not solo: within the first two sentences after the greeting, say what happened with which teammate/squad.`
     : `【降落廣播】
 乘客：${pax}
@@ -354,6 +357,7 @@ ${input.localContext ? `\n【當地資訊 · 抵達地】\n${buildLocalBlock(inp
 ${buildSocialBlock(input.socialCue, locale)}
 
 請宣布：醒來抵達、飛了多久、從哪到哪；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
+說出抵達城市後立刻用一句話定位這個地方（大區域、國家、首都或島國），讓沒聽過這地名的人也知道在哪；
 必須融入一筆當地文化或天氣（改寫）；用一句話點出社交情境，合併成一段流暢廣播，勿列點、勿照搬。
 若【同組社交】不是 solo：必須在開場問候後的前兩句內明確說出「你與哪位隊友或小隊發生了什麼關係」
 （例如共享夜空、接力、靠近、同向、分頭飛、先後降落），不要只把社交資訊放在結尾。`;
@@ -491,7 +495,14 @@ export function fallbackCaptainBroadcast(
     const cultureBit = localContext?.culture
       ? `${localContext.culture.split(';')[0]?.split('.')[0]}. `
       : 'Step out with a smile for the locals. ';
-    return `${greet}Welcome aboard Sleep Airline, this is your captain. We have arrived safely in ${arrivalLabel}. ${timeBit}${wxBit}${pax} flew from ${departureLabel} for ${dur || 'a stretch'}. ${cultureBit}${socialCueText}`;
+    const where = placeOrientationLine(
+      localContext?.cityName || arrivalLocation || '',
+      localContext?.countryName || '',
+      localContext?.countryIso,
+      'en'
+    );
+    const whereBit = where ? `${where} ` : '';
+    return `${greet}Welcome aboard Sleep Airline, this is your captain. We have arrived safely in ${arrivalLabel}. ${whereBit}${timeBit}${wxBit}${pax} flew from ${departureLabel} for ${dur || 'a stretch'}. ${cultureBit}${socialCueText}`;
   }
   if (phase === 'takeoff') {
     const wx = localContext?.weatherSummary
@@ -506,5 +517,11 @@ export function fallbackCaptainBroadcast(
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
   const hello = arrivalHello(localContext?.localTimeLabel);
   const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}，` : '';
-  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${timeBit}窗外的風景正慢慢展開。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
+  const where = placeOrientationLine(
+    localContext?.cityName || arrivalLocation || '',
+    localContext?.countryName || '',
+    localContext?.countryIso
+  );
+  const whereBit = where ? `${where}。` : '';
+  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}窗外的風景正慢慢展開。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }

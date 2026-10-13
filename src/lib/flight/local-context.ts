@@ -135,6 +135,143 @@ function morningGreetingForIso(iso: string): string {
   return 'Hello';
 }
 
+/** 大區域：給降落廣播一句「這地方在世界哪裡」 */
+const MACRO_REGION_BY_ISO: Record<string, string> = {
+  JP: '東北亞', KR: '東北亞', CN: '東亞', TW: '東亞', HK: '東亞', MN: '東亞',
+  TH: '東南亞', VN: '東南亞', SG: '東南亞', MY: '東南亞', ID: '東南亞', PH: '東南亞',
+  IN: '南亞', AE: '西亞', TR: '西亞',
+  RU: '北歐亞',
+  GB: '西歐', FR: '西歐', DE: '西歐', NL: '西歐', CH: '西歐', IE: '西歐', BE: '西歐',
+  IT: '南歐', ES: '南歐', PT: '南歐', GR: '南歐',
+  PL: '中歐', CZ: '中歐', AT: '中歐',
+  SE: '北歐', NO: '北歐', FI: '北歐', DK: '北歐', IS: '北歐',
+  US: '北美', CA: '北美', MX: '北美',
+  BR: '南美', AR: '南美', CL: '南美', PE: '南美', CO: '南美',
+  AU: '大洋洲', NZ: '大洋洲', PG: '大洋洲',
+  NC: '南太平洋', PF: '南太平洋', WS: '南太平洋', TO: '南太平洋', FJ: '南太平洋',
+  VU: '南太平洋', SB: '南太平洋', MH: '南太平洋', KI: '南太平洋', FM: '南太平洋',
+  PW: '南太平洋', NR: '南太平洋', TV: '南太平洋', CK: '南太平洋', NU: '南太平洋',
+  EG: '北非', MA: '北非', KE: '東非', ZA: '南非', RE: '印度洋',
+};
+
+const MACRO_REGION_EN: Record<string, string> = {
+  東北亞: 'Northeast Asia',
+  東亞: 'East Asia',
+  東南亞: 'Southeast Asia',
+  南亞: 'South Asia',
+  西亞: 'West Asia',
+  北歐亞: 'Northern Eurasia',
+  西歐: 'Western Europe',
+  南歐: 'Southern Europe',
+  中歐: 'Central Europe',
+  北歐: 'Northern Europe',
+  北美: 'North America',
+  南美: 'South America',
+  大洋洲: 'Oceania',
+  南太平洋: 'the South Pacific',
+  北非: 'North Africa',
+  東非: 'East Africa',
+  南非: 'Southern Africa',
+  印度洋: 'the Indian Ocean',
+};
+
+const COUNTRY_ZH_EXTRA: Record<string, string> = {
+  NC: '新喀里多尼亞',
+  PW: '帛琉',
+  WS: '薩摩亞',
+  FJ: '斐濟',
+  TO: '東加',
+  VU: '萬那杜',
+  SB: '索羅門群島',
+  MH: '馬紹爾群島',
+  KI: '吉里巴斯',
+  FM: '密克羅尼西亞',
+  PF: '法屬玻里尼西亞',
+};
+
+const CAPITAL_ALIASES: Record<string, string[]> = {
+  JP: ['tokyo', '東京'],
+  KR: ['seoul', '首爾', '서울'],
+  CN: ['beijing', '北京'],
+  TW: ['taipei', '台北', '臺北'],
+  FR: ['paris', '巴黎'],
+  GB: ['london', '倫敦'],
+  DE: ['berlin', '柏林'],
+  IT: ['rome', 'roma', '羅馬'],
+  ES: ['madrid', '馬德里'],
+  TH: ['bangkok', '曼谷'],
+  VN: ['hanoi', '河內'],
+  ID: ['jakarta', '雅加達'],
+  SG: ['singapore', '新加坡'],
+  AU: ['canberra', '坎培拉'],
+  NZ: ['wellington', '威靈頓'],
+  IS: ['reykjavik', 'reykjavík', '雷克雅維克', '雷克亞維克'],
+  US: ['washington', '華盛頓'],
+  CA: ['ottawa', '渥太華'],
+  RU: ['moscow', '莫斯科'],
+  IN: ['new delhi', 'delhi', '新德里', '德里'],
+  EG: ['cairo', '開羅'],
+  TR: ['ankara', '安卡拉'],
+  PL: ['warsaw', '華沙'],
+  CZ: ['prague', 'praha', '布拉格'],
+  AT: ['vienna', 'wien', '維也納'],
+  GR: ['athens', '雅典'],
+  NL: ['amsterdam', '阿姆斯特丹'],
+  SE: ['stockholm', '斯德哥爾摩'],
+  NO: ['oslo', '奧斯陸'],
+  FI: ['helsinki', '赫爾辛基'],
+  DK: ['copenhagen', 'københavn', '哥本哈根'],
+  BR: ['brasília', 'brasilia', '巴西利亞'],
+  AR: ['buenos aires', '布宜諾斯艾利斯'],
+  MX: ['mexico city', 'ciudad de méxico', '墨西哥城'],
+  PE: ['lima', '利馬'],
+  CO: ['bogotá', 'bogota', '波哥大'],
+  CL: ['santiago', '聖地牙哥'],
+  KE: ['nairobi', '奈洛比'],
+  ZA: ['pretoria', '開普敦', 'cape town'],
+  AE: ['abu dhabi', '阿布達比'],
+  MY: ['kuala lumpur', '吉隆坡'],
+  PH: ['manila', '馬尼拉'],
+  PT: ['lisbon', 'lisboa', '里斯本'],
+  IE: ['dublin', '都柏林'],
+  CH: ['bern', '伯恩'],
+  NC: ['nouméa', 'noumea', '努美阿'],
+};
+
+function looksLikeCapital(city: string, iso: string): boolean {
+  const aliases = CAPITAL_ALIASES[iso.toUpperCase()] || [];
+  const n = city.toLowerCase();
+  return aliases.some((alias) => n.includes(alias.toLowerCase()) || city.includes(alias));
+}
+
+/** 降落廣播用：一句話幫旅客把陌生地名放到地圖上。 */
+export function placeOrientationLine(
+  city: string,
+  country: string,
+  iso?: string | null,
+  locale: 'zh' | 'en' = 'zh'
+): string {
+  const key = (iso || '').toUpperCase();
+  const region = key ? MACRO_REGION_BY_ISO[key] || '' : '';
+  const cityShort = (city || '').split(',')[0].trim();
+  const named = key ? (CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || '') : '';
+  const countryShort = (locale === 'zh' && named ? named : (country || '').split(',')[0].trim());
+  const capital = key ? looksLikeCapital(cityShort, key) : false;
+  if (locale === 'en') {
+    const regionEn = MACRO_REGION_EN[region] || region;
+    if (regionEn && capital && countryShort) return `This is ${regionEn} — the capital of ${countryShort}.`;
+    if (regionEn && countryShort && countryShort !== cityShort) return `This is ${regionEn}, in ${countryShort}.`;
+    if (regionEn) return `This is ${regionEn}.`;
+    if (countryShort && countryShort !== cityShort) return `This is in ${countryShort}.`;
+    return '';
+  }
+  if (region && capital && countryShort) return `這裡是${region}，${countryShort}的首都`;
+  if (region && countryShort && countryShort !== cityShort) return `這裡是${region}，屬於${countryShort}`;
+  if (region) return `這裡是${region}`;
+  if (countryShort && countryShort !== cityShort) return `這裡位於${countryShort}`;
+  return '';
+}
+
 const WMO_LABELS: Record<number, string> = {
   0: '晴朗', 1: '大致晴朗', 2: '多雲', 3: '陰天',
   45: '有霧', 48: '霧凇',

@@ -793,6 +793,7 @@ app.post('/api/arrival-voice', async (req, res) => {
     const morning = await generateMorningArrival({
       country: known?.country || country,
       city: known?.city || city,
+      countryIso: known?.countryIso || local?.countryIso,
       localGreeting: local?.morningGreeting,
       weatherSummary: local?.weatherSummary,
       localTimeLabel: local?.localTimeLabel,
@@ -1279,6 +1280,7 @@ app.post('/api/review/generate', async (req, res) => {
       const morning = await generateMorningArrival({
         country: route.arrivalCountry,
         city: route.arrivalCity,
+        countryIso: route.arrivalIso || arrLocal?.countryIso,
         localGreeting: arrLocal?.morningGreeting,
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,
@@ -1318,6 +1320,7 @@ app.post('/api/review/generate', async (req, res) => {
       generateMorningArrival({
         country: route.arrivalCountry,
         city: route.arrivalCity,
+        countryIso: route.arrivalIso || arrLocal?.countryIso,
         localGreeting: arrLocal?.morningGreeting,
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
 import { withTimeout } from '../with-timeout';
 import { findReliableDestinationSubject } from './destination-subjects';
+import { placeOrientationLine } from '../flight/local-context';
 
 export interface MorningContent {
   destination: { country: string; city: string };
@@ -21,6 +22,7 @@ export interface MorningContent {
 export interface MorningContentInput {
   country: string;
   city: string;
+  countryIso?: string | null;
   /** 已知的當地語言「你好」；模型沒給時用這個 */
   localGreeting?: string | null;
   /** 例如「氣溫 18°C，大致晴朗」 */
@@ -548,7 +550,9 @@ function fallbackMorning(
   const weatherLine = weather
     ? `${input.localTimeLabel || '現在'}，這裡${weather}。`
     : time.voiceLine;
-  const voiceText = `${greeting}。${hello}，Sleep Airline 已抵達今天的目的地——${city}。${weatherLine}窗外看見的是${subject.zh}，${subject.detailZh}。歡迎抵達${city}，今天的旅程從這裡開始。`;
+  const where = placeOrientationLine(city, country, input.countryIso);
+  const whereLine = where ? `${where}。` : '';
+  const voiceText = `${greeting}。${hello}，Sleep Airline 已抵達今天的目的地——${city}。${whereLine}${weatherLine}窗外看見的是${subject.zh}，${subject.detailZh}。歡迎抵達${city}，今天的旅程從這裡開始。`;
   const subjectSafety = subject.isGeneric
     ? `Show a believable, destination-specific view of ${subject.en}; never invent a fake named attraction or recipe.`
     : `Keep this verified destination subject unchanged; do not replace it with a generic scene.`;
@@ -692,9 +696,10 @@ const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛
 禁止孤獨、遺棄、失敗、壓力、罪惡、比較：獨自、孤單、寂寞、一個人、沒有人、失敗、浪費、掙扎、逃避、黑暗、迷失。
 禁止空話與契約用語，絕對不要寫：真實城市風貌、地理環境、街道尺度、建築材料、可查證、widely documented、urban character。
 
-voiceText 主體必須是繁體中文口語，約 40–80 個中文字，念出來大約 15–30 秒。
+voiceText 主體必須是繁體中文口語，約 55–100 個中文字，念出來大約 20–35 秒。
 結構：
 A. 抵達：第一句用當地語言的「你好」（localGreeting，例如 Halló、こんにちは、Hola），不要用早安／Good morning／Góðan daginn 這類綁時段的問候。第二句再用中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel），然後「Sleep Airline 已抵達今天的目的地——{城市}。」禁止出現「當地白天問候 + 中文晚安」這種互相打架的開頭。
+A2. 定位：緊接著用一句話告訴剛醒來、可能沒聽過這地名的人「這個地方在世界哪裡」。東京可說「這裡是東北亞，日本的首都」；小島或少見城市更要掛上區域與國家，例如「這裡是南太平洋，法國海外領地新喀里多尼亞」。只用地圖常識：大區域、國家、首都／島國／海外領地／某國城市。禁止人口數字、冷門歷史、百科條列、導遊腔。若 user 提供 placeOrientation，改寫融入即可。
 B. 嚴格採用 user message 的 sceneTheme，只選一個確實屬於這座城市、有名字的具體主題：著名景點、自然地貌、地方料理、街區市集或日常文化場景。像在介紹窗外那張照片。
 C. 同一個主題再補一個具體、看得見的細節（顏色、材料、氣味、地形或活動），不要發明地標、料理、傳統、節慶或歷史。
 D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
@@ -740,6 +745,7 @@ async function requestMorning(
           chineseTimeGreeting: arrivalHello(input.localTimeLabel),
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
           localTimeLabel: (input.localTimeLabel || '').trim() || undefined,
+          placeOrientation: placeOrientationLine(city, country, input.countryIso) || undefined,
           sceneTheme: {
             id: theme.id,
             label: theme.label,
