@@ -119,14 +119,14 @@ export async function devicesForPassenger(passengerId: string): Promise<DeviceRe
   do {
     const response = await getNotionClient().databases.query({
       database_id: await pairingDatabaseId(),
-      filter: { and: [
-        { property: 'Kind', select: { equals: 'Device' } },
-        { property: 'Passenger ID', rich_text: { equals: passengerId } },
-      ] },
+      // A new database may not have a "Device" select option until its first
+      // device is written. Notion can reject filters for missing select options.
+      filter: { property: 'Passenger ID', rich_text: { equals: passengerId } },
       start_cursor: cursor,
       page_size: 100,
     });
     for (const page of response.results as PairingPage[]) {
+      if (kind(page) !== 'Device') continue;
       result.push({
         pageId: page.id,
         deviceId: readTitle(page.properties, 'Name'),

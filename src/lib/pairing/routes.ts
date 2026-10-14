@@ -60,6 +60,10 @@ function storeFailure(res: Response, cause: unknown) {
     fail(res, conflict ? 409 : 503, cause.code);
     return;
   }
+  const error = cause as { name?: string; code?: string; status?: number; message?: string } | null;
+  console.error('pairing_store_unavailable', {
+    name: error?.name, code: error?.code, status: error?.status, message: error?.message,
+  });
   fail(res, 503, 'pairing_store_unavailable');
 }
 
