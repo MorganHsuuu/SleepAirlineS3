@@ -40,9 +40,11 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     if (filter.property === 'Name') {
       selected = rows.filter(row => row.properties.Name?.title?.[0]?.plain_text === filter.title.equals);
     } else {
-      const id = filter.and[1].rich_text.equals;
-      selected = rows.filter(row => row.properties.Kind?.select?.name === 'Device' &&
-        row.properties['Passenger ID']?.rich_text?.[0]?.plain_text === id);
+      // Before the first binding, Kind has no "Device" option. Querying that
+      // absent option can fail in Notion, so only filter on Passenger ID.
+      assert.equal(filter.property, 'Passenger ID');
+      const id = filter.rich_text.equals;
+      selected = rows.filter(row => row.properties['Passenger ID']?.rich_text?.[0]?.plain_text === id);
     }
     return { results: selected, has_more: false, next_cursor: null };
   };
