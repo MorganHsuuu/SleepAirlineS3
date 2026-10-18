@@ -32,6 +32,14 @@ import {
   updateReviewSample,
 } from './src/lib/notion/reviews';
 import { findOriginByLocation, globeHop, globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
+import { loadReviewCalibration } from './src/lib/review/calibration';
+import {
+  clearReviewAccountCookie,
+  loginReviewAccount,
+  registerReviewAccount,
+  reviewAccountFromRequest,
+  setReviewAccountCookie,
+} from './src/lib/review/accounts';
 import { listRecentLiveFlights } from './src/lib/review/live-flights';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
@@ -512,6 +520,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
       departureLocation: flight.departureLocation,
     });
 
+    const calibration = await loadReviewCalibration();
     const takeoffBroadcast = await generateBroadcastWithBudget(
       {
         phase: 'takeoff',
@@ -527,6 +536,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         style: broadcastStyle as BroadcastStyle,
         localContext: depLocal,
         locale: locale === 'en' ? 'en' : 'zh',
+        reviewCalibration: calibration.takeoff || undefined,
       },
       () => fallbackCaptainBroadcast(
         'takeoff',
@@ -695,6 +705,7 @@ app.post('/api/flight/land', async (req, res) => {
             style: broadcastStyle as BroadcastStyle,
             localContext: arrLocal,
             locale: 'en',
+            reviewCalibration: (await loadReviewCalibration()).landing || undefined,
           },
           broadcastFallback
         );
@@ -790,6 +801,7 @@ app.post('/api/arrival-voice', async (req, res) => {
         }).catch(() => null)
       : null;
 
+    const landingCalibration = (await loadReviewCalibration()).landing;
     const morning = await generateMorningArrival({
       country: known?.country || country,
       city: known?.city || city,
@@ -797,6 +809,7 @@ app.post('/api/arrival-voice', async (req, res) => {
       localGreeting: local?.morningGreeting,
       weatherSummary: local?.weatherSummary,
       localTimeLabel: local?.localTimeLabel,
+      reviewCalibration: landingCalibration || undefined,
     });
     const [speechAudioBase64] = await Promise.all([
       generateSpeechWithBudget(morning.voiceText, broadcastStyle),
@@ -1083,7 +1096,41 @@ app.get('/review', (_req, res) => {
   res.sendFile(join(process.cwd(), 'public', 'review.html'));
 });
 
-app.get('/api/review/samples', async (_req, res) => {
+function reviewClient(req: express.Request, sample: Parameters<typeof toReviewClient>[0]) {
+  return toReviewClient(sample, reviewAccountFromRequest(req));
+}
+
+app.get('/api/review/me', (req, res) => {
+  const account = reviewAccountFromRequest(req);
+  res.json({ account });
+});
+
+app.post('/api/review/register', async (req, res) => {
+  try {
+    const account = await registerReviewAccount(String(req.body?.account || ''), String(req.body?.password || ''));
+    setReviewAccountCookie(res, account);
+    res.json({ account });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : '註冊失敗' });
+  }
+});
+
+app.post('/api/review/login', async (req, res) => {
+  try {
+    const account = await loginReviewAccount(String(req.body?.account || ''), String(req.body?.password || ''));
+    setReviewAccountCookie(res, account);
+    res.json({ account });
+  } catch (err) {
+    res.status(401).json({ error: err instanceof Error ? err.message : '登入失敗' });
+  }
+});
+
+app.post('/api/review/logout', (_req, res) => {
+  clearReviewAccountCookie(res);
+  res.json({ account: null });
+});
+
+app.get('/api/review/samples', async (req, res) => {
   try {
     const [samples, review, live] = await Promise.all([
       listReviewSamples(40),
@@ -1099,7 +1146,7 @@ app.get('/api/review/samples', async (_req, res) => {
         }),
     ]);
     res.json({
-      samples: samples.map(toReviewClient),
+      samples: samples.map((item) => reviewClient(req, item)),
       flights: live.flights,
       flightsError: live.flightsError,
       ...review,
@@ -1198,7 +1245,7 @@ app.post('/api/review/generate', async (req, res) => {
         () => null
       );
       if (!generated) {
-        res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample: toReviewClient(current) });
+        res.status(504).json({ error: '生圖逾時或失敗，請再試一次。', sample: reviewClient(req, current) });
         return;
       }
       const imageUrl = await attachReviewImage(
@@ -1213,7 +1260,7 @@ app.post('/api/review/generate', async (req, res) => {
         phase: 'scenery',
       });
       res.json({
-        sample: toReviewClient(sample),
+        sample: reviewClient(req, sample),
         route: globeHop(current.departureLocation, current.arrivalLocation || route.arrivalLocation),
         review: await getReviewStoreStatus(),
       });
@@ -1248,6 +1295,7 @@ app.post('/api/review/generate', async (req, res) => {
       route.arrivalLatitude, route.arrivalLongitude,
       route.arrivalLocation, landingHour
     );
+    const calibration = await loadReviewCalibration();
 
     if (kind === 'takeoff') {
       const takeoffBroadcast = await generateBroadcastWithBudget(
@@ -1265,6 +1313,7 @@ app.post('/api/review/generate', async (req, res) => {
           style: 'formal_captain',
           localContext: depLocal,
           locale: 'zh',
+          reviewCalibration: calibration.takeoff || undefined,
         },
         () => fallbackCaptainBroadcast(
           'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
@@ -1272,7 +1321,7 @@ app.post('/api/review/generate', async (req, res) => {
         )
       );
       sample = await updateReviewSample(sample.sampleId, { takeoffBroadcast, phase: 'takeoff' });
-      res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
+      res.json({ sample: reviewClient(req, sample), route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
@@ -1284,6 +1333,7 @@ app.post('/api/review/generate', async (req, res) => {
         localGreeting: arrLocal?.morningGreeting,
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,
+        reviewCalibration: calibration.landing || undefined,
       });
       sample = await updateReviewSample(sample.sampleId, {
         landingBroadcast: morning.voiceText,
@@ -1291,7 +1341,7 @@ app.post('/api/review/generate', async (req, res) => {
         arrivalLocation: route.arrivalLocation,
         phase: 'landing',
       });
-      res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
+      res.json({ sample: reviewClient(req, sample), route: globePoints(route), review: await getReviewStoreStatus() });
       return;
     }
 
@@ -1311,6 +1361,7 @@ app.post('/api/review/generate', async (req, res) => {
           style: 'formal_captain',
           localContext: depLocal,
           locale: 'zh',
+          reviewCalibration: calibration.takeoff || undefined,
         },
         () => fallbackCaptainBroadcast(
           'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
@@ -1324,6 +1375,7 @@ app.post('/api/review/generate', async (req, res) => {
         localGreeting: arrLocal?.morningGreeting,
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,
+        reviewCalibration: calibration.landing || undefined,
       }),
     ]);
 
@@ -1339,7 +1391,7 @@ app.post('/api/review/generate', async (req, res) => {
     if (includeImage) {
       if (!openAiApiKey()) {
         res.json({
-          sample: toReviewClient(sample),
+          sample: reviewClient(req, sample),
           route: globePoints(route),
           review: await getReviewStoreStatus(),
           warning: '文字已存檔，但尚未設定 OPENAI_API，這次沒有生圖。',
@@ -1363,7 +1415,7 @@ app.post('/api/review/generate', async (req, res) => {
       );
       if (!generated) {
         res.json({
-          sample: toReviewClient(sample),
+          sample: reviewClient(req, sample),
           route: globePoints(route),
           review: await getReviewStoreStatus(),
           warning: '文字已存檔，生圖失敗，請再試一次。',
@@ -1383,7 +1435,7 @@ app.post('/api/review/generate', async (req, res) => {
       });
     }
 
-    res.json({ sample: toReviewClient(sample), route: globePoints(route), review: await getReviewStoreStatus() });
+    res.json({ sample: reviewClient(req, sample), route: globePoints(route), review: await getReviewStoreStatus() });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '生成失敗' });
   }
@@ -1391,13 +1443,22 @@ app.post('/api/review/generate', async (req, res) => {
 
 app.post('/api/review/comment', async (req, res) => {
   try {
+    const account = reviewAccountFromRequest(req);
+    if (!account) {
+      res.status(401).json({ error: '請先登入審查帳號。' });
+      return;
+    }
     const sampleId = String(req.body?.sampleId || '');
     const comment = String(req.body?.comment || '').trim();
-    const reviewer = String(req.body?.reviewer || '').trim();
+    const rawScore = req.body?.textScore;
+    const textScore = rawScore === '' || rawScore == null ? null : Number(rawScore);
     if (!sampleId) { res.status(400).json({ error: '請先選一筆測試內容。' }); return; }
-    if (!comment) { res.status(400).json({ error: '請先寫評論。' }); return; }
-    const sample = await appendReviewComment(sampleId, comment, reviewer);
-    res.json({ sample: toReviewClient(sample) });
+    if (!comment && !(Number.isFinite(textScore) && textScore >= 1)) {
+      res.status(400).json({ error: '請先寫評論或拉文字評分。' });
+      return;
+    }
+    const sample = await appendReviewComment(sampleId, comment, account, textScore);
+    res.json({ sample: reviewClient(req, sample) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '評論寫入失敗' });
   }

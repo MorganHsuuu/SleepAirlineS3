@@ -29,6 +29,7 @@ export function getReviewProperties() {
     Image: { files: {} },
     Comments: { rich_text: {} },
     Reviewer: { rich_text: {} },
+    'Text Score': { number: { format: 'number' as const } },
     'Created At': { date: {} },
     'Updated At': { date: {} },
   };

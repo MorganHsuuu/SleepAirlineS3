@@ -74,6 +74,8 @@ interface BroadcastInput {
   localContext?: LocalContext | null;
   /** UI language for broadcast text; not stored in Notion */
   locale?: UiLocale | string;
+  /** 審查台過往評分，讓新生成對齊高分、避開低分 */
+  reviewCalibration?: string | null;
 }
 
 function normalizeLocale(locale?: string | null): UiLocale {
@@ -298,6 +300,7 @@ raw departure: ${input.departureLocation}
 broadcast place: ${departureLabel}
 heading: ${direction}
 ${input.localContext ? `\n[local context · departure]\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
+${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
 [squad social]
 ${socialLine}
 
@@ -314,6 +317,7 @@ ${noTeammateFacts
 廣播用地名：${departureLabel}
 航線方向：${direction}
 ${input.localContext ? `\n【當地資訊 · 出發地】\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
+${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n` : ''}
 【同組社交】
 ${socialLine}
 
@@ -337,6 +341,7 @@ flight time: ${duration || 'unknown'}
 distance: ${input.estimatedDistanceKm ? `${Math.round(input.estimatedDistanceKm)} km` : 'unknown'}
 heading: ${direction}
 ${input.localContext ? `\n[local context · arrival]\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
+${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
 [squad social]
 ${buildSocialBlock(input.socialCue, locale)}
 
@@ -353,6 +358,7 @@ If [squad social] is not solo: within the first two sentences after the greeting
 航程：${input.estimatedDistanceKm ? `${Math.round(input.estimatedDistanceKm)} 公里` : '未知'}
 航線方向：${direction}
 ${input.localContext ? `\n【當地資訊 · 抵達地】\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
+${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n` : ''}
 【同組社交】
 ${buildSocialBlock(input.socialCue, locale)}
 

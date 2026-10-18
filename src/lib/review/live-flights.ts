@@ -20,6 +20,7 @@ export interface LiveReviewFlight {
   imageUrl: string;
   comments: string;
   reviewer: string;
+  textScore: number | null;
   generatedAt: string;
 }
 
@@ -60,6 +61,7 @@ export function toLiveReviewFlight(flight: Flight): LiveReviewFlight {
       : '',
     comments: '',
     reviewer: '',
+    textScore: null,
     generatedAt: flight.landingTime || flight.takeoffTime || flight.updatedAt || flight.createdAt || '',
   };
 }

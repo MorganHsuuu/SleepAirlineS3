@@ -141,7 +141,7 @@ function shadeOpenLip() {
   const glass = $('window-glass');
   return (glass?.getBoundingClientRect().height || 400) * 0.16;
 }
-function setShade(kind) {
+function setShade(_kind) {
   const panel = document.querySelector('.shade-panel');
   const handle = $('shade-handle');
   if (panel) {
@@ -150,8 +150,13 @@ function setShade(kind) {
     panel.style.transform = '';
   }
   if (handle) handle.classList.remove('is-dragging');
-  $('window-shade').classList.toggle('closed', kind === 'closed');
-  $('window-shade').classList.toggle('peek', kind === 'peek');
+  const shade = $('window-shade');
+  if (!shade) return;
+  shade.classList.remove('closed', 'peek');
+}
+function syncCabinDark() {
+  const dark = state.stage === 'takeoff' || state.stage === 'cruise';
+  document.body.classList.toggle('cabin-dark', dark);
 }
 function shadeLip() {
   const glass = $('window-glass');
@@ -315,9 +320,9 @@ function render() {
   $('to-code').textContent = state.destination?.code || '???';
   paintLeg();
   const labels = {
-    ready: ['準備啟程', '用手從窗頂拉到窗底，把窗簾完整拉下，航班就會起飛。', 'READY', '等待登機', 'BOARDING'],
-    takeoff: ['正在起飛', '機長廣播中。窗外的故事即將開始。', 'TAKEOFF', '起飛中', 'DEPARTING'],
-    cruise: ['飛行途中', '準備好了，就從窗底把窗簾完整拉到窗頂，打開窗戶降落。', 'IN FLIGHT', '飛行中', 'CRUISING'],
+    ready: ['準備啟程', '選好航向後就可以起飛。起飛時螢幕會調暗，請好好休息。', 'READY', '等待登機', 'BOARDING'],
+    takeoff: ['正在起飛', '機艙已調暗。機長廣播中，請好好休息。', 'TAKEOFF', '起飛中', 'DEPARTING'],
+    cruise: ['飛行途中', '機艙維持調暗。準備好降落時，實體窗戶會帶你落地。', 'IN FLIGHT', '飛行中', 'CRUISING'],
     landing: ['即將降落', '機長帶你穿越雲層，前往新的風景。', 'ARRIVING', '降落中', 'ARRIVING'],
     landed: ['你已抵達', '一段新的風景正在窗外等你。也可以再次選擇航向。', 'ARRIVED', '已抵達', 'ARRIVED'],
   };
@@ -337,6 +342,7 @@ function render() {
     if (hint) hint.textContent = '拖動旋鈕';
     document.querySelector('.dial-wrap')?.classList.remove('is-sleep');
   }
+  syncCabinDark();
 }
 function applyWindowOnly(on) {
   document.body.classList.toggle('window-only', on);
@@ -635,7 +641,7 @@ async function doTakeoff() {
   clearTimeout(compassTimer);
   hideGlassPanel('glass-compass');
   window.BroadcastAudio?.primeFromUserGesture?.();
-  $('window-caption').textContent = '舷窗已關閉 · 準備起飛';
+  $('window-caption').textContent = '機艙已調暗 · 準備起飛';
   const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][Math.floor(Math.random() * 3)];
   const localLine = `各位旅客，歡迎搭乘甦醒航班。今天我們從${state.origin.name}出發，朝${directions[state.direction].name}飛行。${sleepCue}我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。`;
   // 塔台聲循環到廣播文字＋語音備妥 → captain.mp3 → captain 一結束立刻接語音
@@ -1340,132 +1346,7 @@ function offerSleepDial() {
     $('direction-dial')._sleepMoved = () => { moved = true; };
   });
 }
-function bindShadeGesture() {
-  const handle = $('shade-handle');
-  const glass = $('window-glass');
-  const shadePanel = document.querySelector('.shade-panel');
-  let pulling = false;
-  let committed = false;
-  let offset = 0;
-  let startLip = 0;
-  let armedWakeup = '';
-  const place = (lip) => {
-    const height = glass.getBoundingClientRect().height;
-    const clamped = Math.max(shadeOpenLip(), Math.min(height, lip));
-    shadePanel.style.transform = `translateY(${clamped - height}px)`;
-    return clamped;
-  };
-  const armAudio = () => {
-    window.BroadcastAudio?.primeFromUserGesture?.();
-    window.BroadcastAudio?.armWakeupCarrier?.();
-  };
-  const clearDrag = () => {
-    pulling = false;
-    handle.classList.remove('is-dragging');
-    shadePanel.classList.remove('is-dragging');
-  };
-  const startTakeoff = () => {
-    if (committed) return;
-    committed = true;
-    const again = state.stage === 'landed';
-    if (state.stage === 'cruise') {
-      state.activeFlight = null;
-      state.lastFlight = null;
-      state.busy = false;
-      state.stage = 'ready';
-    }
-    state.shadeHold = true;
-    setShade('closed');
-    window.BroadcastAudio?.primeFromUserGesture?.();
-    window.BroadcastAudio?.stopWakeupWarmup?.();
-    armedWakeup = '';
-    state.shadeHold = false;
-    clearDrag();
-    if (again) restart({ keepShade: true });
-    void doTakeoff();
-  };
-  const startLand = () => {
-    if (committed) return;
-    committed = true;
-    setShade('open');
-    window.BroadcastAudio?.primeFromUserGesture?.();
-    if (state.sound) {
-      armedWakeup = armedWakeup || `media/${nextWakeup()}`;
-      window.BroadcastAudio?.startWakeupBed?.(armedWakeup, 0);
-    }
-    clearDrag();
-    void doLand();
-  };
-  const consider = (lip) => {
-    const height = glass.getBoundingClientRect().height;
-    const canTakeoff = state.stage === 'ready' || state.stage === 'landed'
-      || (state.stage === 'cruise' && startLip < height * 0.4);
-    if (canTakeoff && lip > height * 0.9) {
-      startTakeoff();
-      return true;
-    }
-    if (state.stage === 'cruise' && lip < height * 0.2) {
-      startLand();
-      return true;
-    }
-    return false;
-  };
-  const begin = (clientY) => {
-    if (pulling || state.busy || state.shadeHold) return false;
-    if (state.stage !== 'ready' && state.stage !== 'cruise' && state.stage !== 'landed') return false;
-    armAudio();
-    pulling = true;
-    committed = false;
-    const rect = glass.getBoundingClientRect();
-    startLip = shadeLip();
-    offset = startLip - (clientY - rect.top);
-    handle.classList.add('is-dragging');
-    shadePanel.classList.add('is-dragging');
-    return true;
-  };
-  const move = (clientY) => {
-    if (!pulling || committed) return;
-    const rect = glass.getBoundingClientRect();
-    consider(place((clientY - rect.top) + offset));
-  };
-  const end = () => {
-    if (committed) return;
-    if (!pulling) return;
-    if (consider(shadeLip())) return;
-    window.BroadcastAudio?.stopWakeupWarmup?.();
-    armedWakeup = '';
-    setShade(state.stage === 'cruise' ? 'closed' : 'open');
-    clearDrag();
-  };
-  const ignoreCancel = () => {
-    // iOS 常在 preventDefault／setPointerCapture 後立刻 pointercancel；不要把窗簾彈回去。
-    handle.classList.remove('is-dragging');
-    shadePanel.classList.remove('is-dragging');
-  };
-  for (const el of [shadePanel, handle]) {
-    if (!el) continue;
-    el.addEventListener('pointerdown', (event) => {
-      if (!begin(event.clientY)) return;
-      event.preventDefault();
-      try { el.setPointerCapture(event.pointerId); } catch { /* already released */ }
-    });
-    el.addEventListener('pointermove', (event) => move(event.clientY));
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', ignoreCancel);
-    el.addEventListener('touchstart', (event) => {
-      if (event.touches?.length !== 1) return;
-      armAudio();
-      if (!pulling) begin(event.touches[0].clientY);
-    }, { passive: true });
-    el.addEventListener('touchmove', (event) => {
-      if (!pulling || !event.touches?.[0]) return;
-      move(event.touches[0].clientY);
-    }, { passive: true });
-    el.addEventListener('touchend', end, { passive: true });
-    el.addEventListener('touchcancel', ignoreCancel, { passive: true });
-  }
-  syncShadeHandle();
-}
+function bindShadeGesture() {}
 function applySleepTurn(delta) {
   let diff = delta;
   if (diff > 180) diff -= 360;

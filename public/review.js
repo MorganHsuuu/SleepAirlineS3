@@ -27,6 +27,7 @@ const state = {
   sampleId: '',
   source: 'lab',
   busy: false,
+  account: '',
   samples: [],
   flights: [],
   preview: null,
@@ -208,6 +209,8 @@ function renderRecordButton(sample, kind) {
   if (kind === 'live' && sample.phase === 'in_flight') bits.push('飛行中');
   if (dir) bits.push(escapeHtml(dir));
   if (sample.durationMinutes) bits.push(escapeHtml(formatDuration(sample.durationMinutes)));
+  if (sample.myScore != null) bits.push(`<em class="${sample.myScore >= 8 ? 'ok' : sample.myScore <= 4 ? 'warn' : ''}">我的${sample.myScore}分</em>`);
+  else if ((sample.ratings || []).some((item) => item.score != null)) bits.push('有評分');
   if (kind === 'lab' && sample.comments) bits.push('有評論');
   const when = recordWhen(sample);
   if (when) bits.push(escapeHtml(when));
@@ -247,7 +250,10 @@ function renderSample(sample) {
     $('btn-comment').disabled = true;
   } else {
     bar.classList.remove('is-locked');
-    $('comments').textContent = sample.comments || '還沒有評論。';
+    renderComments(sample);
+    $('text-score').value = String(sample.myScore || 5);
+    paintScoreReadout();
+    $('comment').placeholder = state.account ? `以 @${state.account} 寫評論` : '對這段語音／圖片的評論';
     $('btn-comment').disabled = state.busy;
   }
   $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
@@ -441,15 +447,69 @@ async function generateFlight() {
   }
 }
 
+function renderComments(sample) {
+  const box = $('comments');
+  const ratings = sample.ratings || [];
+  if (!ratings.length) {
+    box.textContent = sample.comments || '還沒有評論。';
+    return;
+  }
+  box.innerHTML = ratings.map((item) => {
+    const band = item.score == null ? '' : item.score >= 8 ? '' : item.score <= 4 ? 'warn' : '';
+    const score = item.score != null ? `${item.score}分` : '';
+    return `<div class="comment-line"><strong>@${escapeHtml(item.account)}</strong><em class="${band}">${escapeHtml(score)}</em><span>${escapeHtml(item.comment)}</span></div>`;
+  }).join('');
+}
+
+function setAccount(account) {
+  state.account = account || '';
+  const pill = $('account-pill');
+  const out = $('btn-logout');
+  if (state.account) {
+    pill.hidden = false;
+    pill.textContent = `@${state.account}`;
+    out.hidden = false;
+    document.body.classList.remove('gate-on');
+  } else {
+    pill.hidden = true;
+    out.hidden = true;
+    document.body.classList.add('gate-on');
+  }
+}
+
+function gateHint(message) {
+  $('gate-hint').textContent = message || '';
+}
+
+async function submitAuth(kind, account, password) {
+  const res = await fetch(`/api/review/${kind}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || (kind === 'register' ? '註冊失敗' : '登入失敗'));
+  setAccount(data.account);
+  gateHint('');
+  await loadSamples();
+  await loadPreview();
+}
+
 async function saveComment() {
   if (state.busy) return;
+  if (!state.account) {
+    toast('請先登入審查帳號。');
+    setAccount('');
+    return;
+  }
   if (!state.sampleId || state.source === 'live') {
     toast(state.source === 'live' ? '真實航班只供對照，請改選手動生成再寫評論。' : '請先生成一筆內容。');
     return;
   }
   const comment = $('comment').value.trim();
-  if (!comment) {
-    toast('請先寫評論。');
+  const textScore = Number($('text-score').value);
+  if (!comment && !(textScore >= 1)) {
+    toast('請先寫評論或拉文字評分。');
     return;
   }
   setBusy(true);
@@ -460,14 +520,18 @@ async function saveComment() {
       body: JSON.stringify({
         sampleId: state.sampleId,
         comment,
-        reviewer: $('reviewer').value.trim(),
+        textScore,
       }),
     });
     const data = await res.json();
+    if (res.status === 401) {
+      setAccount('');
+      throw new Error(data.error || '請先登入審查帳號。');
+    }
     if (!res.ok) throw new Error(data.error || '評論寫入失敗');
     upsertSample(data.sample);
     $('comment').value = '';
-    toast('評論已寫回這一筆');
+    toast(textScore ? `@${state.account} 已寫回 ${textScore} 分` : `@${state.account} 評論已寫回`);
   } catch (err) {
     toast(err.message || '評論寫入失敗');
   } finally {
@@ -512,7 +576,17 @@ function bindDial() {
 $('duration-bar').addEventListener('input', paintControls);
 $('hour-bar').addEventListener('input', paintControls);
 $('btn-flight').addEventListener('click', generateFlight);
+function paintScoreReadout() {
+  const el = $('text-score');
+  if (!el) return;
+  const n = Number(el.value) || 5;
+  $('score-readout').textContent = String(n);
+  $('score-readout').dataset.band = n >= 8 ? 'high' : n <= 4 ? 'low' : 'mid';
+}
+
+$('text-score').addEventListener('input', paintScoreReadout);
 $('btn-comment').addEventListener('click', saveComment);
+paintScoreReadout();
 async function openRecord(sample) {
   if (!sample) return;
   const index = directions.findIndex((item) => item.key === sample.routeDirection);
@@ -544,6 +618,42 @@ function bindArchive(box) {
 bindArchive($('sample-list'));
 bindArchive($('live-list'));
 
+$('login-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await submitAuth('login', $('login-account').value, $('login-password').value);
+  } catch (err) {
+    gateHint(err.message || '登入失敗');
+  }
+});
+$('register-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await submitAuth('register', $('register-account').value, $('register-password').value);
+  } catch (err) {
+    gateHint(err.message || '註冊失敗');
+  }
+});
+$('btn-logout').addEventListener('click', async () => {
+  try { await fetch('/api/review/logout', { method: 'POST' }); } catch { /* still leave */ }
+  setAccount('');
+  gateHint('');
+});
+
+async function bootReview() {
+  try {
+    const res = await fetch('/api/review/me');
+    const data = await res.json();
+    if (data.account) {
+      setAccount(data.account);
+      await loadSamples();
+      await loadPreview();
+      return;
+    }
+  } catch { /* stay on the gate */ }
+  setAccount('');
+}
+
 bindDial();
 paintControls();
-loadSamples().then(() => loadPreview());
+bootReview();

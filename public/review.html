@@ -9,9 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css">
+  <link rel="stylesheet" href="/review.css?v=rows-2">
 </head>
-<body>
+<body class="gate-on">
   <div class="orb orb-a" aria-hidden="true"></div>
   <div class="orb orb-b" aria-hidden="true"></div>
   <div class="orb orb-c" aria-hidden="true"></div>
@@ -23,6 +23,8 @@
         <h1>內容審查台</h1>
       </div>
       <div class="mast-side">
+        <span class="pill" id="account-pill" hidden></span>
+        <button type="button" class="ghost" id="btn-logout" hidden>登出</button>
         <span class="pill" id="store-pill">讀取中</span>
         <a class="ghost" href="/">回主體驗</a>
       </div>
@@ -32,8 +34,8 @@
 
     <div class="board">
       <aside class="console pane">
-        <div class="pane-scroll">
-          <section>
+        <div class="console-strip">
+          <section class="console-heading">
             <div class="section-head">
               <small>01</small>
               <h2>起飛前調整</h2>
@@ -53,46 +55,42 @@
             <p class="readout"><strong id="direction-name">向東 · 090°</strong></p>
           </section>
 
-          <section>
+          <section class="console-sliders">
             <label class="slider-label" for="duration-bar">
               <span>飛行時間</span>
               <strong id="duration-readout">1 小時 30 分</strong>
             </label>
             <input id="duration-bar" type="range" min="30" max="720" step="15" value="90">
-          </section>
-
-          <section>
             <label class="slider-label" for="hour-bar">
               <span>降落當地時間</span>
               <strong id="hour-readout">現在</strong>
             </label>
             <input id="hour-bar" type="range" min="-1" max="23" step="1" value="-1">
+            <p class="origin-note" id="origin-note">下一班從臺北出發</p>
+            <p class="bearing-note" id="bearing-note">實際航向會顯示在地球儀上</p>
           </section>
-
-          <p class="origin-note" id="origin-note">下一班從臺北出發</p>
-          <p class="bearing-note" id="bearing-note">實際航向會顯示在地球儀上</p>
 
           <div class="globe-stage">
             <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
             <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
           </div>
-        </div>
 
-        <div class="console-dock">
-          <fieldset class="mode-switch">
-            <legend>這次要生成</legend>
-            <div class="mode-options">
-              <label class="mode-option">
-                <input type="radio" name="generate-mode" value="text" checked>
-                <span>生成文字</span>
-              </label>
-              <label class="mode-option">
-                <input type="radio" name="generate-mode" value="image">
-                <span>文字＋圖片</span>
-              </label>
-            </div>
-          </fieldset>
-          <button type="button" class="primary" id="btn-flight">開始生成</button>
+          <div class="console-dock">
+            <fieldset class="mode-switch">
+              <legend>這次要生成</legend>
+              <div class="mode-options">
+                <label class="mode-option">
+                  <input type="radio" name="generate-mode" value="text" checked>
+                  <span>生成文字</span>
+                </label>
+                <label class="mode-option">
+                  <input type="radio" name="generate-mode" value="image">
+                  <span>文字＋圖片</span>
+                </label>
+              </div>
+            </fieldset>
+            <button type="button" class="primary" id="btn-flight">開始生成</button>
+          </div>
         </div>
       </aside>
 
@@ -138,7 +136,14 @@
         <article class="comment-bar" id="comment-bar">
           <div class="comments" id="comments">還沒有評論。</div>
           <div class="comment-form">
-            <input id="reviewer" type="text" maxlength="40" placeholder="名字">
+            <label class="score-bar">
+              <span class="score-label">文字評分 <strong id="score-readout">5</strong></span>
+              <span class="score-track">
+                <span>糟糕</span>
+                <input id="text-score" type="range" min="1" max="10" step="1" value="5">
+                <span>不錯</span>
+              </span>
+            </label>
             <textarea id="comment" rows="1" maxlength="1200" placeholder="對這段語音／圖片的評論"></textarea>
             <button type="button" class="primary" id="btn-comment">寫回</button>
           </div>
@@ -167,9 +172,27 @@
       </aside>
     </div>
   </div>
+  <div class="gate" id="review-gate">
+    <form class="gate-card" id="login-form">
+      <p class="eyebrow">Review Lab</p>
+      <h2>先登入審查帳號</h2>
+      <p class="gate-copy">評分與評論會記在這個帳號下面，換人不會互相蓋掉。伺服器會記住你，下次不用重填。</p>
+      <label>帳號<input id="login-account" name="account" maxlength="20" autocomplete="username" placeholder="你的帳號"></label>
+      <label>密碼<input id="login-password" name="password" type="password" maxlength="72" autocomplete="current-password" placeholder="至少 4 個字"></label>
+      <button type="submit" class="primary" id="btn-login">登入</button>
+    </form>
+    <form class="gate-card gate-register" id="register-form">
+      <p class="eyebrow">New desk</p>
+      <h2>還沒有帳號？註冊</h2>
+      <label>帳號<input id="register-account" name="account" maxlength="20" autocomplete="username" placeholder="2–20 字，中英數或底線"></label>
+      <label>密碼<input id="register-password" name="password" type="password" maxlength="72" autocomplete="new-password" placeholder="至少 4 個字"></label>
+      <button type="submit" class="primary" id="btn-register">註冊並進入</button>
+      <p class="gate-hint" id="gate-hint"></p>
+    </form>
+  </div>
   <div class="toast" id="toast" hidden></div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js"></script>
+  <script src="/review.js?v=rows-1"></script>
 </body>
 </html>

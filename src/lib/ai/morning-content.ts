@@ -28,6 +28,8 @@ export interface MorningContentInput {
   /** 例如「氣溫 18°C，大致晴朗」 */
   weatherSummary?: string | null;
   localTimeLabel?: string | null;
+  /** 審查台過往評分，讓新生成對齊高分、避開低分 */
+  reviewCalibration?: string | null;
 }
 
 export type ArrivalSceneThemeId =
@@ -700,6 +702,7 @@ voiceText 主體必須是繁體中文口語，約 55–100 個中文字，念出
 結構：
 A. 抵達：第一句用當地語言的「你好」（localGreeting，例如 Halló、こんにちは、Hola），不要用早安／Good morning／Góðan daginn 這類綁時段的問候。第二句再用中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel），然後「Sleep Airline 已抵達今天的目的地——{城市}。」禁止出現「當地白天問候 + 中文晚安」這種互相打架的開頭。
 A2. 定位：緊接著用一句話告訴剛醒來、可能沒聽過這地名的人「這個地方在世界哪裡」。必須說出洲或海洋，不要用東北亞、西歐這種細分區。東京可說「這裡是亞洲，日本的首都」；太平洋小島可說「這裡是南太平洋，屬於新喀里多尼亞」；冰島可說「這裡是北大西洋，冰島的首都」。只用地圖常識：洲或海洋、國家、首都／島國／海外領地／某國城市。禁止人口數字、冷門歷史、百科條列、導遊腔。若 user 提供 placeOrientation，改寫融入即可。
+若 user 提供 reviewCalibration，那是審查台對過往降落廣播的分數。高分範例請靠近其語氣、節奏與具體程度；低分範例裡的空話、夜色套句、不像這個城市的內容不要再犯。
 B. 嚴格採用 user message 的 sceneTheme，只選一個確實屬於這座城市、有名字的具體主題：著名景點、自然地貌、地方料理、街區市集或日常文化場景。像在介紹窗外那張照片。
 C. 同一個主題再補一個具體、看得見的細節（顏色、材料、氣味、地形或活動），不要發明地標、料理、傳統、節慶或歷史。
 D. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
@@ -746,6 +749,7 @@ async function requestMorning(
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
           localTimeLabel: (input.localTimeLabel || '').trim() || undefined,
           placeOrientation: placeOrientationLine(city, country, input.countryIso) || undefined,
+          reviewCalibration: (input.reviewCalibration || '').trim() || undefined,
           sceneTheme: {
             id: theme.id,
             label: theme.label,

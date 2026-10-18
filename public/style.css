@@ -197,6 +197,10 @@ body.window-only .sleep-hint{font-size:clamp(11px,min(1.8cqh,3.2cqi),22px);top:c
 .shade-handle.is-dragging{cursor:grabbing;transition:none}
 .shade-panel.is-dragging{transition:none;cursor:grabbing}
 #btn-takeoff,#btn-land{display:none}
+.window-shade,.shade-panel,.shade-handle{display:none!important;pointer-events:none!important}
+.cabin-veil{position:fixed;inset:0;z-index:9990;background:#000;opacity:0;pointer-events:none;transition:opacity 1.6s cubic-bezier(.42,.02,.18,1)}
+body.cabin-dark .cabin-veil{opacity:.99}
+@media(prefers-reduced-motion:reduce){.cabin-veil{transition-duration:.2s}}
 .dial-wrap.is-sleep .dial-cardinal{opacity:0}
 .sleep-arc{position:absolute;left:50%;top:50%;width:124%;height:124%;overflow:visible;opacity:0;pointer-events:none;transform:translate(-50%,-50%);transition:opacity .8s ease;touch-action:none}
 .dial-wrap.is-sleep{position:relative;z-index:7}

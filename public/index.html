@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=3">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="booting window-only">
   <div id="login-section" class="sr-only" aria-hidden="true"></div>
@@ -26,7 +26,7 @@
       <section class="story" aria-label="航班資訊">
         <div class="eyebrow"><span class="line"></span> 01 / THE JOURNEY</div>
         <h1>一扇窗，<br><em>飛向另一個地方。</em></h1>
-        <p class="intro">選擇今晚的方向。拉下窗簾起飛，等準備好了，再打開窗戶看看自己抵達哪裡。</p>
+        <p class="intro">選擇今晚的方向。起飛時螢幕會變暗，降落時窗外風景會亮起來。</p>
         <div class="story-spacer"></div>
         <div class="route-card">
           <div class="route-top"><span>YOUR FLIGHT</span><span id="flight-code">SA 003</span></div>
@@ -172,9 +172,9 @@
         <select id="tk-direction" class="sr-only" aria-label="航向"><option value="northbound">向北</option><option value="northeast">東北</option><option value="eastbound" selected>向東</option><option value="southeast">東南</option><option value="southbound">向南</option><option value="southwest">西南</option><option value="westbound">向西</option><option value="northwest">西北</option></select>
         <div class="control-divider"></div>
         <div class="stage-heading"><div><small>02</small><h2 id="action-heading">準備啟程</h2></div><span id="stage-indicator">READY</span></div>
-        <p class="stage-copy" id="stage-copy">拉下舷窗簾，聽完機長廣播，這趟航班就會起飛。</p>
-        <button class="primary-button" id="btn-takeoff" type="button"><span class="button-icon">↓</span><span>拉下窗簾・起飛</span><span class="button-arrow">↗</span></button>
-        <button class="primary-button landing-button hidden" id="btn-land" type="button"><span class="button-icon">↑</span><span>打開窗戶・降落</span><span class="button-arrow">↗</span></button>
+        <p class="stage-copy" id="stage-copy">選好航向後就可以起飛。起飛時螢幕會調暗，請好好休息。</p>
+        <button class="primary-button" id="btn-takeoff" type="button"><span class="button-icon">↓</span><span>起飛</span><span class="button-arrow">↗</span></button>
+        <button class="primary-button landing-button hidden" id="btn-land" type="button"><span class="button-icon">↑</span><span>降落</span><span class="button-arrow">↗</span></button>
         <button class="secondary-button hidden" id="btn-restart" type="button">再飛一次 <span>↻</span></button>
         <button class="secondary-button sleep-report-button hidden" id="btn-sleep-report" type="button">回報實際睡眠 <span>＋</span></button>
         <div class="sound-row"><span>♫</span><span id="sound-label">音樂與機長廣播將在起飛時播放</span><button id="sound-toggle" type="button" aria-label="切換聲音" aria-pressed="true">聲音開啟</button></div>
@@ -183,11 +183,12 @@
     <footer class="footer"><span>TAKE A BREATH. TAKE A FLIGHT.</span><span>為 iPad mini 橫式畫面設計 · 亦支援直式</span></footer>
   </div>
 
+  <div class="cabin-veil" id="cabin-veil" aria-hidden="true"></div>
   <div class="ceremony hidden" id="ceremony" role="status" aria-live="polite"><span class="ceremony-tag" id="ceremony-tag">CAPTAIN SPEAKING</span><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p id="ceremony-copy"></p></div>
   <div class="toast hidden" id="toast" role="alert"></div>
 
-  <dialog id="profile-dialog" class="profile-dialog"><form id="login-form" method="dialog" novalidate><div class="dialog-top"><span class="eyebrow">BOARDING PASS</span><button type="button" id="profile-close" aria-label="關閉">×</button></div><h2>登機資料</h2><p>選填。不填也可以直接拉窗簾起飛；未勾選研究同意時，航班只在這台裝置體驗，不會寫入研究資料庫。</p><label>乘客代碼<input id="input-pid" name="passengerId" autocomplete="off" placeholder="可留空"></label><label>暱稱<input id="input-name" name="name" autocomplete="off" placeholder="可留空"></label><label>Terminal 航站<input id="input-group" name="groupId" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="可留空，預設 0001"></label><label class="consent"><input id="research-consent" type="checkbox"><span>我同意將本次航班與選填的睡眠回報記錄在 S3 研究資料庫。</span></label><button type="submit" id="btn-login" class="primary-button">儲存並登機 ↗</button><span class="dialog-hint" id="profile-hint"></span></form></dialog>
-  <dialog id="sleep-report-dialog" class="profile-dialog"><form id="sleep-report-form"><div class="dialog-top"><span class="eyebrow">SLEEP LOG</span><button type="button" id="sleep-report-close" aria-label="關閉">×</button></div><h2>這趟睡得如何？</h2><p>窗簾關閉到打開的時間已自動記錄為休息區間。若你知道自己實際睡了多久，可以選填下方資料。</p><label>實際睡著約幾分鐘（選填）<input id="sleep-minutes" type="number" min="0" max="1440" step="1" inputmode="numeric" placeholder="例如 45"></label><label>睡眠品質 1–5 分（選填）<select id="sleep-quality"><option value="">不填寫</option><option value="1">1 · 很差</option><option value="2">2 · 偏差</option><option value="3">3 · 普通</option><option value="4">4 · 不錯</option><option value="5">5 · 很好</option></select></label><button type="submit" id="sleep-report-submit" class="primary-button">儲存睡眠回報</button><span class="dialog-hint" id="sleep-report-hint"></span></form></dialog>
-  <script src="vendor/d3.min.js"></script><script src="globe.js"></script><script src="broadcast-audio.js"></script><script src="vendor/qrcode.js"></script><script src="device-controls.js"></script><script src="app.js"></script>
+  <dialog id="profile-dialog" class="profile-dialog"><form id="login-form" method="dialog" novalidate><div class="dialog-top"><span class="eyebrow">BOARDING PASS</span><button type="button" id="profile-close" aria-label="關閉">×</button></div><h2>登機資料</h2><p>選填。不填也可以直接起飛；未勾選研究同意時，航班只在這台裝置體驗，不會寫入研究資料庫。</p><label>乘客代碼<input id="input-pid" name="passengerId" autocomplete="off" placeholder="可留空"></label><label>暱稱<input id="input-name" name="name" autocomplete="off" placeholder="可留空"></label><label>Terminal 航站<input id="input-group" name="groupId" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="可留空，預設 0001"></label><label class="consent"><input id="research-consent" type="checkbox"><span>我同意將本次航班與選填的睡眠回報記錄在 S3 研究資料庫。</span></label><button type="submit" id="btn-login" class="primary-button">儲存並登機 ↗</button><span class="dialog-hint" id="profile-hint"></span></form></dialog>
+  <dialog id="sleep-report-dialog" class="profile-dialog"><form id="sleep-report-form"><div class="dialog-top"><span class="eyebrow">SLEEP LOG</span><button type="button" id="sleep-report-close" aria-label="關閉">×</button></div><h2>這趟睡得如何？</h2><p>起飛到降落的時間已自動記錄為休息區間。若你知道自己實際睡了多久，可以選填下方資料。</p><label>實際睡著約幾分鐘（選填）<input id="sleep-minutes" type="number" min="0" max="1440" step="1" inputmode="numeric" placeholder="例如 45"></label><label>睡眠品質 1–5 分（選填）<select id="sleep-quality"><option value="">不填寫</option><option value="1">1 · 很差</option><option value="2">2 · 偏差</option><option value="3">3 · 普通</option><option value="4">4 · 不錯</option><option value="5">5 · 很好</option></select></label><button type="submit" id="sleep-report-submit" class="primary-button">儲存睡眠回報</button><span class="dialog-hint" id="sleep-report-hint"></span></form></dialog>
+  <script src="vendor/d3.min.js"></script><script src="globe.js"></script><script src="broadcast-audio.js"></script><script src="vendor/qrcode.js"></script><script src="device-controls.js"></script><script src="app.js?v=6"></script>
 </body>
 </html>

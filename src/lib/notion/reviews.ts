@@ -14,6 +14,18 @@ import {
 } from './client';
 import { REVIEW_DB_TITLE, getReviewProperties } from './review-schema';
 import { attachFileUploadToProperty, uploadImageToNotion } from './notion-file-upload';
+import {
+  parseReviewEntries,
+  scoreForAccount,
+  serializeReviewEntries,
+  upsertReviewEntry,
+} from '../review/ratings';
+
+export const REVIEW_ACCOUNTS_SAMPLE_ID = 'SYS-ACCOUNTS';
+
+export function isSystemReviewSample(sample: { sampleId?: string }): boolean {
+  return String(sample.sampleId || '').startsWith('SYS-');
+}
 
 export interface ReviewSample {
   notionId: string;
@@ -30,6 +42,8 @@ export interface ReviewSample {
   imageUrl: string;
   comments: string;
   reviewer: string;
+  /** 1–10；尚未評分為 null */
+  textScore: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +57,11 @@ export interface ReviewStoreStatus {
 const mem: ReviewSample[] = [];
 const RICH_TEXT_CHUNK = 2000;
 const COMMENTS_LIMIT = 18000;
+
+function clampTextScore(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.max(1, Math.min(10, Math.round(value)));
+}
 
 function readTextAll(props: Record<string, unknown>, key: string): string {
   const p = props[key] as { rich_text?: { plain_text: string }[] } | undefined;
@@ -74,6 +93,7 @@ function parseSample(id: string, props: Record<string, unknown>): ReviewSample {
     imageUrl: readFirstFileUrl(props, 'Image'),
     comments: readTextAll(props, 'Comments'),
     reviewer: readTextAll(props, 'Reviewer'),
+    textScore: clampTextScore(readNumber(props, 'Text Score')),
     createdAt: readDate(props, 'Created At') || '',
     updatedAt: readDate(props, 'Updated At') || '',
   };
@@ -115,26 +135,42 @@ export async function resolveReviewDbId(): Promise<string | null> {
 export async function listReviewSamples(limit = 24): Promise<ReviewSample[]> {
   const dbId = await resolveReviewDbId().catch(() => null);
   if (!isNotionConfigured() || !dbId) {
-    return [...mem].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit);
+    return [...mem]
+      .filter((item) => !isSystemReviewSample(item))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit);
   }
 
   const client = getNotionClient();
   const response = await client.databases.query({
     database_id: dbId,
-    page_size: Math.min(limit, 50),
+    page_size: Math.min(limit + 4, 50),
     sorts: [{ timestamp: 'created_time', direction: 'descending' }],
   });
 
-  return response.results.map((page) => {
-    const typed = page as { id: string; properties: Record<string, unknown> };
-    return parseSample(typed.id, typed.properties);
-  });
+  return response.results
+    .map((page) => {
+      const typed = page as { id: string; properties: Record<string, unknown> };
+      return parseSample(typed.id, typed.properties);
+    })
+    .filter((item) => !isSystemReviewSample(item))
+    .slice(0, limit);
 }
 
 export async function getReviewSample(sampleId: string): Promise<ReviewSample | null> {
   const fromMem = mem.find((item) => item.sampleId === sampleId || item.notionId === sampleId);
   const dbId = await resolveReviewDbId().catch(() => null);
   if (!isNotionConfigured() || !dbId) return fromMem || null;
+
+  try {
+    const response = await getNotionClient().databases.query({
+      database_id: dbId,
+      page_size: 1,
+      filter: { property: 'Sample ID', title: { equals: sampleId } },
+    });
+    const page = response.results[0] as { id: string; properties: Record<string, unknown> } | undefined;
+    if (page) return parseSample(page.id, page.properties);
+  } catch { /* fall through */ }
 
   if (fromMem && !fromMem.notionId.startsWith('mem_')) {
     try {
@@ -144,18 +180,7 @@ export async function getReviewSample(sampleId: string): Promise<ReviewSample | 
     } catch { /* fall through */ }
   }
 
-  const samples = await listReviewSamples(50);
-  const listed = samples.find((item) => item.sampleId === sampleId || item.notionId === sampleId) || fromMem || null;
-  if (listed && listed.notionId && !listed.notionId.startsWith('mem_')) {
-    try {
-      const page = await getNotionClient().pages.retrieve({ page_id: listed.notionId });
-      const typed = page as { id: string; properties: Record<string, unknown> };
-      return parseSample(typed.id, typed.properties);
-    } catch {
-      return listed;
-    }
-  }
-  return listed;
+  return fromMem || null;
 }
 
 export async function createReviewSample(input: Partial<ReviewSample>): Promise<ReviewSample> {
@@ -175,6 +200,7 @@ export async function createReviewSample(input: Partial<ReviewSample>): Promise<
     imageUrl: input.imageUrl || '',
     comments: input.comments || '',
     reviewer: input.reviewer || '',
+    textScore: clampTextScore(input.textScore),
     createdAt: now,
     updatedAt: now,
   };
@@ -227,15 +253,50 @@ export async function updateReviewSample(
 export async function appendReviewComment(
   sampleId: string,
   comment: string,
-  reviewer: string
+  reviewer: string,
+  textScore?: number | null
 ): Promise<ReviewSample> {
   const current = await getReviewSample(sampleId);
   if (!current) throw new Error('找不到這筆測試內容。');
-  const stamp = new Date().toLocaleString('zh-TW', { hour12: false });
-  const name = reviewer.trim() || '匿名';
-  const line = `[${stamp} ${name}]\n${comment.trim()}`;
-  const comments = [current.comments, line].filter(Boolean).join('\n\n').slice(-COMMENTS_LIMIT);
-  return updateReviewSample(current.sampleId, { comments, reviewer: name, phase: current.phase });
+  await ensureReviewTextScoreProperty();
+  const name = reviewer.trim();
+  if (!name) throw new Error('請先登入審查帳號。');
+  const score = clampTextScore(textScore);
+  const comments = serializeReviewEntries(upsertReviewEntry(current.comments, name, score, comment));
+  return updateReviewSample(current.sampleId, {
+    comments,
+    reviewer: name,
+    textScore: score ?? scoreForAccount(comments, name) ?? current.textScore,
+    phase: current.phase,
+  });
+}
+
+let textScoreEnsured = false;
+async function ensureReviewTextScoreProperty(): Promise<void> {
+  if (textScoreEnsured) return;
+  const dbId = await resolveReviewDbId().catch(() => null);
+  if (!isNotionConfigured() || !dbId) {
+    textScoreEnsured = true;
+    return;
+  }
+  try {
+    const client = getNotionClient();
+    const id = dbId.replace(/-/g, '');
+    const db = await client.databases.retrieve({ database_id: id }) as {
+      properties: Record<string, { type: string }>;
+    };
+    if (!db.properties['Text Score']) {
+      await client.databases.update({
+        database_id: id,
+        properties: {
+          'Text Score': { number: { format: 'number' } },
+        },
+      });
+    }
+    textScoreEnsured = true;
+  } catch (err) {
+    console.error('[review] ensure Text Score failed', err);
+  }
 }
 
 type CachedReviewImage = { buffer: Buffer; contentType: string; at: number };
@@ -246,13 +307,16 @@ export function cacheReviewImage(sampleId: string, buffer: Buffer, contentType: 
   imageCache.set(sampleId, { buffer, contentType, at: Date.now() });
 }
 
-export function toReviewClient(sample: ReviewSample) {
+export function toReviewClient(sample: ReviewSample, account?: string | null) {
   const hasImage = Boolean(sample.imageUrl);
+  const ratings = parseReviewEntries(sample.comments);
   return {
     ...sample,
     source: 'lab' as const,
     hasImage,
     imageUrl: hasImage ? `/api/review/image?sampleId=${encodeURIComponent(sample.sampleId)}` : '',
+    ratings,
+    myScore: scoreForAccount(sample.comments, account),
   };
 }
 
@@ -325,6 +389,7 @@ function sampleToProperties(sample: ReviewSample) {
     'Image Prompt': wLongText(sample.imagePrompt),
     Comments: wLongText(sample.comments),
     Reviewer: wLongText(sample.reviewer),
+    'Text Score': wNumber(sample.textScore),
     'Created At': wDate(sample.createdAt),
     'Updated At': wDate(sample.updatedAt),
   };
