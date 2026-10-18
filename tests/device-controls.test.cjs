@@ -100,3 +100,25 @@ test('sleep feedback and busy state cannot change direction or start a new fligh
   f.state.sleepDial = false; f.send();
   assert.deepEqual(f.actions, [['direction', 5]]);
 });
+test('ordinary browsers skip the local Pi kiosk probe', () => {
+  const { shouldProbeLocalBridge } = require('../public/device-controls.js');
+  assert.equal(shouldProbeLocalBridge(
+    { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0', platform: 'MacIntel' },
+    { search: '' },
+  ), false);
+  assert.equal(shouldProbeLocalBridge(
+    { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel) Chrome/120.0.0.0 Mobile', platform: 'Linux armv8l' },
+    { search: '' },
+  ), false);
+});
+test('Raspberry Pi kiosk or explicit device flag still probes the local bridge', () => {
+  const { shouldProbeLocalBridge } = require('../public/device-controls.js');
+  assert.equal(shouldProbeLocalBridge(
+    { userAgent: 'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36', platform: 'Linux aarch64' },
+    { search: '' },
+  ), true);
+  assert.equal(shouldProbeLocalBridge(
+    { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0', platform: 'MacIntel' },
+    { search: '?device=1' },
+  ), true);
+});

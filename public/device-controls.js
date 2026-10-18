@@ -6,6 +6,19 @@
   const enabled = true;
   const kioskStatusUrl = 'http://127.0.0.1:8766/api/status';
 
+  // Chrome always logs failed loopback fetches. Ordinary laptops/phones have no
+  // Pi kiosk, so skip 8766/8765 unless this looks like the hardware browser.
+  function shouldProbeLocalBridge(nav = root.navigator, loc = root.location) {
+    try {
+      const params = new URLSearchParams(loc?.search || '');
+      if (params.get('device') === '1' || params.get('kiosk') === '1') return true;
+    } catch { /* ignore */ }
+    const ua = String(nav?.userAgent || '');
+    const platform = String(nav?.platform || '');
+    if (/Android|iPhone|iPad|iPod/i.test(ua)) return false;
+    return /(aarch64|armv[6-8]|arm64)/i.test(`${ua} ${platform}`) && /Linux|X11/i.test(`${ua} ${platform}`);
+  }
+
   function showError(message) {
     if (!root.document) return;
     let panel = root.document.getElementById('device-error');
@@ -75,6 +88,13 @@
   }
 
   function start(adapter) {
+    if (root.document) {
+      root.document.addEventListener('pointerdown', () => {
+        root.BroadcastAudio?.primeFromUserGesture?.();
+        root.BroadcastAudio?.armWakeupCarrier?.();
+      }, { once: true, capture: true });
+    }
+    if (!shouldProbeLocalBridge()) return;
     const errors = { bridge: '', adc: '' };
     const setError = (kind, message) => {
       errors[kind] = message;
@@ -111,11 +131,6 @@
       }
     }
     void probeKiosk();
-    // A real gesture is still required by browsers for audio playback.
-    root.document.addEventListener('pointerdown', () => {
-      root.BroadcastAudio?.primeFromUserGesture?.();
-      root.BroadcastAudio?.armWakeupCarrier?.();
-    }, { once: true, capture: true });
     async function poll() {
       if (!kioskDetected) {
         setTimeout(poll, 2000);
@@ -158,7 +173,7 @@
     void poll();
   }
 
-  const api = { enabled, start, createController };
+  const api = { enabled, start, createController, shouldProbeLocalBridge };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlightDeviceControls = api;
 })(globalThis);
