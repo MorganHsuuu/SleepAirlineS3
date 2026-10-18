@@ -84,6 +84,7 @@
     let connected = false;
     let kioskDetected = false;
     let bridgeExitCode = null;
+    let kioskMisses = 0;
     async function probeKiosk() {
       const abort = new AbortController();
       const timeout = setTimeout(() => abort.abort(), 2500);
@@ -91,17 +92,22 @@
         const response = await fetch(kioskStatusUrl, {
           cache: 'no-store', signal: abort.signal, targetAddressSpace: 'loopback',
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error('kiosk missing');
         const status = await response.json();
         kioskDetected = true;
+        kioskMisses = 0;
         bridgeExitCode = status.bridgeExitCode;
       } catch {
+        kioskDetected = false;
+        kioskMisses += 1;
         bridgeExitCode = null;
         /* Ordinary web visitors have no local kiosk. */
-      }
-      finally {
+      } finally {
         clearTimeout(timeout);
-        setTimeout(probeKiosk, 3000);
+        const wait = kioskDetected
+          ? 3000
+          : Math.min(60000, 5000 * (2 ** Math.min(Math.max(kioskMisses - 1, 0), 3)));
+        setTimeout(probeKiosk, wait);
       }
     }
     void probeKiosk();
@@ -111,6 +117,10 @@
       root.BroadcastAudio?.armWakeupCarrier?.();
     }, { once: true, capture: true });
     async function poll() {
+      if (!kioskDetected) {
+        setTimeout(poll, 2000);
+        return;
+      }
       const abort = new AbortController();
       const timeout = setTimeout(() => abort.abort(), 2500);
       try {
