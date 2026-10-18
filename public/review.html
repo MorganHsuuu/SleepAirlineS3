@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css?v=rows-2">
+  <link rel="stylesheet" href="/review.css?v=desk-1">
 </head>
 <body class="gate-on">
   <div class="orb orb-a" aria-hidden="true"></div>
@@ -74,23 +74,22 @@
             <canvas id="globe-canvas" width="700" height="1000" aria-label="預覽這次會飛到哪裡"></canvas>
             <p class="globe-caption" id="globe-caption">臺北 → 預覽中</p>
           </div>
-
-          <div class="console-dock">
-            <fieldset class="mode-switch">
-              <legend>這次要生成</legend>
-              <div class="mode-options">
-                <label class="mode-option">
-                  <input type="radio" name="generate-mode" value="text" checked>
-                  <span>生成文字</span>
-                </label>
-                <label class="mode-option">
-                  <input type="radio" name="generate-mode" value="image">
-                  <span>文字＋圖片</span>
-                </label>
-              </div>
-            </fieldset>
-            <button type="button" class="primary" id="btn-flight">開始生成</button>
-          </div>
+        </div>
+        <div class="console-dock">
+          <fieldset class="mode-switch">
+            <legend>這次要生成</legend>
+            <div class="mode-options">
+              <label class="mode-option">
+                <input type="radio" name="generate-mode" value="text" checked>
+                <span>生成文字</span>
+              </label>
+              <label class="mode-option">
+                <input type="radio" name="generate-mode" value="image">
+                <span>文字＋圖片</span>
+              </label>
+            </div>
+          </fieldset>
+          <button type="button" class="primary" id="btn-flight">開始生成</button>
         </div>
       </aside>
 
@@ -120,20 +119,24 @@
               <p class="copy" id="landing-copy">目的地會接著上一站，不會覆蓋舊的紀錄。</p>
             </article>
           </div>
-
-          <article class="picture">
-            <header>
-              <small>Scenery</small>
-              <h3>降落風景</h3>
-            </header>
-            <div class="image-frame" id="image-frame">
-              <p>選擇「文字＋圖片」時會一起生成風景。</p>
-            </div>
-            <p class="prompt" id="image-prompt" hidden></p>
-          </article>
         </div>
 
+        <article class="picture scenery-strip">
+          <header>
+            <small>Scenery</small>
+            <h3>降落風景</h3>
+          </header>
+          <div class="image-frame" id="image-frame">
+            <p>選擇「文字＋圖片」時會一起生成風景。</p>
+          </div>
+          <p class="prompt" id="image-prompt" hidden></p>
+        </article>
+
         <article class="comment-bar" id="comment-bar">
+          <div class="section-head">
+            <small>Rate</small>
+            <h2>這則評分</h2>
+          </div>
           <div class="comments" id="comments">還沒有評論。</div>
           <div class="comment-form">
             <label class="score-bar">
@@ -193,6 +196,6 @@
   <div class="toast" id="toast" hidden></div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js?v=rows-1"></script>
+  <script src="/review.js?v=desk-1"></script>
 </body>
 </html>
