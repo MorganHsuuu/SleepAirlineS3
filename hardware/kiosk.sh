@@ -80,10 +80,27 @@ if [ -z "$CHROME" ]; then
 fi
 
 start_bridge
-wait_for_site
+BOOT_URL="$URL"
+if command -v systemctl >/dev/null 2>&1 && \
+    systemctl is-enabled --quiet sleep-airline-pairing.service; then
+  pairing_status=""
+  for i in $(seq 1 60); do
+    pairing_status="$(curl -fsS --max-time 1 http://127.0.0.1:8766/api/status 2>/dev/null || true)"
+    if [ -n "$pairing_status" ]; then break; fi
+    sleep 1
+  done
+  if [ -z "$pairing_status" ]; then
+    echo "配對服務未回應，請檢查 sleep-airline-pairing.service。" >&2
+    BOOT_URL="http://127.0.0.1:8766/device"
+  elif ! printf '%s' "$pairing_status" | python3 -c \
+      'import json,sys; s=json.load(sys.stdin); sys.exit(0 if s.get("paired") and s.get("online") else 1)'; then
+    BOOT_URL="http://127.0.0.1:8766/device"
+  fi
+fi
+if [ "$BOOT_URL" = "$URL" ]; then wait_for_site; fi
 disable_blanking
 
-echo "正在全螢幕開啟 ${URL}"
+echo "正在全螢幕開啟 ${BOOT_URL}"
 echo "感測器：http://127.0.0.1:8765/state"
 echo "日誌：/tmp/sleep-airline-kiosk.log"
 echo "沒有鍵盤時，用 SSH 關掉：pkill chromium"
@@ -110,7 +127,7 @@ CHROME_ARGS=(
   --autoplay-policy=no-user-gesture-required
   --no-first-run
   --overscroll-history-navigation=0
-  "$URL"
+  "$BOOT_URL"
 )
 
 nohup "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
