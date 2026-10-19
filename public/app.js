@@ -691,6 +691,7 @@ async function doTakeoff() {
     if (state.sound) void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: false, volume: .45, fadeInMs: 400 });
     await delay(10000);
     await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 4500 });
+    if (state.stage !== 'takeoff') return;
     setInflightStandby(true);
     setScene('clouds'); setShade('closed');
     state.stage = 'cruise'; render();
@@ -699,13 +700,16 @@ async function doTakeoff() {
     hideCeremony();
     if (state.researchFlight) { void fetchBoard().catch(() => {}); }
   } catch (error) {
+    if (state.stage !== 'takeoff') return;
     markSpeechReady(false);
     window.BroadcastAudio?.stopTowerSignalLoop?.();
     await BroadcastAudio?.stopFlightSfx?.({ fade: false });
     await BroadcastAudio?.stopCaptainIntro?.();
     hideCeremony(); setInflightStandby(false); setShade('open'); state.stage = 'ready'; state.researchFlight = false; render();
     showToast(`起飛失敗：${error.message}`);
-  } finally { state.busy = false; }
+  } finally {
+    if (state.stage === 'takeoff' || state.stage === 'ready') state.busy = false;
+  }
 }
 async function requestScenery(flightId) {
   if (!flightId || !state.researchFlight || !state.openaiReady) return null;
@@ -1011,7 +1015,8 @@ function playApproachVoiceSync() {
 }
 
 async function doLand() {
-  if (state.busy || state.stage !== 'cruise') return;
+  if (state.stage !== 'cruise' && state.stage !== 'takeoff') return;
+  if (state.stage === 'landing' || state.stage === 'landed') return;
   state.busy = true;
   state.landedLegReady = false;
   state.stage = 'landing'; render(); setShade('open');

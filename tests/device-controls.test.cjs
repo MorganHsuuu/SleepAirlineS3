@@ -36,13 +36,10 @@ test('knob sets the departure direction before a fresh takeoff; held/released ma
   f.send({ takeoffClosed: false });
   assert.deepEqual(f.actions, [['direction', 6], ['takeoff', 6]]);
 });
-test('a brief landing pulse during takeoff is retained until cruise, exactly once', () => {
+test('a landing pulse during takeoff lands immediately', () => {
   const f = fixture();
   f.send(); f.send({ takeoffCount: 1 });
-  f.send({ landCount: 1 }); // pulse has already ended before HTTP poll
-  f.send();
-  f.state.stage = 'cruise'; f.state.busy = false;
-  f.send(); f.send();
+  f.send({ landCount: 1 });
   assert.deepEqual(f.actions, [['takeoff', 2], ['land']]);
 });
 test('landing before departure and takeoff during landing are not replayed later', () => {
@@ -67,19 +64,19 @@ test('simultaneous reed activations are ignored until a fresh unambiguous event'
 });
 test('disconnection and Python restart discard stale commands and queued landing', () => {
   const f = fixture(); f.send(); f.send({ takeoffCount: 1 }); f.send({ landCount: 1 });
+  assert.deepEqual(f.actions, [['takeoff', 2], ['land']]);
   f.controller.reset();
   f.state.stage = 'cruise'; f.state.busy = false;
   f.send({ landCount: 5 }); f.send();
   f.send({ session: 'two', takeoffCount: 0, landCount: 1 }); f.send();
-  assert.deepEqual(f.actions, [['takeoff', 2]]);
   f.send({ landCount: 2 });
   assert.deepEqual(f.actions.at(-1), ['land']);
 });
-test('failed takeoff clears a pending landing for the next attempt', () => {
+test('a landing during takeoff does not replay after a later takeoff', () => {
   const f = fixture(); f.send(); f.send({ takeoffCount: 1 }); f.send({ landCount: 1 });
   f.state.stage = 'ready'; f.state.busy = false; f.send(); f.send({ takeoffCount: 2 });
   f.state.stage = 'cruise'; f.state.busy = false; f.send();
-  assert.deepEqual(f.actions, [['takeoff', 2], ['takeoff', 2]]);
+  assert.deepEqual(f.actions, [['takeoff', 2], ['land'], ['takeoff', 2]]);
 });
 test('ADC failure preserves heading and reed controls; invalid payloads are rejected', () => {
   const f = fixture(); f.send();

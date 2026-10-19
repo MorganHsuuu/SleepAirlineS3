@@ -2,8 +2,15 @@
 # Raspberry Pi: wait for sensors + network, then open Sleep Airline fullscreen.
 set -euo pipefail
 
-URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app}"
+URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app/}"
+case "$URL" in
+  *kiosk=1*|*device=1*) ;;
+  *\?*) URL="${URL}&kiosk=1" ;;
+  *) URL="${URL}?kiosk=1" ;;
+esac
 HERE="$(cd "$(dirname "$0")" && pwd)"
+CHROME_PROFILE="${HOME}/.cache/sleep-airline-chrome"
+mkdir -p "$CHROME_PROFILE"
 export DISPLAY="${DISPLAY:-:0}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
@@ -88,6 +95,9 @@ fi
 
 CHROME_ARGS=(
   "${OZONE[@]}"
+  --user-data-dir="$CHROME_PROFILE"
+  --disable-web-security
+  --allow-running-insecure-content
   --kiosk
   --start-fullscreen
   --password-store=basic
@@ -103,10 +113,7 @@ CHROME_ARGS=(
   "$URL"
 )
 
-if [ -n "${SSH_CONNECTION:-}" ]; then
-  "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
-  echo "已在樹莓派螢幕開啟（PID $!）。這個 SSH 視窗還可以繼續打指令。"
-  exit 0
-fi
-
-exec "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1
+nohup "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
+disown || true
+echo "已在背景全螢幕開啟（PID $!）。這個視窗可以繼續測磁鐵；Ctrl+C 不會關掉畫面。"
+echo "要關全螢幕請打：pkill chromium"

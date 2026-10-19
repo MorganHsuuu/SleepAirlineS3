@@ -16,7 +16,21 @@
     const ua = String(nav?.userAgent || '');
     const platform = String(nav?.platform || '');
     if (/Android|iPhone|iPad|iPod/i.test(ua)) return false;
-    return /(aarch64|armv[6-8]|arm64)/i.test(`${ua} ${platform}`) && /Linux|X11/i.test(`${ua} ${platform}`);
+    const hints = `${ua} ${platform} ${nav?.userAgentData?.platform || ''}`;
+    return /(aarch64|armv[6-8]|arm64|Raspberry)/i.test(hints) && /Linux|X11|Wayland/i.test(hints);
+  }
+
+  function showStatus(text) {
+    if (!root.document) return;
+    let panel = root.document.getElementById('device-link');
+    if (!panel) {
+      panel = root.document.createElement('div');
+      panel.id = 'device-link';
+      panel.className = 'device-link';
+      root.document.body.appendChild(panel);
+    }
+    panel.textContent = text || '';
+    panel.hidden = !text;
   }
 
   function showError(message) {
@@ -78,7 +92,11 @@
           takeoff();
           return;
         }
-        if (landEdge && ['takeoff', 'cruise'].includes(state.stage)) pendingLand = true;
+        if (landEdge && ['takeoff', 'cruise'].includes(state.stage)) {
+          pendingLand = false;
+          land();
+          return;
+        }
         if (pendingLand && state.stage === 'cruise' && !state.busy) {
           pendingLand = false;
           land();
@@ -150,16 +168,16 @@
         if (!connected) adapter.notify('裝置控制已連線，移開磁鐵後再靠近即可觸發');
         controller.accept(data);
         connected = true;
+        showStatus(`磁鐵已連線 · 起飛 ${data.takeoffCount} · 降落 ${data.landCount}`);
         setError('bridge', '');
       } catch (error) {
         controller.reset();
-        if (connected || kioskDetected) {
-          const detail = bridgeExitCode === null || bridgeExitCode === undefined
-            ? error.message || '瀏覽器無法存取本機程式'
-            : `橋接程式已結束，代碼 ${bridgeExitCode}`;
-          setError('bridge', `裝置感測器未連線：${detail}。請查看樹莓派終端機與瀏覽器的本機網路權限。`);
-          setError('adc', '');
-        }
+        const detail = bridgeExitCode === null || bridgeExitCode === undefined
+          ? error.message || '瀏覽器無法存取本機程式'
+          : `橋接程式已結束，代碼 ${bridgeExitCode}`;
+        showStatus('磁鐵未連線');
+        setError('bridge', `裝置感測器未連線：${detail}。請用 kiosk.sh 開全螢幕。`);
+        setError('adc', '');
         connected = false;
       } finally {
         clearTimeout(timeout);
