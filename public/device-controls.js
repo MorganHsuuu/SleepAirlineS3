@@ -132,10 +132,6 @@
     }
     void probeKiosk();
     async function poll() {
-      if (!kioskDetected) {
-        setTimeout(poll, 2000);
-        return;
-      }
       const abort = new AbortController();
       const timeout = setTimeout(() => abort.abort(), 2500);
       try {
@@ -147,7 +143,7 @@
         if (!validSample(data)) throw new Error('請啟動新版 device_bridge.py');
         if (typeof data.passengerId === 'string' && /^PAX-[A-Z0-9]{8,32}$/.test(data.passengerId)) {
           adapter.setPassenger?.(data.passengerId);
-        } else if (data.passengerId === null) {
+        } else if (kioskDetected && data.passengerId === null) {
           root.location.replace('http://127.0.0.1:8766/device');
           return;
         }
