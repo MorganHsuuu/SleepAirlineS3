@@ -36,6 +36,17 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(bridge.DirectionFilter(reverse=True).update(0), 7)
         self.assertEqual(bridge.DirectionFilter(0.2, 3.1).update(3.1), 7)
 
+    def test_knob_stop_does_not_wrap_from_northwest_to_north(self):
+        knob = bridge.DirectionFilter()
+        self.assertEqual(knob.update(3.3), 7)
+        self.assertEqual(knob.update(3.29), 7)
+        self.assertNotEqual(knob.update(3.3), 0)
+        direction = 7
+        for voltage in (2.8, 2.2, 1.6, 1.0, 0.4, 0.0):
+            for _ in range(20):
+                direction = knob.update(voltage)
+        self.assertEqual(direction, 0)
+
     def test_noisy_boundary_stays_stable_but_real_turn_changes_heading(self):
         knob = bridge.DirectionFilter()
         self.assertEqual(knob.update(0.48 * 3.3), 3)
@@ -62,10 +73,19 @@ class BridgeTests(unittest.TestCase):
 
     def test_adc_failure_cannot_reuse_stale_heading(self):
         state = bridge.DeviceState()
-        state.adc(3, 1.5)
+        state.adc(3, 1.5, position=0.4)
         state.adc(None, None, 'I2C unavailable')
-        self.assertIsNone(state.snapshot()['direction'])
-        self.assertIsNone(state.snapshot()['voltage'])
+        snapshot = state.snapshot()
+        self.assertIsNone(snapshot['direction'])
+        self.assertIsNone(snapshot['voltage'])
+        self.assertIsNone(snapshot['position'])
+
+    def test_snapshot_reports_absolute_pot_position(self):
+        state = bridge.DeviceState()
+        state.adc(7, 3.3, position=1.0)
+        snapshot = state.snapshot()
+        self.assertEqual(snapshot['direction'], 7)
+        self.assertEqual(snapshot['position'], 1.0)
 
     def test_http_snapshot_and_cors_origin_boundary(self):
         state = bridge.DeviceState()

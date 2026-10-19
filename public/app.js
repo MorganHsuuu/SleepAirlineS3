@@ -172,15 +172,21 @@ function shadeLip() {
 function syncShadeHandle() {}
 let compassTimer = null;
 let heading = 90;
-function wrapDelta(from, to) {
-  let diff = to - from;
-  if (diff > 180) diff -= 360;
-  if (diff < -180) diff += 360;
-  return diff;
+const POT_MAX_ANGLE = 315;
+const POT_WRAP_MID = 337.5;
+function clampDirection(index) {
+  const n = Math.round(Number(index));
+  if (!Number.isFinite(n)) return state.direction;
+  return Math.max(0, Math.min(directions.length - 1, n));
+}
+function angleToDirection(angle) {
+  const a = ((Number(angle) % 360) + 360) % 360;
+  if (a > POT_WRAP_MID) return 0;
+  return Math.max(0, Math.min(7, Math.round(a / 45)));
 }
 function paintNeedles(angle, animate) {
-  heading = angle;
-  const spin = `translate(-50%,-100%) rotate(${angle}deg)`;
+  heading = Math.max(0, Math.min(POT_MAX_ANGLE, angle));
+  const spin = `translate(-50%,-100%) rotate(${heading}deg)`;
   for (const id of ['dial-pointer', 'compass-needle']) {
     const node = $(id);
     if (!node) continue;
@@ -188,19 +194,11 @@ function paintNeedles(angle, animate) {
     node.style.transform = spin;
   }
 }
-function spinTo(index, prefer) {
-  const next = (index + 8) % 8;
-  const target = directions[next].angle;
-  const current = ((heading % 360) + 360) % 360;
-  let delta = wrapDelta(current, target);
-  if (next !== state.direction) {
-    if (prefer === 'cw' && delta < 0) delta += 360;
-    if (prefer === 'ccw' && delta > 0) delta -= 360;
-    paintNeedles(heading + delta, true);
-  }
+function spinTo(index) {
+  paintNeedles(directions[clampDirection(index)].angle, true);
 }
 function applyDirection(index) {
-  state.direction = (index + 8) % 8;
+  state.direction = clampDirection(index);
   const d = directions[state.direction];
   $('tk-direction').value = d.key;
   $('direction-name').textContent = `${d.name} · ${String(d.angle).padStart(3, '0')}°`;
@@ -294,10 +292,15 @@ function dialCanTurn() {
   if (state.sleepDial) return true;
   return state.stage === 'ready' || state.stage === 'landed';
 }
-function setDirection(index, prefer) {
+function setDirection(index) {
   if (!dialCanTurn() || state.sleepDial) return;
-  spinTo(index, prefer);
-  applyDirection(index);
+  const next = clampDirection(index);
+  if (next === state.direction) {
+    paintNeedles(directions[next].angle, true);
+    return;
+  }
+  spinTo(next);
+  applyDirection(next);
   window.BroadcastAudio?.playCompassTick?.();
   showCompass();
 }
@@ -339,7 +342,7 @@ function render() {
     const heading = document.querySelector('.direction-heading h2');
     const hint = document.querySelector('.direction-heading > span');
     if (heading) heading.textContent = '航向選擇';
-    if (hint) hint.textContent = '拖動旋鈕';
+    if (hint) hint.textContent = '轉到底即停';
     document.querySelector('.dial-wrap')?.classList.remove('is-sleep');
   }
   syncCabinDark();
@@ -1343,6 +1346,8 @@ function offerSleepDial() {
     $('direction-dial').style.opacity = '1';
     $('direction-dial').setAttribute('aria-disabled', 'false');
     $('direction-dial')._sleepValue = SLEEP_FACE_IDLE;
+    $('direction-dial')._sleepStart = SLEEP_FACE_IDLE;
+    $('direction-dial')._sleepDeviceOrigin = null;
     paintSleep(SLEEP_FACE_IDLE);
     const timer = setTimeout(finish, 10000);
     function finish() {
@@ -1367,47 +1372,46 @@ function offerSleepDial() {
   });
 }
 function bindShadeGesture() {}
-function applySleepTurn(delta) {
-  let diff = delta;
-  if (diff > 180) diff -= 360;
-  if (diff < -180) diff += 360;
+function applySleepPercent(percent) {
   const el = $('direction-dial');
-  const next = Math.max(0, Math.min(100, (Number(el._sleepValue) || 0) + diff / 3.6));
+  const next = Math.max(0, Math.min(100, Number(percent) || 0));
+  if (el._sleepStart == null) el._sleepStart = next;
+  if (Math.abs(next - el._sleepStart) > 2) el._sleepMoved?.();
   el._sleepValue = next;
   el.dataset.sleep = String(Math.round(next));
-  el._sleepMoved?.();
   paintSleep(next);
+}
+function applySleepFromDevice(percent) {
+  const el = $('direction-dial');
+  const next = Math.max(0, Math.min(100, Number(percent) || 0));
+  if (el._sleepDeviceOrigin == null) {
+    el._sleepDeviceOrigin = next;
+    el._sleepStart = next;
+    el._sleepValue = next;
+    paintSleep(next);
+    return;
+  }
+  applySleepPercent(next);
 }
 function bindDial() {
   const el = $('direction-dial');
   const wrap = document.querySelector('.dial-wrap');
-  let dragAngle = null;
   let dragging = false;
   let pointerId = null;
-  let unwrapped = heading;
   const angleFromEvent = (event) => {
     const rect = el.getBoundingClientRect();
     const x = event.clientX - (rect.left + rect.width / 2);
     const y = event.clientY - (rect.top + rect.height / 2);
     return (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
   };
-  const pointToIndex = (event, follow) => {
+  const pointToIndex = (event) => {
     const angle = angleFromEvent(event);
     if (state.sleepDial) {
-      if (follow && dragAngle != null) applySleepTurn(wrapDelta(dragAngle, angle));
-      dragAngle = angle;
+      applySleepPercent((angle / 360) * 100);
       return;
     }
-    if (!follow || dragAngle == null) {
-      const base = ((heading % 360) + 360) % 360;
-      unwrapped = heading + wrapDelta(base, angle);
-    } else {
-      unwrapped += wrapDelta(dragAngle, angle);
-    }
-    dragAngle = angle;
-    paintNeedles(unwrapped, false);
-    const norm = ((unwrapped % 360) + 360) % 360;
-    const index = Math.round(norm / 45) % 8;
+    const index = angleToDirection(angle);
+    paintNeedles(directions[index].angle, false);
     if (index !== state.direction) {
       applyDirection(index);
       window.BroadcastAudio?.playCompassTick?.();
@@ -1424,39 +1428,28 @@ function bindDial() {
     event.preventDefault();
     dragging = true;
     pointerId = event.pointerId;
-    dragAngle = null;
     const cap = event.target instanceof Element && wrap.contains(event.target) ? event.target : wrap;
     try { cap.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
-    pointToIndex(event, false);
+    pointToIndex(event);
   });
   wrap?.addEventListener('pointermove', (event) => {
     if (!dragging || event.pointerId !== pointerId) return;
     event.preventDefault();
-    pointToIndex(event, true);
+    pointToIndex(event);
   });
   const endDrag = (event) => {
     if (!dragging || (event && event.pointerId !== pointerId)) return;
-    const angle = dragAngle;
     dragging = false;
     pointerId = null;
-    dragAngle = null;
     try { wrap.releasePointerCapture(event.pointerId); } catch { /* not captured */ }
-    if (state.sleepDial || angle == null) return;
-    const norm = ((unwrapped % 360) + 360) % 360;
-    const index = Math.round(norm / 45) % 8;
-    unwrapped += wrapDelta(norm, directions[index].angle);
-    paintNeedles(unwrapped, true);
-    if (index !== state.direction) {
-      applyDirection(index);
-      window.BroadcastAudio?.playCompassTick?.();
-      showCompass();
-    }
+    if (state.sleepDial) return;
+    paintNeedles(directions[state.direction].angle, true);
   };
   wrap?.addEventListener('pointerup', endDrag);
   wrap?.addEventListener('pointercancel', endDrag);
   el.addEventListener('keydown', (event) => {
-    if (['ArrowRight', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setDirection(state.direction + 1, 'cw'); }
-    if (['ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setDirection(state.direction - 1, 'ccw'); }
+    if (['ArrowRight', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setDirection(state.direction + 1); }
+    if (['ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setDirection(state.direction - 1); }
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
@@ -1464,6 +1457,7 @@ function startDeviceControls() {
   window.FlightDeviceControls?.start({
     getState: () => state,
     setDirection: (index) => setDirection(index),
+    setSleep: (percent) => applySleepFromDevice(percent),
     setPassenger: (passengerId) => {
       if (state.profile?.passengerId === passengerId) return;
       state.profile = { passengerId, name: '旅人', groupId: '0001' };

@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=3">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body class="booting window-only">
   <div id="login-section" class="sr-only" aria-hidden="true"></div>
@@ -157,12 +157,13 @@
       <aside class="controls" aria-label="航班操控台">
         <div class="controls-top"><span class="eyebrow">FLIGHT CONTROL</span><span class="control-symbol">✧</span></div>
         <div class="control-divider"></div>
-        <div class="direction-heading"><div><small>01</small><h2>航向選擇</h2></div><span>拖動旋鈕</span></div>
+        <div class="direction-heading"><div><small>01</small><h2>航向選擇</h2></div><span>轉到底即停</span></div>
         <div class="dial-wrap">
           <svg class="sleep-arc" id="sleep-arc" viewBox="0 0 120 120" aria-hidden="true">
             <circle class="sleep-arc-track" cx="60" cy="60" r="54"></circle>
             <circle class="sleep-arc-draw" id="sleep-arc-draw" cx="60" cy="60" r="54" transform="rotate(-90 60 60)"></circle>
           </svg>
+          <div class="dial-stop" aria-hidden="true"></div>
           <div class="dial-cardinal n">N</div><div class="dial-cardinal e">E</div><div class="dial-cardinal s">S</div><div class="dial-cardinal w">W</div>
           <div id="direction-dial" class="direction-dial" role="slider" tabindex="0" aria-label="選擇航向" aria-valuemin="0" aria-valuemax="7" aria-valuenow="2" aria-valuetext="向東">
             <div class="dial-ticks"></div><div class="dial-inner"><span class="dial-pointer" id="dial-pointer"></span><span class="dial-center">✦</span></div>
@@ -189,6 +190,6 @@
 
   <dialog id="profile-dialog" class="profile-dialog"><form id="login-form" method="dialog" novalidate><div class="dialog-top"><span class="eyebrow">BOARDING PASS</span><button type="button" id="profile-close" aria-label="關閉">×</button></div><h2>登機資料</h2><p>選填。不填也可以直接起飛；未勾選研究同意時，航班只在這台裝置體驗，不會寫入研究資料庫。</p><label>乘客代碼<input id="input-pid" name="passengerId" autocomplete="off" placeholder="可留空"></label><label>暱稱<input id="input-name" name="name" autocomplete="off" placeholder="可留空"></label><label>Terminal 航站<input id="input-group" name="groupId" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="可留空，預設 0001"></label><label class="consent"><input id="research-consent" type="checkbox"><span>我同意將本次航班與選填的睡眠回報記錄在 S3 研究資料庫。</span></label><button type="submit" id="btn-login" class="primary-button">儲存並登機 ↗</button><span class="dialog-hint" id="profile-hint"></span></form></dialog>
   <dialog id="sleep-report-dialog" class="profile-dialog"><form id="sleep-report-form"><div class="dialog-top"><span class="eyebrow">SLEEP LOG</span><button type="button" id="sleep-report-close" aria-label="關閉">×</button></div><h2>這趟睡得如何？</h2><p>起飛到降落的時間已自動記錄為休息區間。若你知道自己實際睡了多久，可以選填下方資料。</p><label>實際睡著約幾分鐘（選填）<input id="sleep-minutes" type="number" min="0" max="1440" step="1" inputmode="numeric" placeholder="例如 45"></label><label>睡眠品質 1–5 分（選填）<select id="sleep-quality"><option value="">不填寫</option><option value="1">1 · 很差</option><option value="2">2 · 偏差</option><option value="3">3 · 普通</option><option value="4">4 · 不錯</option><option value="5">5 · 很好</option></select></label><button type="submit" id="sleep-report-submit" class="primary-button">儲存睡眠回報</button><span class="dialog-hint" id="sleep-report-hint"></span></form></dialog>
-  <script src="vendor/d3.min.js"></script><script src="globe.js"></script><script src="broadcast-audio.js"></script><script src="vendor/qrcode.js"></script><script src="device-controls.js?v=16"></script><script src="app.js?v=16"></script>
+  <script src="vendor/d3.min.js"></script><script src="globe.js"></script><script src="broadcast-audio.js"></script><script src="vendor/qrcode.js"></script><script src="device-controls.js?v=17"></script><script src="app.js?v=17"></script>
 </body>
 </html>

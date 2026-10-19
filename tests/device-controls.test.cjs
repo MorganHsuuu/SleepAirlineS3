@@ -12,6 +12,7 @@ function fixture() {
   const controller = createController({
     getState: () => state,
     setDirection: (value) => { state.direction = value; actions.push(['direction', value]); },
+    setSleep: (value) => { actions.push(['sleep', value]); },
     takeoff: () => { actions.push(['takeoff', state.direction]); state.stage = 'takeoff'; state.busy = true; },
     land: () => { actions.push(['land']); state.stage = 'landing'; state.busy = true; },
     notify: (message) => messages.push(message),
@@ -96,6 +97,17 @@ test('sleep feedback and busy state cannot change direction or start a new fligh
   assert.deepEqual(f.actions, []);
   f.state.sleepDial = false; f.send();
   assert.deepEqual(f.actions, [['direction', 5]]);
+});
+test('sleep dial uses the absolute pot position instead of wrapping extra turns', () => {
+  const f = fixture(); f.send();
+  f.state.stage = 'landed'; f.state.sleepDial = true;
+  f.send({ position: 0.2 });
+  f.send({ position: 1, direction: 7, takeoffCount: 1 });
+  assert.deepEqual(f.actions, [['sleep', 20], ['sleep', 100]]);
+});
+test('pot position outside 0-1 is rejected', () => {
+  const f = fixture(); f.send();
+  assert.throws(() => f.send({ position: 1.2 }));
 });
 test('ordinary browsers skip the local Pi kiosk probe', () => {
   const { shouldProbeLocalBridge } = require('../public/device-controls.js');

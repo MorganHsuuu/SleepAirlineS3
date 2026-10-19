@@ -43,13 +43,20 @@ class ADS1115:
 
 
 class DirectionFilter:
+    """Map a stop-to-stop potentiometer onto eight headings.
+
+    The physical knob cannot wrap: min voltage is N, max voltage is NW.
+    Turning past NW hits the mechanical stop instead of jumping back to N.
+    """
+
     def __init__(self, minimum=0.0, maximum=3.3, reverse=False):
         self.minimum, self.maximum, self.reverse = minimum, maximum, reverse
         self.filtered = None
         self.direction = None
 
     def update(self, voltage):
-        position = max(0.0, min(1.0, (voltage - self.minimum) / (self.maximum - self.minimum)))
+        span = self.maximum - self.minimum
+        position = max(0.0, min(1.0, (voltage - self.minimum) / span))
         if self.reverse:
             position = 1.0 - position
         self.filtered = position if self.filtered is None else self.filtered + 0.35 * (position - self.filtered)
@@ -67,7 +74,7 @@ class DeviceState:
         self.lock = Lock()
         self.data = dict(version=2, session=uuid.uuid4().hex, takeoffClosed=False,
                          landClosed=False, takeoffCount=0, landCount=0,
-                         direction=None, voltage=None, adcError="Starting ADS1115")
+                         direction=None, position=None, voltage=None, adcError="Starting ADS1115")
 
     def reed(self, name, closed, initial=False):
         with self.lock:
@@ -77,13 +84,13 @@ class DeviceState:
                 self.data[name + "Count"] += 1
                 print(f"{name.upper()} magnet detected", flush=True)
 
-    def adc(self, direction, voltage, error=None):
+    def adc(self, direction, voltage, error=None, position=None):
         with self.lock:
             if error != self.data["adcError"]:
                 print(f"ADC: {error or 'connected'}", flush=True)
             if direction is not None and direction != self.data["direction"]:
                 print(f"Direction: {DIRECTIONS[direction]} ({voltage:.3f} V)", flush=True)
-            self.data.update(direction=direction, voltage=voltage, adcError=error)
+            self.data.update(direction=direction, position=position, voltage=voltage, adcError=error)
 
     def snapshot(self):
         with self.lock:
@@ -101,7 +108,9 @@ def sample_adc(state, stop, args):
                 smoothing = DirectionFilter(args.min_voltage, args.max_voltage, args.reverse)
                 while not stop.is_set():
                     voltage = adc.read_voltage()
-                    state.adc(smoothing.update(voltage), round(voltage, 4))
+                    direction = smoothing.update(voltage)
+                    position = None if smoothing.filtered is None else round(smoothing.filtered, 4)
+                    state.adc(direction, round(voltage, 4), position=position)
                     stop.wait(0.04)
             finally:
                 bus.close()
@@ -169,7 +178,7 @@ def main():
     parser.add_argument("--address", type=lambda value: int(value, 0), default=0x48)
     parser.add_argument("--min-voltage", type=float, default=0.0)
     parser.add_argument("--max-voltage", type=float, default=3.3)
-    parser.add_argument("--reverse", action="store_true", help="Reverse knob direction")
+    parser.add_argument("--reverse", action="store_true", help="Reverse the stop-to-stop knob mapping")
     parser.add_argument("--origin", default=SITE_ORIGIN, help="One allowed website origin, no trailing slash")
     parser.add_argument("--identity-file", default=None, help="Kiosk identity file; omit for standalone sensor testing")
     args = parser.parse_args()

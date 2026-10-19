@@ -51,10 +51,12 @@
     return data?.version === 2 && typeof data.session === 'string' && data.session.length > 0
       && ['takeoffCount', 'landCount'].every((key) => Number.isSafeInteger(data[key]) && data[key] >= 0)
       && typeof data.takeoffClosed === 'boolean' && typeof data.landClosed === 'boolean'
-      && (data.direction === null || (Number.isInteger(data.direction) && data.direction >= 0 && data.direction < 8));
+      && (data.direction === null || (Number.isInteger(data.direction) && data.direction >= 0 && data.direction < 8))
+      && (data.position === undefined || data.position === null
+        || (typeof data.position === 'number' && Number.isFinite(data.position) && data.position >= 0 && data.position <= 1));
   }
 
-  function createController({ getState, setDirection, takeoff, land, notify, setError }) {
+  function createController({ getState, setDirection, setSleep, takeoff, land, notify, setError }) {
     let previous = null;
     let pendingLand = false;
     let adcFailed = false;
@@ -63,6 +65,9 @@
       accept(data) {
         if (!validSample(data)) throw new Error('Expected device_bridge.py protocol v2');
         const state = getState();
+        if (state.sleepDial && typeof data.position === 'number') {
+          setSleep?.(data.position * 100);
+        }
         const canDepart = !state.busy && !state.sleepDial && ['ready', 'landed'].includes(state.stage);
         if (canDepart && data.direction !== null && data.direction !== state.direction) {
           setDirection(data.direction);
