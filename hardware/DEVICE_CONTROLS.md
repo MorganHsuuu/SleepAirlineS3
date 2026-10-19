@@ -15,18 +15,42 @@
 
 兩個磁簧同時觸發會忽略該次動作；重連後先建立基準，不重播斷線期間的事件。ADC 失敗時保留前一次方位，磁簧仍可操作。完整安裝、配網和維護方式請看樹莓派專案 README。
 
-## 開機自動全螢幕
-
-在這台樹莓派上把 `hardware/` 拷過去（或直接 clone 本 repo），然後執行：
+終端機測試磁鐵（橋接已在跑時）：
 
 ```bash
+bash ~/SleepAirlineS3/hardware/watch-reeds.sh
+```
+
+或直接：
+
+```bash
+while true; do curl -sS http://127.0.0.1:8765/state; echo; sleep 0.2; done
+```
+
+## 開機自動啟動
+
+開機會自動做兩件事，互不綁死：
+
+1. **磁簧 + 旋鈕**（`device_bridge.py`）→ systemd `sleep-airline-bridge.service`，關瀏覽器也不會停
+2. **全螢幕網站** → 桌面 autostart `kiosk.sh`
+
+在樹莓派上：
+
+```bash
+cd ~/SleepAirlineS3
+git pull
 cd hardware
 chmod +x install-kiosk.sh kiosk.sh
 ./install-kiosk.sh
-sudo raspi-config   # System Options → Boot / Auto Login → Desktop Autologin
 sudo reboot
 ```
 
-開機後會等網路，再開 Chromium kiosk 進入 `https://sleep-airline-s3.vercel.app`。同資料夾若有 `device_bridge.py`，也會一併啟動，主頁才能讀到磁簧與旋鈕。
+查看感測器服務：
 
-改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。離開全螢幕可用 `Alt+F4`；沒有鍵盤時用 SSH 執行 `pkill chromium`。
+```bash
+systemctl status sleep-airline-bridge
+curl -sS http://127.0.0.1:8765/state
+sudo journalctl -u sleep-airline-bridge -n 40 --no-pager
+```
+
+`pkill chromium` 只關全螢幕，不要殺掉 bridge。改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。
