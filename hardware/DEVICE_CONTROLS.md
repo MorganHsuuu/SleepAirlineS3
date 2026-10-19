@@ -14,3 +14,19 @@
 主頁從 `http://127.0.0.1:8765/state` 讀取磁簧次數、方位和 ADC 錯誤，再呼叫現有的 `setDirection`、`doTakeoff`、`doLand`。本機 kiosk 的 `http://127.0.0.1:8766/api/status` 用於識別實體裝置和橋接程式狀態。連線或 ADC 失敗會在正式畫面保留錯誤資訊，恢復後清除；普通訪客在非樹莓派的瀏覽器不會看到感測器錯誤。
 
 兩個磁簧同時觸發會忽略該次動作；重連後先建立基準，不重播斷線期間的事件。ADC 失敗時保留前一次方位，磁簧仍可操作。完整安裝、配網和維護方式請看樹莓派專案 README。
+
+## 開機自動全螢幕
+
+在這台樹莓派上把 `hardware/` 拷過去（或直接 clone 本 repo），然後執行：
+
+```bash
+cd hardware
+chmod +x install-kiosk.sh kiosk.sh
+./install-kiosk.sh
+sudo raspi-config   # System Options → Boot / Auto Login → Desktop Autologin
+sudo reboot
+```
+
+開機後會等網路，再開 Chromium kiosk 進入 `https://sleep-airline-s3.vercel.app`。同資料夾若有 `device_bridge.py`，也會一併啟動，主頁才能讀到磁簧與旋鈕。
+
+改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。離開全螢幕可用 `Alt+F4`。

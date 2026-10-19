@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Sleep Airline Kiosk
+Comment=開機全螢幕開啟甦醒航班
+Exec=REPLACE_ME/kiosk.sh
+X-GNOME-Autostart-enabled=true
+Terminal=false
+StartupNotify=false
