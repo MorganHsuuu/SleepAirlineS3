@@ -941,6 +941,41 @@ app.get('/api/board', async (req, res) => {
 // ── GET /api/scenery ──────────────────────────────────────────────────────────
 // 唯讀：依 flightId 取降落風景（供小隊看板查看隊友的降落風景圖）
 
+app.post('/api/scenery/preview', async (req, res) => {
+  try {
+    if (!openAiApiKey()) {
+      res.status(503).json({ error: 'OPENAI_API_KEY 尚未設定。' });
+      return;
+    }
+    const city = String(req.body?.city || '').trim();
+    const country = String(req.body?.country || city).trim();
+    const displayName = String(req.body?.displayName || city).trim();
+    if (!city) {
+      res.status(400).json({ error: '請提供城市。' });
+      return;
+    }
+    const result = await generateLandingScenery(
+      city,
+      country || city,
+      displayName || city,
+      `preview-${Date.now()}`,
+      {
+        landingTime: new Date().toISOString(),
+        timezone: typeof req.body?.timezone === 'string' ? req.body.timezone : null,
+      }
+    );
+    if (!result) {
+      res.status(502).json({ error: '風景圖生成失敗。' });
+      return;
+    }
+    res.json({
+      imageUrl: `data:${result.contentType};base64,${result.imageBuffer.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
+  }
+});
+
 app.get('/api/scenery', async (req, res) => {
   try {
     const flightId = req.query.flightId as string;

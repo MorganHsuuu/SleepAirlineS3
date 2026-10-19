@@ -526,6 +526,9 @@
     if (method === 'GET' && path === '/api/scenery') {
       return { scenery: null };
     }
+    if (method === 'POST' && path === '/api/scenery/preview') {
+      return { imageUrl: null };
+    }
     if (method === 'GET' && path === '/api/config') {
       return { dataMode: 'preview', notionConfigured: false, notionReady: false, hint: '' };
     }

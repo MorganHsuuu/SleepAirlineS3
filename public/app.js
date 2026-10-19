@@ -711,6 +711,20 @@ async function doTakeoff() {
     if (state.stage === 'takeoff' || state.stage === 'ready') state.busy = false;
   }
 }
+async function requestPreviewScenery(place) {
+  if (!state.openaiReady || !place?.name) return null;
+  try {
+    const data = await api('POST', '/api/scenery/preview', {
+      city: place.name,
+      country: place.country || place.name,
+      displayName: place.name,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }, 90000);
+    const url = data?.imageUrl;
+    if (url && await preloadImage(url, 8000)) return url;
+  } catch { /* local fallback still works */ }
+  return null;
+}
 async function requestScenery(flightId) {
   if (!flightId || !state.researchFlight || !state.openaiReady) return null;
   const deadline = Date.now() + 45000;
@@ -1096,6 +1110,7 @@ async function doLand() {
       await Promise.race([landPromise, delay(5000)]);
     }
     if (!state.destination) state.destination = destinationFor(state.direction);
+    sceneryJob = sceneryJob.then((url) => url || requestPreviewScenery(state.destination));
     paintDestCopy(state.destination);
     weatherJob ||= loadWeather(state.destination);
     const openingMinutes = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
