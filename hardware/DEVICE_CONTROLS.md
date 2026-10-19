@@ -1,6 +1,6 @@
 # 樹莓派實體控制
 
-正式裝置由 [樹莓派專案的 `device_kiosk.py`](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test) 啟動。它在同一台樹莓派上執行感測器橋接、首次配網頁及 Chromium。此網站的全螢幕主頁直接讀取本機橋接，沒有獨立感測器測試頁，也不需 `?device=1`。
+正式裝置保留此專案的全螢幕 Chromium 與感測器橋接；[樹莓派專案的 `device_kiosk.py`](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test) 在背景提供首次配網、配對 QR 與綁定狀態。此網站的主頁直接讀取本機橋接，沒有獨立感測器測試頁。
 
 | 元件 | 接線與動作 |
 | --- | --- |
@@ -54,3 +54,9 @@ sudo journalctl -u sleep-airline-bridge -n 40 --no-pager
 ```
 
 `pkill chromium` 只關全螢幕，不要殺掉 bridge。改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。
+
+### 首次配對與之後開機
+
+安裝上面的全螢幕與感測器服務後，再於 `~/raspberry-pi-reed-sensor-test` 執行 `./install-pairing-service.sh`。它保留現有服務，增加 `sleep-airline-pairing.service`，並讓橋接從 `~/.config/sleep-airline/device.json` 讀取旅客身分。完成後重新執行本專案的 `./install-kiosk.sh`，讓開機腳本更新到支援配對的版本，再重新開機。
+
+配對服務回報未綁定時，全螢幕瀏覽器開啟本機 QR；已綁定且連網時，直接進入正式飛機窗；已綁定但斷網時，顯示本機離線頁。三個狀態都使用同一個 Chromium 畫面，不會另開感測器測試分頁。
