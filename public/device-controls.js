@@ -68,9 +68,9 @@
         previous = { ...data };
         if (baseline) { pendingLand = false; return; }
 
-        if ((data.takeoffClosed && data.landClosed) || (takeoffEdge && landEdge)) {
+        if (takeoffEdge && landEdge) {
           pendingLand = false;
-          if (takeoffEdge || landEdge) notify('兩個磁簧同時觸發，請移開後再靠近其中一個');
+          notify('兩個磁簧同時觸發，請移開後再靠近其中一個');
           return;
         }
         if (['ready', 'landed'].includes(state.stage)) pendingLand = false;

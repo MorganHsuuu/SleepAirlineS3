@@ -95,7 +95,7 @@ CHROME_ARGS=(
   --disable-infobars
   --disable-session-crashed-bubble
   --disable-restore-session-state
-  --disable-features=TranslateUI
+  --disable-features=TranslateUI,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,LocalNetworkAccessChecks
   --check-for-update-interval=31536000
   --autoplay-policy=no-user-gesture-required
   --no-first-run
