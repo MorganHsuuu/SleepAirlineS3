@@ -4,6 +4,15 @@
 // stays in preview mode until the new data connections are ready.
 const FRONTEND_PREVIEW_ONLY = false;
 const $ = (id) => document.getElementById(id);
+function isHardwareKiosk() {
+  try {
+    const params = new URLSearchParams(location.search || '');
+    return params.get('kiosk') === '1' || params.get('device') === '1';
+  } catch { return false; }
+}
+function hasResearchConsent() {
+  return !!$('research-consent')?.checked || isHardwareKiosk();
+}
 const directions = [
   { key: 'northbound', name: '向北', angle: 0 },
   { key: 'northeast', name: '東北', angle: 45 },
@@ -46,7 +55,7 @@ const state = {
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
   destination: null, busy: false, shadeHold: false, sceneryUrl: null, openaiReady: false,
-  sleepDial: false, landedLegReady: false,
+  sleepDial: false, landedLegReady: false, headingConfirmed: false, sleepMoved: false,
 };
 let clockTimer = null;
 let toastTimer = null;
@@ -198,7 +207,9 @@ function spinTo(index) {
   paintNeedles(directions[clampDirection(index)].angle, true);
 }
 function applyDirection(index) {
-  state.direction = clampDirection(index);
+  const next = clampDirection(index);
+  if (next !== state.direction) state.headingConfirmed = false;
+  state.direction = next;
   const d = directions[state.direction];
   $('tk-direction').value = d.key;
   $('direction-name').textContent = `${d.name} · ${String(d.angle).padStart(3, '0')}°`;
@@ -301,8 +312,10 @@ function setDirection(index) {
   }
   spinTo(next);
   applyDirection(next);
+  state.headingConfirmed = false;
   window.BroadcastAudio?.playCompassTick?.();
   showCompass();
+  syncConfirmButton();
 }
 function render() {
   const ready = state.stage === 'ready';
@@ -345,7 +358,43 @@ function render() {
     if (hint) hint.textContent = '轉到底即停';
     document.querySelector('.dial-wrap')?.classList.remove('is-sleep');
   }
+  syncConfirmButton();
   syncCabinDark();
+}
+function syncConfirmButton() {
+  const button = $('btn-confirm');
+  if (!button) return;
+  const readyOrLanded = state.stage === 'ready' || state.stage === 'landed';
+  if (state.sleepDial) {
+    button.hidden = false;
+    button.disabled = !state.sleepMoved;
+    button.textContent = state.sleepMoved ? '確認心情' : '先轉動旋鈕';
+    return;
+  }
+  if (readyOrLanded && !state.busy) {
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = state.headingConfirmed ? '航向已確認' : '確認航向';
+    return;
+  }
+  button.hidden = true;
+  button.disabled = true;
+}
+function confirmAction() {
+  if (state.sleepDial) {
+    if (!state.sleepMoved) {
+      showToast('請先轉動旋鈕，再按確認心情');
+      return;
+    }
+    $('direction-dial')._sleepFinish?.();
+    return;
+  }
+  if (state.busy || !['ready', 'landed'].includes(state.stage)) return;
+  state.headingConfirmed = true;
+  const d = directions[state.direction];
+  showToast(`航向已確認：${d.name} · ${String(d.angle).padStart(3, '0')}°`);
+  showCompass();
+  syncConfirmButton();
 }
 function applyWindowOnly(on) {
   document.body.classList.toggle('window-only', on);
@@ -426,7 +475,8 @@ async function doLogin(event) {
   $('input-pid').value = passengerId;
   $('input-name').value = name;
   $('input-group').value = groupId;
-  const researchConsent = $('research-consent').checked;
+  const researchConsent = hasResearchConsent();
+  if ($('research-consent')) $('research-consent').checked = researchConsent;
   $('btn-login').disabled = true;
   try {
     if (state.mode === 'live' && researchConsent) {
@@ -637,7 +687,7 @@ async function playBroadcast(text, speechBase64, {
 async function doTakeoff() {
   if (state.busy || state.stage !== 'ready') return;
   ensureGuestProfile();
-  state.researchFlight = state.mode === 'live' && $('research-consent').checked;
+  state.researchFlight = state.mode === 'live' && hasResearchConsent();
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
   setInflightStandby(true);
@@ -659,8 +709,8 @@ async function doTakeoff() {
       const data = await api('POST', '/api/flight/takeoff', {
         ...flightBody(), routeDirection: $('tk-direction').value,
         clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        researchConsent: $('research-consent').checked,
-        researchConsentAt: $('research-consent').checked ? new Date().toISOString() : undefined,
+        researchConsent: hasResearchConsent(),
+        researchConsentAt: hasResearchConsent() ? new Date().toISOString() : undefined,
       }, 60000);
       state.activeFlight = data.flight;
       state.origin = locationFromFlight(data.flight, 'departure');
@@ -1214,6 +1264,7 @@ async function doLand() {
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
+    syncConfirmButton();
     if (moodAfter != null && state.researchFlight && state.profile && state.lastFlight?.flightId) {
       void api('POST', '/api/flight/sleep-report', {
         passengerId: state.profile.passengerId,
@@ -1293,6 +1344,7 @@ function restart({ keepShade = false } = {}) {
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
   state.researchFlight = false;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null; state.landedLegReady = false;
+  state.headingConfirmed = false; state.sleepMoved = false;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('is-inflight', 'developing');
   setInflightStandby(false);
@@ -1329,7 +1381,7 @@ function paintSleep(percent) {
 function offerSleepDial() {
   return new Promise((resolve) => {
     state.sleepDial = true;
-    let moved = false;
+    state.sleepMoved = false;
     const wrap = document.querySelector('.dial-wrap');
     wrap?.classList.add('is-sleep');
     const sleepGlass = $('glass-sleep');
@@ -1342,20 +1394,27 @@ function offerSleepDial() {
     const askTimer = setTimeout(() => sleepGlass?.classList.add('is-ask'), 1100);
     const ringTimer = setTimeout(() => sleepGlass?.classList.add('is-ring'), 2600);
     document.querySelector('.direction-heading h2').textContent = '昨夜睡得如何';
-    document.querySelector('.direction-heading > span').textContent = '轉動旋鈕';
+    document.querySelector('.direction-heading > span').textContent = '轉動後按確認';
     $('direction-dial').style.opacity = '1';
     $('direction-dial').setAttribute('aria-disabled', 'false');
     $('direction-dial')._sleepValue = SLEEP_FACE_IDLE;
     $('direction-dial')._sleepStart = SLEEP_FACE_IDLE;
     $('direction-dial')._sleepDeviceOrigin = null;
     paintSleep(SLEEP_FACE_IDLE);
-    const timer = setTimeout(finish, 10000);
+    const hint = document.querySelector('.sleep-hint');
+    if (hint) hint.textContent = '轉動旋鈕，再按確認';
+    syncConfirmButton();
     function finish() {
-      clearTimeout(timer);
+      if (!state.sleepDial) return;
+      if (!state.sleepMoved) {
+        showToast('請先轉動旋鈕，再按確認心情');
+        return;
+      }
       clearTimeout(askTimer);
       clearTimeout(ringTimer);
-      const value = moved ? Math.round(Number($('direction-dial')._sleepValue) || 0) : null;
+      const value = Math.round(Number($('direction-dial')._sleepValue) || 0);
       state.sleepDial = false;
+      state.sleepMoved = false;
       const center = document.querySelector('.dial-center');
       if (center) center.textContent = '✦';
       const pointer = $('dial-pointer');
@@ -1368,7 +1427,10 @@ function offerSleepDial() {
     }
     $('direction-dial').dataset.sleepFinish = '1';
     $('direction-dial')._sleepFinish = finish;
-    $('direction-dial')._sleepMoved = () => { moved = true; };
+    $('direction-dial')._sleepMoved = () => {
+      state.sleepMoved = true;
+      syncConfirmButton();
+    };
   });
 }
 function bindShadeGesture() {}
@@ -1458,6 +1520,7 @@ function startDeviceControls() {
     getState: () => state,
     setDirection: (index) => setDirection(index),
     setSleep: (percent) => applySleepFromDevice(percent),
+    confirm: () => confirmAction(),
     setPassenger: (passengerId) => {
       if (state.profile?.passengerId === passengerId) return;
       state.profile = { passengerId, name: '旅人', groupId: '0001' };
@@ -1490,7 +1553,7 @@ async function init() {
   if (!$('input-pid').value) $('input-pid').value = state.profile.passengerId;
   if (!$('input-name').value) $('input-name').value = state.profile.name;
   if (!$('input-group').value) $('input-group').value = state.profile.groupId;
-  if ($('research-consent')) $('research-consent').checked = false;
+  if ($('research-consent')) $('research-consent').checked = isHardwareKiosk();
   if (!FRONTEND_PREVIEW_ONLY) {
     void fetch('country-iso.json').then((res) => res.json()).then((data) => { countryIsoMap = data; }).catch(() => { countryIsoMap = {}; });
   }
@@ -1509,6 +1572,7 @@ async function init() {
   $('login-form').addEventListener('submit', doLogin);
   $('btn-takeoff').addEventListener('click', doTakeoff);
   $('btn-land').addEventListener('click', doLand);
+  $('btn-confirm')?.addEventListener('click', confirmAction);
   $('btn-restart').addEventListener('click', restart);
   $('btn-sleep-report').addEventListener('click', () => $('sleep-report-dialog').showModal());
   $('sleep-report-close').addEventListener('click', () => $('sleep-report-dialog').close());

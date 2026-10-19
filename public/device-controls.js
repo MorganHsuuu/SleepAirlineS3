@@ -50,13 +50,14 @@
   function validSample(data) {
     return data?.version === 2 && typeof data.session === 'string' && data.session.length > 0
       && ['takeoffCount', 'landCount'].every((key) => Number.isSafeInteger(data[key]) && data[key] >= 0)
+      && (data.confirmCount === undefined || (Number.isSafeInteger(data.confirmCount) && data.confirmCount >= 0))
       && typeof data.takeoffClosed === 'boolean' && typeof data.landClosed === 'boolean'
       && (data.direction === null || (Number.isInteger(data.direction) && data.direction >= 0 && data.direction < 8))
       && (data.position === undefined || data.position === null
         || (typeof data.position === 'number' && Number.isFinite(data.position) && data.position >= 0 && data.position <= 1));
   }
 
-  function createController({ getState, setDirection, setSleep, takeoff, land, notify, setError }) {
+  function createController({ getState, setDirection, setSleep, confirm, takeoff, land, notify, setError }) {
     let previous = null;
     let pendingLand = false;
     let adcFailed = false;
@@ -84,6 +85,7 @@
           || data.takeoffCount < previous.takeoffCount || data.landCount < previous.landCount;
         const takeoffEdge = !baseline && data.takeoffCount > previous.takeoffCount;
         const landEdge = !baseline && data.landCount > previous.landCount;
+        const confirmEdge = !baseline && Number(data.confirmCount || 0) > Number(previous.confirmCount || 0);
         previous = { ...data };
         if (baseline) { pendingLand = false; return; }
 
@@ -96,6 +98,9 @@
         if (takeoffEdge && canDepart) {
           takeoff();
           return;
+        }
+        if (confirmEdge) {
+          confirm?.();
         }
         if (landEdge && ['takeoff', 'cruise'].includes(state.stage)) {
           pendingLand = false;
@@ -173,7 +178,7 @@
         if (!connected) adapter.notify('裝置控制已連線，移開磁鐵後再靠近即可觸發');
         controller.accept(data);
         connected = true;
-        showStatus(`磁鐵已連線 · 起飛 ${data.takeoffCount} · 降落 ${data.landCount}`);
+        showStatus(`磁鐵已連線 · 起飛 ${data.takeoffCount} · 降落 ${data.landCount} · 確認 ${data.confirmCount || 0}`);
         setError('bridge', '');
       } catch (error) {
         controller.reset();

@@ -70,6 +70,12 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(snapshot['takeoffCount'], 1)
         self.assertEqual(snapshot['landCount'], 1)
         self.assertFalse(snapshot['landClosed'])
+        state.reed('confirm', True, initial=True)
+        state.reed('confirm', True)
+        self.assertEqual(state.snapshot()['confirmCount'], 0)
+        state.reed('confirm', False)
+        state.reed('confirm', True)
+        self.assertEqual(state.snapshot()['confirmCount'], 1)
 
     def test_adc_failure_cannot_reuse_stale_heading(self):
         state = bridge.DeviceState()

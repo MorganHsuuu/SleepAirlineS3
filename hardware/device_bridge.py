@@ -73,7 +73,8 @@ class DeviceState:
     def __init__(self):
         self.lock = Lock()
         self.data = dict(version=2, session=uuid.uuid4().hex, takeoffClosed=False,
-                         landClosed=False, takeoffCount=0, landCount=0,
+                         landClosed=False, confirmClosed=False,
+                         takeoffCount=0, landCount=0, confirmCount=0,
                          direction=None, position=None, voltage=None, adcError="Starting ADS1115")
 
     def reed(self, name, closed, initial=False):
@@ -174,6 +175,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--takeoff-pin", type=int, default=17, help="BCM numbering")
     parser.add_argument("--land-pin", type=int, default=27, help="BCM numbering")
+    parser.add_argument("--confirm-pin", type=int, default=22, help="BCM numbering; heading/mood confirm")
     parser.add_argument("--i2c-bus", type=int, default=1)
     parser.add_argument("--address", type=lambda value: int(value, 0), default=0x48)
     parser.add_argument("--min-voltage", type=float, default=0.0)
@@ -185,8 +187,8 @@ def main():
     if (not all(math.isfinite(v) for v in (args.min_voltage, args.max_voltage))
             or not 0 <= args.min_voltage < args.max_voltage <= 3.3):
         parser.error("Voltage calibration must satisfy 0 <= min < max <= 3.3")
-    if args.takeoff_pin == args.land_pin:
-        parser.error("Use separate GPIO pins for the two reed switches")
+    if len({args.takeoff_pin, args.land_pin, args.confirm_pin}) < 3:
+        parser.error("Use separate GPIO pins for takeoff, land and confirm")
     try:
         from gpiozero import Button
         import smbus  # Check dependency before starting threads.
@@ -196,7 +198,8 @@ def main():
     state, stop = DeviceState(), Event()
     try:
         with ExitStack() as resources:
-            for name, pin in (("takeoff", args.takeoff_pin), ("land", args.land_pin)):
+            for name, pin in (("takeoff", args.takeoff_pin), ("land", args.land_pin),
+                              ("confirm", args.confirm_pin)):
                 reed = resources.enter_context(Button(pin, pull_up=True, bounce_time=0.05))
                 state.reed(name, reed.is_pressed, initial=True)
                 reed.when_pressed = lambda name=name: state.reed(name, True)

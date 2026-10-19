@@ -13,6 +13,7 @@ function fixture() {
     getState: () => state,
     setDirection: (value) => { state.direction = value; actions.push(['direction', value]); },
     setSleep: (value) => { actions.push(['sleep', value]); },
+    confirm: () => { actions.push(['confirm']); },
     takeoff: () => { actions.push(['takeoff', state.direction]); state.stage = 'takeoff'; state.busy = true; },
     land: () => { actions.push(['land']); state.stage = 'landing'; state.busy = true; },
     notify: (message) => messages.push(message),
@@ -97,6 +98,12 @@ test('sleep feedback and busy state cannot change direction or start a new fligh
   assert.deepEqual(f.actions, []);
   f.state.sleepDial = false; f.send();
   assert.deepEqual(f.actions, [['direction', 5]]);
+});
+test('confirm button fires without blocking magnet takeoff', () => {
+  const f = fixture(); f.send();
+  f.send({ confirmCount: 1 });
+  f.send({ takeoffCount: 1 });
+  assert.deepEqual(f.actions, [['confirm'], ['takeoff', 2]]);
 });
 test('sleep dial uses the absolute pot position instead of wrapping extra turns', () => {
   const f = fixture(); f.send();
