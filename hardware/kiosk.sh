@@ -2,15 +2,8 @@
 # Raspberry Pi: wait for sensors + network, then open Sleep Airline fullscreen.
 set -euo pipefail
 
-URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app/}"
-case "$URL" in
-  *kiosk=1*|*device=1*) ;;
-  *\?*) URL="${URL}&kiosk=1" ;;
-  *) URL="${URL}?kiosk=1" ;;
-esac
+URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-CHROME_PROFILE="${HOME}/.cache/sleep-airline-chrome"
-mkdir -p "$CHROME_PROFILE"
 export DISPLAY="${DISPLAY:-:0}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
@@ -80,10 +73,27 @@ if [ -z "$CHROME" ]; then
 fi
 
 start_bridge
-wait_for_site
+BOOT_URL="$URL"
+if command -v systemctl >/dev/null 2>&1 && \
+    systemctl is-enabled --quiet sleep-airline-pairing.service; then
+  pairing_status=""
+  for i in $(seq 1 60); do
+    pairing_status="$(curl -fsS --max-time 1 http://127.0.0.1:8766/api/status 2>/dev/null || true)"
+    if [ -n "$pairing_status" ]; then break; fi
+    sleep 1
+  done
+  if [ -z "$pairing_status" ]; then
+    echo "配對服務未回應，請檢查 sleep-airline-pairing.service。" >&2
+    BOOT_URL="http://127.0.0.1:8766/device"
+  elif ! printf '%s' "$pairing_status" | python3 -c \
+      'import json,sys; s=json.load(sys.stdin); sys.exit(0 if s.get("paired") and s.get("online") else 1)'; then
+    BOOT_URL="http://127.0.0.1:8766/device"
+  fi
+fi
+if [ "$BOOT_URL" = "$URL" ]; then wait_for_site; fi
 disable_blanking
 
-echo "正在全螢幕開啟 ${URL}"
+echo "正在全螢幕開啟 ${BOOT_URL}"
 echo "感測器：http://127.0.0.1:8765/state"
 echo "日誌：/tmp/sleep-airline-kiosk.log"
 echo "沒有鍵盤時，用 SSH 關掉：pkill chromium"
@@ -95,9 +105,6 @@ fi
 
 CHROME_ARGS=(
   "${OZONE[@]}"
-  --user-data-dir="$CHROME_PROFILE"
-  --disable-web-security
-  --allow-running-insecure-content
   --kiosk
   --start-fullscreen
   --password-store=basic
@@ -110,10 +117,13 @@ CHROME_ARGS=(
   --autoplay-policy=no-user-gesture-required
   --no-first-run
   --overscroll-history-navigation=0
-  "$URL"
+  "$BOOT_URL"
 )
 
-nohup "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
-disown || true
-echo "已在背景全螢幕開啟（PID $!）。這個視窗可以繼續測磁鐵；Ctrl+C 不會關掉畫面。"
-echo "要關全螢幕請打：pkill chromium"
+if [ -n "${SSH_CONNECTION:-}" ]; then
+  "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
+  echo "已在樹莓派螢幕開啟（PID $!）。這個 SSH 視窗還可以繼續打指令。"
+  exit 0
+fi
+
+exec "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1
