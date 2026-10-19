@@ -6,6 +6,9 @@ URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export DISPLAY="${DISPLAY:-:0}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+  export WAYLAND_DISPLAY=wayland-0
+fi
 
 wait_for_site() {
   local i
