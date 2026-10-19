@@ -155,7 +155,8 @@ function setShade(_kind) {
   shade.classList.remove('closed', 'peek');
 }
 function syncCabinDark() {
-  document.body.classList.toggle('cabin-dark', state.stage === 'takeoff');
+  const flying = state.stage === 'takeoff' || state.stage === 'cruise';
+  document.body.classList.toggle('cabin-dark', flying);
 }
 function shadeLip() {
   const glass = $('window-glass');
@@ -321,7 +322,7 @@ function render() {
   const labels = {
     ready: ['準備啟程', '選好航向後就可以起飛。起飛時螢幕會調暗，請好好休息。', 'READY', '等待登機', 'BOARDING'],
     takeoff: ['正在起飛', '機艙已調暗。機長廣播中，請好好休息。', 'TAKEOFF', '起飛中', 'DEPARTING'],
-    cruise: ['飛行途中', '準備好降落時，實體窗戶會帶你落地。', 'IN FLIGHT', '飛行中', 'CRUISING'],
+    cruise: ['飛行途中', '機艙維持調暗。準備好降落時，實體窗戶會帶你落地。', 'IN FLIGHT', '飛行中', 'CRUISING'],
     landing: ['即將降落', '機長帶你穿越雲層，前往新的風景。', 'ARRIVING', '降落中', 'ARRIVING'],
     landed: ['你已抵達', '一段新的風景正在窗外等你。也可以再次選擇航向。', 'ARRIVED', '已抵達', 'ARRIVED'],
   };

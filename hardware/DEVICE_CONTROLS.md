@@ -29,4 +29,4 @@ sudo reboot
 
 開機後會等網路，再開 Chromium kiosk 進入 `https://sleep-airline-s3.vercel.app`。同資料夾若有 `device_bridge.py`，也會一併啟動，主頁才能讀到磁簧與旋鈕。
 
-改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。離開全螢幕可用 `Alt+F4`。
+改網址：編輯 `~/sleep-airline-kiosk/kiosk.sh` 裡的 `SLEEP_AIRLINE_URL`。離開全螢幕可用 `Alt+F4`；沒有鍵盤時用 SSH 執行 `pkill chromium`。

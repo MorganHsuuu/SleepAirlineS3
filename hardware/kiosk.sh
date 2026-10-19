@@ -49,16 +49,36 @@ wait_for_site
 disable_blanking
 start_bridge
 
-exec "$CHROME" \
-  --kiosk \
-  --start-fullscreen \
-  --app="$URL" \
-  --noerrdialogs \
-  --disable-infobars \
-  --disable-session-crashed-bubble \
-  --disable-restore-session-state \
-  --disable-features=TranslateUI \
-  --check-for-update-interval=31536000 \
-  --autoplay-policy=no-user-gesture-required \
-  --no-first-run \
+echo "正在全螢幕開啟 ${URL}"
+echo "日誌：/tmp/sleep-airline-kiosk.log"
+echo "沒有鍵盤時，用 SSH 關掉：pkill chromium"
+
+OZONE=()
+if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+  OZONE=(--ozone-platform=wayland)
+fi
+
+CHROME_ARGS=(
+  "${OZONE[@]}"
+  --kiosk
+  --start-fullscreen
+  --password-store=basic
+  --noerrdialogs
+  --disable-infobars
+  --disable-session-crashed-bubble
+  --disable-restore-session-state
+  --disable-features=TranslateUI
+  --check-for-update-interval=31536000
+  --autoplay-policy=no-user-gesture-required
+  --no-first-run
   --overscroll-history-navigation=0
+  "$URL"
+)
+
+if [ -n "${SSH_CONNECTION:-}" ]; then
+  "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1 &
+  echo "已在樹莓派螢幕開啟（PID $!）。這個 SSH 視窗還可以繼續打指令。"
+  exit 0
+fi
+
+exec "$CHROME" "${CHROME_ARGS[@]}" >/tmp/sleep-airline-kiosk.log 2>&1
