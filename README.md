@@ -43,7 +43,7 @@ npm run build
 
 ## 樹莓派實體控制
 
-全螢幕主頁會自動偵測同一台樹莓派的 `device_bridge.py`，不需要 `?device=1` 或額外分頁。GPIO17 磁簧起飛、GPIO27 磁簧降落、ADS1115 A0 旋鈕選方位。開機自動全螢幕見 [`hardware/DEVICE_CONTROLS.md`](hardware/DEVICE_CONTROLS.md)；首次配網與正式 kiosk 也可看 [樹莓派專案](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test)。
+全螢幕主頁會自動偵測同一台樹莓派的 `device_bridge.py`，不需要 `?device=1` 或額外分頁。GPIO17 磁簧起飛、GPIO27 磁簧降落、ADS1115 A0 旋鈕選方位。開機、首次配網與正式 kiosk 都由本專案的 [`hardware/DEVICE_CONTROLS.md`](hardware/DEVICE_CONTROLS.md) 說明。
 正式裝置畫面會保留顯示橋接程式中斷及 ADC 讀取失敗的錯誤資訊，恢復後自動清除；普通訪客不會看到本機感測器錯誤。
 
 ## 裝置綁定 API

@@ -88,7 +88,7 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     assert.equal((await call('/devices/complete', 'POST', { deviceId, deviceSecret, setupCode: 'wrong-code-with-at-least-32-characters', grant: granted.body.grant })).code, 401);
     const complete = { deviceId, deviceSecret, setupCode, grant: granted.body.grant };
     assert.equal((await call('/devices/complete', 'POST', complete)).body.status, 'paired');
-    assert.equal((await call('/devices/complete', 'POST', complete)).body.error, 'grant_used');
+    assert.equal((await call('/devices/complete', 'POST', complete)).body.status, 'paired');
     assert.equal((await call('/status', 'GET', undefined, session)).body.deviceId, deviceId);
     assert.equal((await call('/devices/status', 'POST', { deviceId, deviceSecret })).body.status, 'paired');
     assert.equal((await call('/devices/status', 'POST', { deviceId, deviceSecret: 'wrong-device-secret-with-at-least-32-characters' })).code, 404);
@@ -100,6 +100,7 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     assert.ok(!JSON.stringify(rows).includes(recoveryCode));
     assert.ok(!JSON.stringify(rows).includes(deviceSecret));
     assert.equal((await call('/unbind', 'POST', {}, session)).body.status, 'unpaired');
+    assert.equal((await call('/devices/complete', 'POST', complete)).body.error, 'grant_used');
     assert.equal((await call('/devices/status', 'POST', { deviceId, deviceSecret })).body.status, 'unpaired');
     assert.equal((await call('/status', 'GET', undefined, session)).body.status, 'unpaired');
 });
