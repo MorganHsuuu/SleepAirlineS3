@@ -12,6 +12,7 @@ test('archive maps actual Notion properties without filling absent fields with d
       'Passenger ID': text('PAX-TEST0001'), 'Flight ID': title('FL-TEST-001'),
       'Status': { select: { name: 'landed' } },
       'Takeoff Time': { date: { start: '2026-10-20T00:00:00+08:00' } },
+      'Client Time Zone': text('Asia/Taipei'),
       'Landing Time': { date: { start: '2026-10-20T07:00:00+08:00' } },
       'Departure Location': text('Taipei, Taiwan'), 'Arrival Location': text('Hong Kong'),
       'Departure Airport Code': text('TPE'), 'Arrival Airport Code': text('HKG'),
@@ -28,6 +29,7 @@ test('archive maps actual Notion properties without filling absent fields with d
   assert.equal(journey.destination.city, 'Hong Kong');
   assert.equal(journey.destination.country, '');
   assert.equal(journey.durationMinutes, 420);
+  assert.equal(journey.timeZone, 'Asia/Taipei');
   assert.equal(journey.note, 'A real note from Notion');
   assert.equal(journey.imageUrl, 'https://example.com/real.jpg');
   assert.equal(journey.status, 'completed');
