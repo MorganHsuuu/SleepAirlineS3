@@ -66,7 +66,19 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let speechPrepGen = 0;
+
+function stopBrowserSpeech() {
+  try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+}
+
+function pausePreparedAudio(prepared) {
+  if (!prepared?.audio) return;
+  try { prepared.audio.pause(); } catch { /* noop */ }
+}
+
 function stopPlayback({ keepSpeech = false } = {}) {
+  speechPrepGen += 1;
   stopCeremonyWebAudio();
   const carrier = keepAliveAudio || document.getElementById('ceremony-keepalive');
   if (currentAudio && currentAudio === carrier) {
@@ -206,6 +218,7 @@ async function playWebAudioBuffer(buffer, {
   loop = false,
   maxSeconds = 0,
   fadeInMs = 0,
+  fadeOutMs = 0,
   padSec = 0,
   tag = 'speech',
 } = {}) {
@@ -273,16 +286,29 @@ async function playWebAudioBuffer(buffer, {
     };
     activePlaybacks.set(node, finish);
     source.onended = () => { if (!source.loop) finish(true); };
+    const fadeSec = (!loop && fadeOutMs > 0) ? fadeOutMs / 1000 : 0;
+    const fadeAt = fadeSec > 0 && endAt > 0 ? Math.max(startedAt + 0.08, endAt - fadeSec) : 0;
+    let faded = false;
     // 用 AudioContext 時鐘輪詢結束點，避免 wall-clock setTimeout 在 ctx 暫停／追趕時提早砍語音
     const pollEnd = () => {
       if (done || loop || endAt <= 0) return;
-      if (ctx.currentTime >= endAt) {
+      const now = ctx.currentTime;
+      if (fadeAt > 0 && !faded && now >= fadeAt) {
+        faded = true;
+        try {
+          const cur = Math.max(gain.gain.value, 0.0001);
+          gain.gain.cancelScheduledValues(now);
+          gain.gain.setValueAtTime(cur, now);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeSec);
+        } catch { /* noop */ }
+      }
+      if (now >= endAt) {
         finish(true);
         return;
       }
-      timer = setTimeout(pollEnd, 120);
+      timer = setTimeout(pollEnd, 80);
     };
-    if (endAt > 0) timer = setTimeout(pollEnd, 120);
+    if (endAt > 0) timer = setTimeout(pollEnd, 80);
     try {
       if (clipSec > 0) source.start(0, 0, clipSec);
       else source.start(0);
@@ -573,7 +599,7 @@ async function crossfadeLandingToCaptainIntro() {
   return ok;
 }
 
-async function playFlightSfx(url, { loop = true, volume = 0.65, fadeInMs = 700 } = {}) {
+async function playFlightSfx(url, { loop = true, volume = 0.65, fadeInMs = 700, fadeOutMs = 0 } = {}) {
   stopFlightSfx({ fade: false });
   if (!url) return false;
   await ensureAudioCtx();
@@ -581,6 +607,7 @@ async function playFlightSfx(url, { loop = true, volume = 0.65, fadeInMs = 700 }
     volume,
     loop,
     fadeInMs,
+    fadeOutMs: loop ? 0 : fadeOutMs,
     tag: 'flightSfx',
   })) return true;
 
@@ -594,6 +621,33 @@ async function playFlightSfx(url, { loop = true, volume = 0.65, fadeInMs = 700 }
   try {
     await Promise.race([audio.play(), delay(1200)]);
     await fadeAudioVolume(audio, 0, volume, fadeInMs);
+    if (loop) return true;
+    const tail = Math.max(0, Number(fadeOutMs) || 0);
+    await new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        audio.removeEventListener('ended', done);
+        resolve();
+      };
+      audio.addEventListener('ended', done);
+      const d = audio.duration;
+      if (Number.isFinite(d) && d > 0) {
+        const wait = Math.max(50, d * 1000 - tail);
+        setTimeout(async () => {
+          if (settled) return;
+          if (tail > 0 && flightSfxAudio === audio) {
+            await fadeAudioVolume(audio, audio.volume, 0, tail);
+          }
+          done();
+        }, wait);
+      }
+    });
+    if (flightSfxAudio === audio) {
+      audio.pause();
+      flightSfxAudio = null;
+    }
     return true;
   } catch {
     flightSfxAudio = null;
@@ -1184,7 +1238,16 @@ function speakTextOnce(text) {
     const voice = pickSpeechVoice(utter.lang);
     if (voice) utter.voice = voice;
     utter.onend = () => finish(true);
-    utter.onerror = () => finish(false);
+    utter.onerror = () => {
+      // Chrome / Pi Chromium 常在仍朗讀時丟 error；若已在說話就當成功，避免再疊一軌。
+      try {
+        if (speechSynthesis.speaking || speechSynthesis.pending) {
+          finish(true);
+          return;
+        }
+      } catch { /* noop */ }
+      finish(false);
+    };
     try { speechSynthesis.resume(); } catch { /* noop */ }
     speechSynthesis.speak(utter);
     const keep = setInterval(() => {
@@ -1192,18 +1255,19 @@ function speakTextOnce(text) {
       try { if (speechSynthesis.paused) speechSynthesis.resume(); } catch { /* noop */ }
     }, 4000);
     };
-    // cancel() 會把緊接著的朗讀一起清掉，iPhone 上就完全沒人聲。
-    if (speechSynthesis.speaking || speechSynthesis.pending) start();
-    else {
-      speechSynthesis.cancel();
-      setTimeout(start, 80);
-    }
+    // cancel() 後立刻 speak 會把新朗讀一起清掉；等一小段再只播一次。
+    // 不可在 already-speaking 時再 speak 第二次，Chromium 會兩軌重疊。
+    stopBrowserSpeech();
+    setTimeout(start, 80);
   });
 }
 
 async function speakText(text) {
   await unlockMedia();
   if (await speakTextOnce(text)) return true;
+  try {
+    if (window.speechSynthesis?.speaking || window.speechSynthesis?.pending) return true;
+  } catch { /* noop */ }
   await unlockMedia();
   return speakTextOnce(text);
 }
@@ -1288,6 +1352,8 @@ async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain'
 async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio = false } = {}) {
   if (!prepared) return false;
   if (prepared.kind === 'browser') return speakText(prepared.text);
+  pausePreparedAudio(prepared);
+  stopBrowserSpeech();
   if (!prepared.buffer && prepared.blob) {
     try { prepared.buffer = await decodeBlobToBuffer(prepared.blob); } catch { /* 下面再用 HTMLAudio */ }
   }
@@ -1313,6 +1379,7 @@ async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio 
   // padSec：開頭留白，避免「歡迎」被 captain 交叉／裝置緩衝吃掉；immediate 為起飛無縫交接
   const speechOpts = { volume: 1, tag: 'speech', fadeInMs: 0, padSec: immediate ? 0 : 0.48 };
   if (prepared.buffer && await playWebAudioBuffer(prepared.buffer, speechOpts)) {
+    pausePreparedAudio(prepared);
     if (prepared.url) URL.revokeObjectURL(prepared.url);
     return true;
   }
@@ -1361,6 +1428,11 @@ async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio 
     audio.addEventListener('timeupdate', onTime);
     audio.onended = () => finish(true);
     audio.onerror = async () => {
+      if (!audio.paused && audio.currentTime > 0.15) {
+        finish(true);
+        return;
+      }
+      try { audio.pause(); } catch { /* noop */ }
       finish(await speakText(prepared.fallbackText || ''));
     };
   });
@@ -1378,8 +1450,10 @@ async function speakWithOpenAI(text, style) {
  * 避免降落後空等 /api/broadcast/speech 造成「廣播靜音空窗」。
  */
 async function prepareCaptainSpeechForPlay(text, style, speechBase64) {
+  const gen = ++speechPrepGen;
   if (speechBase64) {
     const ready = await prepareCaptainSpeechFromBase64(speechBase64, text, style);
+    if (gen !== speechPrepGen) return null;
     if (ready) return ready;
   }
   const openaiP = prepareCaptainSpeech(text, style);
@@ -1387,8 +1461,13 @@ async function prepareCaptainSpeechForPlay(text, style, speechBase64) {
     openaiP,
     delay(2800).then(() => 'timeout'),
   ]);
+  if (gen !== speechPrepGen) {
+    openaiP.then(pausePreparedAudio).catch(() => {});
+    return null;
+  }
   if (raced && raced !== 'timeout') return raced;
   if (text?.trim() && window.speechSynthesis) {
+    openaiP.then(pausePreparedAudio).catch(() => {});
     return { kind: 'browser', text, fallbackText: text };
   }
   return openaiP;
@@ -1403,12 +1482,7 @@ async function playCaptainBroadcast(text, style, {
   prepared: preparedIn = null,
 } = {}) {
   if (!text?.trim()) return false;
-  const alreadySpeaking = !!(window.speechSynthesis?.speaking || window.speechSynthesis?.pending);
-  stopPlayback({ keepSpeech: alreadySpeaking });
-  if (alreadySpeaking && !speechBase64 && !preparedIn) {
-    speakFromGesture(text);
-    return waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
-  }
+  stopPlayback({ keepSpeech: false });
   try {
     if (immediate && preparedIn) {
       // 起飛交接：captain.mp3 剛結束，不等 unlock／淡出／緩衝延遲
@@ -1582,7 +1656,32 @@ function playApproachClip() {
   return playWebAudioBuffer(approachBuffer, { volume: 1, tag: 'speech', fadeInMs: 0, padSec: 0 });
 }
 
+const TAKEOFF_BLESSING_ZH = 'Sleep Airline 祝你好眠。';
+const TAKEOFF_BLESSING_EN = 'Sleep Airline, sleep well.';
+
+/** 起飛廣播拆成「即將起飛」與音效後的祝福，避免祝你好眠被 takeoff.mp3 掐掉。 */
+function takeoffAnnouncementParts(text) {
+  const locale = window.SleepI18n?.getLocale?.() === 'en' ? 'en' : 'zh';
+  const closing = locale === 'en' ? TAKEOFF_BLESSING_EN : TAKEOFF_BLESSING_ZH;
+  let opening = String(text || '').trim()
+    .replace(/\s*Sleep Airline 感謝您的搭乘[，,.、]?\s*請好好休息[，,.、]?\s*祝你有個好眠[。．.～~!]*/gu, '')
+    .replace(/\s*請好好休息[，,.、]?\s*祝你有個好眠[。．.～~!]*/gu, '')
+    .replace(/\s*祝你有個好眠[。．.～~!]*/gu, '')
+    .replace(/\s*Sleep Airline thanks you[\s\S]*?sleep well\.?/gi, '')
+    .trim();
+  if (opening && !/即將起飛|about to take off/i.test(opening)) {
+    opening = locale === 'en'
+      ? `${opening.replace(/[.!\s]+$/u, '')}. We are about to take off.`
+      : `${opening.replace(/[。.!]+$/u, '')}。我們即將起飛。`;
+  }
+  if (!opening) {
+    opening = locale === 'en' ? 'Passengers, we are about to take off.' : '各位旅客，我們即將起飛。';
+  }
+  return { opening, closing };
+}
+
 window.BroadcastAudio = {
+  takeoffAnnouncementParts,
   playCaptainBroadcast,
   playCaptainIntro,
   playTakeoffLeadIn,

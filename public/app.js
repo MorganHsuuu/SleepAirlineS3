@@ -723,27 +723,38 @@ async function doTakeoff() {
       state.takeoffAt = Date.now();
       text = localLine;
     }
-    const useOpenAIVoice = !!(state.sound && text && (speech || state.openaiReady) && window.BroadcastAudio?.prepareTakeoffSpeech);
+    const parts = window.BroadcastAudio?.takeoffAnnouncementParts?.(text)
+      || { opening: text, closing: 'Sleep Airline 祝你好眠。' };
+    const useOpenAIVoice = !!(state.sound && parts.opening && (speech || state.openaiReady) && window.BroadcastAudio?.prepareTakeoffSpeech);
+    // 不用後端整段 TTS：裡面含「祝你好眠」，會在 takeoff.mp3 之前被講完或被掐掉。
     const prepared = useOpenAIVoice
-      ? await BroadcastAudio.prepareTakeoffSpeech(text, speech).catch(() => null)
+      ? await BroadcastAudio.prepareTakeoffSpeech(parts.opening, null).catch(() => null)
       : null;
     markSpeechReady(true);
     const decoded = prepared ? BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared) : null;
+    const closingPrep = useOpenAIVoice
+      ? BroadcastAudio.prepareTakeoffSpeech(parts.closing).catch(() => null)
+      : Promise.resolve(null);
     await leadIn;
     if (decoded) await decoded;
-    if (state.sound && text) {
+    if (state.sound && parts.opening) {
       if (useOpenAIVoice) {
-        // 已播過 captain 前奏；語音已備妥並解碼，captain 結束立刻接上
-        await playBroadcast(text, speech, { skipCaptainIntro: true, immediate: true, prepared });
+        await playBroadcast(parts.opening, null, { skipCaptainIntro: true, immediate: true, prepared });
       } else {
-        window.BroadcastAudio?.speakFromGesture?.(text);
+        window.BroadcastAudio?.speakFromGesture?.(parts.opening);
         await BroadcastAudio.waitForSpeechComplete?.({ maxMs: 120000, quietMs: 350 });
       }
     }
     setCeremony('TAKING OFF', '飛機正在穿越雲層…');
-    if (state.sound) void BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', { loop: false, volume: .45, fadeInMs: 400 });
-    await delay(10000);
-    await BroadcastAudio?.stopFlightSfx?.({ fade: true, ms: 4500 });
+    if (state.sound) {
+      await BroadcastAudio?.playFlightSfx?.('media/takeoff.mp3', {
+        loop: false, volume: 0.45, fadeInMs: 400, fadeOutMs: 1400,
+      });
+      const closingPrepared = await closingPrep;
+      await playBroadcast(parts.closing, null, {
+        skipCaptainIntro: true, immediate: true, restoreBed: false, prepared: closingPrepared,
+      });
+    }
     if (state.stage !== 'takeoff') return;
     setInflightStandby(true);
     setScene('clouds'); setShade('closed');
