@@ -3,6 +3,13 @@
 set -euo pipefail
 
 URL="${SLEEP_AIRLINE_URL:-https://sleep-airline-s3.vercel.app}"
+if [[ "$URL" != *"kiosk=1"* ]]; then
+  if [[ "$URL" == *"?"* ]]; then
+    URL="${URL}&kiosk=1"
+  else
+    URL="${URL}?kiosk=1"
+  fi
+fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export DISPLAY="${DISPLAY:-:0}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

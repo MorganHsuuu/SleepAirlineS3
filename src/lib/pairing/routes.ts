@@ -140,11 +140,17 @@ router.post('/devices/complete', async (req, res) => {
     const device = await findDevice(deviceId);
     const secretHash = sha(deviceSecret);
     const grantHash = sha(data.nonce);
-    if (device?.lastGrantHash === grantHash) return fail(res, 409, 'grant_used');
     if (device?.deviceSecretHash && !sameHash(device.deviceSecretHash, secretHash)) return fail(res, 409, 'device_identity_mismatch');
     if (device?.passengerId && device.passengerId !== data.passengerId) return fail(res, 409, 'device_already_bound');
     const prior = await boundDevice(data.passengerId);
     if (prior && prior.deviceId !== deviceId) return fail(res, 409, 'passenger_already_bound');
+    // A lost response after Notion committed must be safe to retry with the same grant.
+    if (device?.lastGrantHash === grantHash) {
+      if (device.passengerId === data.passengerId && prior?.deviceId === deviceId) {
+        return res.json({ status: 'paired', passengerId: data.passengerId, deviceId });
+      }
+      return fail(res, 409, 'grant_used');
+    }
     await bindDevice({ deviceId, deviceSecretHash: secretHash, passengerId: data.passengerId, grantHash, existing: device });
     // Query again so concurrent edits or duplicate Notion rows fail closed.
     const current = await findDevice(deviceId);
