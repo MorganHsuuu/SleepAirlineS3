@@ -1,6 +1,6 @@
 # 樹莓派實體控制
 
-正式裝置保留此專案的全螢幕 Chromium 與感測器橋接；[樹莓派專案的 `device_kiosk.py`](https://github.com/yuhsiangc0620/raspberry-pi-reed-sensor-test) 在背景提供首次配網、配對 QR 與綁定狀態。此網站的主頁直接讀取本機橋接，沒有獨立感測器測試頁。
+此專案同時提供全螢幕 Chromium、感測器橋接與 `device_kiosk.py` 配對服務。裝置首次配網、配對 QR 和綁定狀態都由這個 repo 的 `hardware/` 管理；主頁直接讀取本機橋接。
 
 | 元件 | 接線與動作 |
 | --- | --- |
@@ -14,7 +14,7 @@
 
 主頁從 `http://127.0.0.1:8765/state` 讀取磁簧次數、方位和 ADC 錯誤，再呼叫現有的 `setDirection`、`doTakeoff`、`doLand`。樹莓派 Chromium 只要 8765 有資料就會聽磁鐵；`http://127.0.0.1:8766/api/status` 是正式 kiosk 的選配狀態頁（配網／裝置身分），沒開也不會擋住起飛降落。連線或 ADC 失敗會在正式畫面保留錯誤資訊，恢復後清除；普通訪客在非樹莓派的瀏覽器不會看到感測器錯誤。
 
-兩個磁簧同時觸發會忽略該次動作；重連後先建立基準，不重播斷線期間的事件。ADC 失敗時保留前一次方位，磁簧仍可操作。旋鈕是單向行程，畫面指針也不會無限轉圈。完整安裝、配網和維護方式請看樹莓派專案 README。
+兩個磁簧同時觸發會忽略該次動作；重連後先建立基準，不重播斷線期間的事件。ADC 失敗時磁簧仍可操作。旋鈕是單向行程，畫面指針也不會無限轉圈。
 
 終端機測試磁鐵（橋接已在跑時）：
 
@@ -43,6 +43,7 @@ git pull
 cd hardware
 chmod +x install-kiosk.sh kiosk.sh
 ./install-kiosk.sh
+./install-pairing-service.sh
 sudo reboot
 ```
 
@@ -58,6 +59,17 @@ sudo journalctl -u sleep-airline-bridge -n 40 --no-pager
 
 ### 首次配對與之後開機
 
-安裝上面的全螢幕與感測器服務後，再於 `~/raspberry-pi-reed-sensor-test` 執行 `./install-pairing-service.sh`。它保留現有服務，增加 `sleep-airline-pairing.service`，並讓橋接從 `~/.config/sleep-airline/device.json` 讀取旅客身分。完成後重新執行本專案的 `./install-kiosk.sh`，讓開機腳本更新到支援配對的版本，再重新開機。
+在同一個 `~/SleepAirlineS3/hardware` 目錄先執行 `./install-kiosk.sh`，再執行 `./install-pairing-service.sh`。後者保留現有服務，增加 `sleep-airline-pairing.service`，並讓橋接從 `~/.config/sleep-airline/device.json` 讀取旅客身分。安裝時會啟動裝置暫時 Wi-Fi；請在樹莓派桌面操作，避免 SSH 斷線。
 
 配對服務回報未綁定時，全螢幕瀏覽器開啟本機 QR；已綁定且連網時，直接進入正式飛機窗；已綁定但斷網時，顯示本機離線頁。三個狀態都使用同一個 Chromium 畫面，不會另開感測器測試分頁。
+
+裝置熱點沒有網際網路是正常的。手機先在原網路掃描 QR，取得授權後才切到裝置 Wi-Fi，開啟 `http://10.42.0.1:8766/setup` 輸入家中 Wi-Fi。送出後手機會離開裝置熱點，再回原網路查看綁定結果。熱點建立失敗或綁定卡住時，可在樹莓派終端機檢查：
+
+```bash
+curl -s localhost:8766/api/status
+nmcli device status
+nmcli networking connectivity
+sudo journalctl -u sleep-airline-pairing -n 60 --no-pager
+```
+
+裝置身分檔保存在 `~/.config/sleep-airline/device.json`，家中 Wi-Fi 密碼由 NetworkManager 保存。請勿把身分檔、暫時熱點密碼或家中 Wi-Fi 密碼貼到 GitHub。
