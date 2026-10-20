@@ -342,6 +342,19 @@ function prefersGestureElement() {
   return iOS || safari;
 }
 
+/** 樹莓派 Chromium 有 speechSynthesis API，但通常沒有可聽的中文語音。 */
+function browserSpeechUsable() {
+  if (prefersGestureElement()) return true;
+  try {
+    if (!window.speechSynthesis) return false;
+    const voices = speechSynthesis.getVoices() || [];
+    if (!voices.length) return false;
+    return voices.some((voice) => /zh|cmn|chinese|taiwan/i.test(`${voice.lang || ''} ${voice.name || ''}`));
+  } catch {
+    return false;
+  }
+}
+
 /** Safari 只承認手勢當下 play() 過的 audio 元素；內容播完後不得留在 loop 狀態。 */
 function playOnGestureElement(audio, src, {
   seconds = 0,
@@ -1325,7 +1338,7 @@ async function prepareCaptainSpeech(text, style) {
     const ready = await loadPreparedSpeechAudio(blob, text);
     if (ready) return ready;
   }
-  if (text?.trim() && window.speechSynthesis) return { kind: 'browser', text, fallbackText: text };
+  if (text?.trim() && browserSpeechUsable()) return { kind: 'browser', text, fallbackText: text };
   return null;
 }
 
@@ -1351,7 +1364,9 @@ async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain'
 
 async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio = false } = {}) {
   if (!prepared) return false;
-  if (prepared.kind === 'browser') return speakText(prepared.text);
+  if (prepared.kind === 'browser') {
+    return browserSpeechUsable() ? speakText(prepared.text) : false;
+  }
   pausePreparedAudio(prepared);
   stopBrowserSpeech();
   if (!prepared.buffer && prepared.blob) {
@@ -1403,7 +1418,7 @@ async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio 
   if (!ok) {
     URL.revokeObjectURL(url);
     if (currentAudio === audio) currentAudio = null;
-    return speakText(prepared.fallbackText || '');
+    return browserSpeechUsable() ? speakText(prepared.fallbackText || '') : false;
   }
   return new Promise((resolve) => {
     let done = false;
@@ -1446,8 +1461,8 @@ async function speakWithOpenAI(text, style) {
 }
 
 /**
- * 準備機長 TTS：有 base64 直接用；沒有則短等 OpenAI，逾時改走瀏覽器 TTS，
- * 避免降落後空等 /api/broadcast/speech 造成「廣播靜音空窗」。
+ * 準備機長 TTS：有 base64 直接用。iOS／Safari 短等後可改瀏覽器朗讀；
+ * 樹莓派 Chromium 沒有可聽的中文語音，必須等 OpenAI MP3，不可提早切 TTS。
  */
 async function prepareCaptainSpeechForPlay(text, style, speechBase64) {
   const gen = ++speechPrepGen;
@@ -1457,16 +1472,17 @@ async function prepareCaptainSpeechForPlay(text, style, speechBase64) {
     if (ready) return ready;
   }
   const openaiP = prepareCaptainSpeech(text, style);
+  const canUseBrowser = browserSpeechUsable();
   const raced = await Promise.race([
     openaiP,
-    delay(2800).then(() => 'timeout'),
+    delay(canUseBrowser ? 2800 : 12000).then(() => 'timeout'),
   ]);
   if (gen !== speechPrepGen) {
     openaiP.then(pausePreparedAudio).catch(() => {});
     return null;
   }
   if (raced && raced !== 'timeout') return raced;
-  if (text?.trim() && window.speechSynthesis) {
+  if (canUseBrowser && text?.trim()) {
     openaiP.then(pausePreparedAudio).catch(() => {});
     return { kind: 'browser', text, fallbackText: text };
   }
@@ -1510,7 +1526,16 @@ async function playCaptainBroadcast(text, style, {
     await ensureAudioCtx();
     // 短間隔，讓裝置緩衝就緒，減少首字「歡迎」被吃
     if (!immediate) await delay(280);
-    if (!prepared) return await speakText(text);
+    if (!prepared || (prepared.kind === 'browser' && !browserSpeechUsable())) {
+      const late = await prepareCaptainSpeech(text, style);
+      if (late && late.kind !== 'browser') {
+        const okLate = await playPreparedSpeech(late, { immediate, preferWebAudio });
+        await waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
+        return okLate;
+      }
+      if (browserSpeechUsable()) return await speakText(text);
+      return false;
+    }
     const ok = await playPreparedSpeech(prepared, { immediate, preferWebAudio });
     // 再等語音真正靜下來，避免 Promise 提前 resolve 就切 landing.mp4
     await waitForSpeechComplete({ maxMs: 120000, quietMs: 420 });
@@ -1520,7 +1545,12 @@ async function playCaptainBroadcast(text, style, {
     stopCaptainIntro();
     await muteCeremonyBedForSpeech();
     await unlockMedia();
-    return speakText(text);
+    if (browserSpeechUsable()) return speakText(text);
+    const late = await prepareCaptainSpeech(text, style).catch(() => null);
+    if (late && late.kind !== 'browser') {
+      return playPreparedSpeech(late, { immediate, preferWebAudio });
+    }
+    return false;
   } finally {
     stopCaptainIntro();
     if (restoreBed) await restoreCeremonyBed({ ms: CEREMONY_RESTORE_MS });

@@ -1177,6 +1177,12 @@ async function doLand() {
     sceneryJob = sceneryJob.then((url) => url || requestPreviewScenery(state.destination));
     paintDestCopy(state.destination);
     weatherJob ||= loadWeather(state.destination);
+    const landingLine = () => `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
+    const fallbackVoiceP = state.sound && window.BroadcastAudio?.prepareTakeoffSpeech
+      ? BroadcastAudio.prepareTakeoffSpeech(landingLine())
+        .then((prepared) => (prepared ? BroadcastAudio.decodePreparedSpeech(prepared) : null))
+        .catch(() => null)
+      : Promise.resolve(null);
     const openingMinutes = state.takeoffAt ? Math.max(1, Math.round((Date.now() - state.takeoffAt) / 60000)) : 1;
     const minutes = state.lastFlight?.flightDurationMinutes || openingMinutes;
     const distanceKm = state.lastFlight?.estimatedFlightDistanceKm || Math.max(12, minutes * 12);
@@ -1228,7 +1234,7 @@ async function doLand() {
       delay(2500).then(() => null),
     ]);
     const arrivalVoice = arrivalPack?.voice || arrivalPack || null;
-    const arrivalPrepared = arrivalPack?.prepared || null;
+    let arrivalPrepared = arrivalPack?.prepared || null;
     const image = $('arrival-image');
     image.classList.remove('is-inflight', 'developing');
     image.src = finalImage;
@@ -1250,8 +1256,16 @@ async function doLand() {
     resetLandingCloudScene();
     state.stage = 'landed';
     render();
-    const spoken = arrivalVoice?.text
-      || `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
+    const spoken = arrivalVoice?.text || landingLine();
+    if (state.sound && !arrivalPrepared) {
+      if (arrivalVoice?.speechAudioBase64) {
+        arrivalPrepared = await BroadcastAudio.prepareTakeoffSpeech(spoken, arrivalVoice.speechAudioBase64)
+          .then((prepared) => (prepared ? BroadcastAudio.decodePreparedSpeech(prepared) : null))
+          .catch(() => null);
+      } else if (!arrivalVoice) {
+        arrivalPrepared = await fallbackVoiceP;
+      }
+    }
     const speechPlay = state.sound
       ? playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, {
         skipCaptainIntro: true,
