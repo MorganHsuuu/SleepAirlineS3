@@ -50,6 +50,7 @@ export const DASHBOARD_PROPERTY_ORDER = [
   'Status',
   // 起飛
   'Departure Location',
+  'Departure Airport Code',
   'Departure Latitude',
   'Departure Longitude',
   'Takeoff Time',
@@ -67,9 +68,12 @@ export const DASHBOARD_PROPERTY_ORDER = [
   'Mood After',
   'Estimated Flight Distance KM',
   'Arrival Location',
+  'Arrival Airport Code',
   'Arrival Latitude',
   'Arrival Longitude',
   'Captain Broadcast',
+  'Immigration Note',
+  'Files & media',
   // 社交
   'Social Cue Type',
   'Social Cue Text',
@@ -91,6 +95,7 @@ export function getDashboardProperties() {
     'Status': { select: { options: STATUS_OPTIONS } },
     // ── 起飛 ──
     'Departure Location': { rich_text: {} },
+    'Departure Airport Code': { rich_text: {} },
     'Departure Latitude': { number: { format: 'number' as const } },
     'Departure Longitude': { number: { format: 'number' as const } },
     'Takeoff Time': { date: {} },
@@ -108,9 +113,12 @@ export function getDashboardProperties() {
     'Mood After': { number: { format: 'number' as const } },
     'Estimated Flight Distance KM': { number: { format: 'number' as const } },
     'Arrival Location': { rich_text: {} },
+    'Arrival Airport Code': { rich_text: {} },
     'Arrival Latitude': { number: { format: 'number' as const } },
     'Arrival Longitude': { number: { format: 'number' as const } },
     'Captain Broadcast': { rich_text: {} },
+    'Immigration Note': { rich_text: {} },
+    'Files & media': { files: {} },
     // ── 社交 ──
     'Social Cue Type': { select: { options: SOCIAL_CUE_OPTIONS } },
     'Social Cue Text': { rich_text: {} },

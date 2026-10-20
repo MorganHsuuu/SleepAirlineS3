@@ -4,6 +4,7 @@ import {
   PairingStoreError, bindDevice, createPassenger, devicesForPassenger, findDevice, findPassenger,
   unbindDevice,
 } from './notion-store';
+import { listArchiveJourneys, saveArchiveNote } from './archive';
 
 const router = Router();
 const appOrigin = process.env.PAIRING_APP_ORIGIN || 'https://night-departures.vercel.app';
@@ -168,6 +169,28 @@ router.get('/status', async (req, res) => {
     if (!id) return fail(res, 401, 'session_expired');
     const deviceId = (await boundDevice(id))?.deviceId || null;
     res.json({ passengerId: id, deviceId, status: deviceId ? 'paired' : 'unpaired' });
+  } catch (cause) { storeFailure(res, cause); }
+});
+
+router.get('/journeys', async (req, res) => {
+  try {
+    const id = await passenger(req);
+    if (!id) return fail(res, 401, 'session_expired');
+    res.json({ journeys: await listArchiveJourneys(id) });
+  } catch (cause) { storeFailure(res, cause); }
+});
+
+router.post('/journeys/:flightId/note', async (req, res) => {
+  try {
+    const id = await passenger(req);
+    if (!id) return fail(res, 401, 'session_expired');
+    const flightId = req.params.flightId;
+    const note = req.body?.note;
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(flightId) || typeof note !== 'string' || note.length > 500) {
+      return fail(res, 400, 'invalid_note');
+    }
+    if (!await saveArchiveNote(id, flightId, note)) return fail(res, 404, 'journey_not_found');
+    res.json({ note });
   } catch (cause) { storeFailure(res, cause); }
 });
 
