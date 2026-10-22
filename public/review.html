@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css?v=hub-2">
+  <link rel="stylesheet" href="/review.css?v=hub-4">
 </head>
 <body class="gate-on">
   <div class="desk">
@@ -124,25 +124,6 @@
             </div>
             <p class="prompt" id="image-prompt" hidden></p>
           </article>
-          <article class="comment-bar" id="comment-bar">
-            <div class="section-head">
-              <small>Rate</small>
-              <h2>評分</h2>
-            </div>
-            <div class="comments" id="comments">還沒有評論。</div>
-            <div class="comment-form">
-              <label class="score-bar">
-                <span class="score-label">文字評分 <strong id="score-readout">5</strong></span>
-                <span class="score-track">
-                  <span>糟糕</span>
-                  <input id="text-score" type="range" min="1" max="10" step="1" value="5">
-                  <span>不錯</span>
-                </span>
-              </label>
-              <textarea id="comment" rows="1" maxlength="1200" placeholder="對這段語音／圖片的評論"></textarea>
-              <button type="button" class="primary" id="btn-comment">寫回</button>
-            </div>
-          </article>
         </div>
       </main>
 
@@ -164,6 +145,24 @@
           <p class="hint">審查台手動產的測試，按生成時間排列。</p>
           <div class="sample-list" id="sample-list"></div>
         </section>
+      </aside>
+
+      <aside class="judge pane">
+        <div class="pane-head">評分</div>
+        <div class="grades" role="radiogroup" aria-label="五級評分">
+          <button type="button" class="grade" data-score="1"><b>1</b><span>很差</span></button>
+          <button type="button" class="grade" data-score="2"><b>2</b><span>偏差</span></button>
+          <button type="button" class="grade is-on" data-score="3"><b>3</b><span>普通</span></button>
+          <button type="button" class="grade" data-score="4"><b>4</b><span>不錯</span></button>
+          <button type="button" class="grade" data-score="5"><b>5</b><span>很好</span></button>
+        </div>
+        <input id="text-score" type="hidden" value="3">
+        <div class="comments" id="comments">還沒有評論。</div>
+        <div class="feedback">
+          <label class="feedback-label" for="comment">回饋</label>
+          <textarea id="comment" rows="4" maxlength="1200" placeholder="對這段語音／圖片的評論"></textarea>
+          <button type="button" class="primary" id="btn-comment">寫回</button>
+        </div>
       </aside>
     </div>
   </div>
@@ -188,6 +187,6 @@
   <div class="toast" id="toast" hidden></div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js?v=hub-2"></script>
+  <script src="/review.js?v=hub-4"></script>
 </body>
 </html>

@@ -11,6 +11,23 @@ const directions = [
   { key: 'northwest', name: '西北', angle: 315 },
 ];
 
+const GRADE_LABELS = ['', '很差', '偏差', '普通', '不錯', '很好'];
+
+function toStoredScore(grade) {
+  const n = Math.max(1, Math.min(5, Math.round(Number(grade) || 3)));
+  return n * 2;
+}
+
+function fromStoredScore(score) {
+  const n = Number(score);
+  if (!Number.isFinite(n) || n <= 0) return 3;
+  return Math.max(1, Math.min(5, Math.round(n / 2)));
+}
+
+function gradeLabel(grade) {
+  return GRADE_LABELS[grade] || '普通';
+}
+
 const hourLabels = [
   [5, '當地深夜'],
   [8, '當地黎明'],
@@ -246,7 +263,10 @@ function renderRecordButton(sample, kind) {
   if (kind === 'live' && sample.phase === 'in_flight') bits.push('飛行中');
   if (dir) bits.push(escapeHtml(dir));
   if (sample.durationMinutes) bits.push(escapeHtml(formatDuration(sample.durationMinutes)));
-  if (sample.myScore != null) bits.push(`<em class="${sample.myScore >= 8 ? 'ok' : sample.myScore <= 4 ? 'warn' : ''}">我的${sample.myScore}分</em>`);
+  if (sample.myScore != null) {
+    const grade = fromStoredScore(sample.myScore);
+    bits.push(`<em class="${grade >= 4 ? 'ok' : grade <= 2 ? 'warn' : ''}">我的${grade}分</em>`);
+  }
   else if ((sample.ratings || []).some((item) => item.score != null)) bits.push('有評分');
   if (sample.comments) bits.push('有評論');
   const when = recordWhen(sample);
@@ -281,7 +301,7 @@ function renderSample(sample) {
       : '選擇「文字＋圖片」時會一起生成風景。',
   );
   renderComments(sample);
-  $('text-score').value = String(sample.myScore || 5);
+  $('text-score').value = String(fromStoredScore(sample.myScore));
   paintScoreReadout();
   $('comment').placeholder = state.account
     ? `以 @${state.account} 寫評論`
@@ -494,9 +514,10 @@ function renderComments(sample) {
     return;
   }
   box.innerHTML = ratings.map((item) => {
-    const band = item.score == null ? '' : item.score >= 8 ? '' : item.score <= 4 ? 'warn' : '';
-    const score = item.score != null ? `${item.score}分` : '';
-    return `<div class="comment-line"><strong>@${escapeHtml(item.account)}</strong><em class="${band}">${escapeHtml(score)}</em><span>${escapeHtml(item.comment)}</span></div>`;
+    const grade = item.score == null ? null : fromStoredScore(item.score);
+    const band = grade == null ? '' : grade >= 4 ? '' : grade <= 2 ? 'warn' : '';
+    const score = grade != null ? `${grade} · ${gradeLabel(grade)}` : '';
+    return `<div class="comment-line"><div class="comment-meta"><strong>@${escapeHtml(item.account)}</strong><em class="${band}">${escapeHtml(score)}</em></div><span>${escapeHtml(item.comment || '')}</span></div>`;
   }).join('');
 }
 
@@ -546,9 +567,10 @@ async function saveComment() {
     return;
   }
   const comment = $('comment').value.trim();
-  const textScore = Number($('text-score').value);
-  if (!comment && !(textScore >= 1)) {
-    toast('請先寫評論或拉文字評分。');
+  const grade = Math.max(1, Math.min(5, Number($('text-score').value) || 3));
+  const textScore = toStoredScore(grade);
+  if (!comment && !(grade >= 1)) {
+    toast('請先寫評論或選評分。');
     return;
   }
   setBusy(true);
@@ -571,7 +593,7 @@ async function saveComment() {
     if (!res.ok) throw new Error(data.error || '評論寫入失敗');
     upsertSample(data.sample);
     $('comment').value = '';
-    toast(textScore ? `@${state.account} 已寫回 ${textScore} 分` : `@${state.account} 評論已寫回`);
+    toast(`@${state.account} 已寫回 ${grade} · ${gradeLabel(grade)}`);
   } catch (err) {
     toast(err.message || '評論寫入失敗');
   } finally {
@@ -619,12 +641,19 @@ $('btn-flight').addEventListener('click', generateFlight);
 function paintScoreReadout() {
   const el = $('text-score');
   if (!el) return;
-  const n = Number(el.value) || 5;
-  $('score-readout').textContent = String(n);
-  $('score-readout').dataset.band = n >= 8 ? 'high' : n <= 4 ? 'low' : 'mid';
+  const n = Math.max(1, Math.min(5, Number(el.value) || 3));
+  el.value = String(n);
+  document.querySelectorAll('.grade').forEach((button) => {
+    button.classList.toggle('is-on', Number(button.dataset.score) === n);
+  });
 }
 
-$('text-score').addEventListener('input', paintScoreReadout);
+document.querySelector('.grades')?.addEventListener('click', (event) => {
+  const button = event.target.closest('.grade');
+  if (!button) return;
+  $('text-score').value = button.dataset.score;
+  paintScoreReadout();
+});
 $('btn-comment').addEventListener('click', saveComment);
 paintScoreReadout();
 async function openRecord(sample) {

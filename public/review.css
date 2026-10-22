@@ -1,6 +1,6 @@
 :root {
   --board-w: min(1480px, calc(100vw - 28px));
-  --board-h: calc(100svh - 78px);
+  --board-h: calc(100svh - 64px);
   --ink: #143056;
   --muted: #7a8ba3;
   --line: #d7e4f5;
@@ -28,7 +28,7 @@ body {
 .desk {
   width: var(--board-w);
   margin: 0 auto;
-  padding: 16px 0 0;
+  padding: 10px 0 0;
   height: 100svh;
   display: flex;
   flex-direction: column;
@@ -39,7 +39,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   flex: 0 0 auto;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
@@ -109,11 +109,11 @@ h1 {
   height: var(--board-h);
   flex: 0 0 var(--board-h);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 228px;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1.45fr) minmax(240px, 300px);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    "console console"
-    "sheet ledger";
+    "console console console"
+    "ledger  sheet    judge";
   gap: 12px;
 }
 
@@ -136,10 +136,11 @@ h1 {
   text-align: center;
 }
 
-.console, .ledger, .sheet { display: flex; flex-direction: column; }
+.console, .ledger, .sheet, .judge { display: flex; flex-direction: column; }
 .console { grid-area: console; }
 .sheet { grid-area: sheet; }
 .ledger { grid-area: ledger; }
+.judge { grid-area: judge; }
 
 .console-strip {
   display: grid;
@@ -421,18 +422,16 @@ input[type=range] {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "takeoff picture"
-    "landing picture"
-    "rate rate";
+    "landing picture";
   gap: 12px;
 }
 .takeoff { grid-area: takeoff; }
 .landing { grid-area: landing; }
 .picture { grid-area: picture; }
-.comment-bar { grid-area: rate; }
 
 .voice-card, .picture {
   min-height: 0;
@@ -522,63 +521,94 @@ input[type=range] {
 }
 .prompt[hidden] { display: none; }
 
-.comment-bar {
-  padding: 10px 14px 8px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid var(--line);
+.judge {
+  background: var(--card);
 }
-.comment-bar .section-head { margin-bottom: 6px; }
+.grades {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 14px 8px;
+  flex: 0 0 auto;
+}
+.grade {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 58px;
+  padding: 8px 2px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: center;
+  font: inherit;
+}
+.grade b {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.grade span {
+  font-size: 11px;
+  font-weight: 800;
+}
+.grade.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.grade[data-score="1"].is-on,
+.grade[data-score="2"].is-on { background: var(--warn); border-color: var(--warn); }
 .comments {
   display: grid;
-  gap: 4px;
-  max-height: 56px;
+  align-content: start;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   color: var(--muted);
   font-size: 12px;
-  margin-bottom: 6px;
-  min-height: 16px;
+  padding: 4px 14px 8px;
 }
 .comment-line {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: baseline;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--accent-soft);
 }
 .comment-line strong { color: var(--ink); font-weight: 800; }
 .comment-line em { font-style: normal; font-weight: 800; color: var(--accent); }
 .comment-line em.warn { color: var(--warn); }
+.comment-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
 .comment-line span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--ink);
 }
-.comment-form {
+.feedback {
+  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px;
   gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--line);
 }
-.score-bar {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px 12px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.score-track {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
+.feedback-label {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
-.score-bar input[type=range] { margin: 0; }
-#score-readout { color: var(--accent); font-variant-numeric: tabular-nums; }
-#score-readout[data-band="low"] { color: var(--warn); }
 input[type=text], textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -589,7 +619,8 @@ input[type=text], textarea {
   color: var(--ink);
   resize: none;
 }
-#btn-comment { width: auto; min-width: 88px; min-height: 42px; font-size: 13px; }
+#comment { min-height: 96px; }
+#btn-comment { width: 100%; min-height: 46px; font-size: 14px; }
 
 .archive {
   flex-direction: column;
@@ -691,8 +722,10 @@ body.gate-on .desk { filter: blur(8px); pointer-events: none; }
   font-size: 12px;
 }
 
-@media (max-width: 1100px) {
-  .board { grid-template-columns: minmax(0, 1fr) 210px; }
+@media (max-width: 1180px) {
+  .board {
+    grid-template-columns: 210px minmax(0, 1fr) 240px;
+  }
   .console-strip { grid-template-columns: 108px minmax(0, 1fr) 168px; }
   .globe-stage { display: none; }
 }
@@ -711,16 +744,17 @@ body.gate-on .desk { filter: blur(8px); pointer-events: none; }
     grid-template-areas:
       "console"
       "sheet"
+      "judge"
       "ledger";
   }
   .console-strip, .stage {
     grid-template-columns: 1fr;
     grid-template-areas: none;
   }
-  .takeoff, .landing, .picture, .comment-bar { grid-area: auto; }
+  .takeoff, .landing, .picture { grid-area: auto; }
   .stage { min-height: 720px; }
   .image-frame { min-height: 220px; }
-  .console, .ledger, .sheet { height: auto; }
+  .console, .ledger, .sheet, .judge { height: auto; }
   .sample-list { overflow: visible; }
   .ledger { background: var(--card); }
   .ledger .pane-head, .ledger .section-head h2, .ledger .section-head small { color: var(--ink); }
