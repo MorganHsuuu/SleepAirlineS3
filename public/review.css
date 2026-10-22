@@ -1,6 +1,6 @@
 :root {
   --board-w: min(1480px, calc(100vw - 28px));
-  --board-h: calc(100svh - 64px);
+  --board-h: auto;
   --ink: #143056;
   --muted: #7a8ba3;
   --line: #d7e4f5;
@@ -28,7 +28,7 @@ body {
 .desk {
   width: var(--board-w);
   margin: 0 auto;
-  padding: 10px 0 0;
+  padding: 10px 0 24px;
   height: 100svh;
   display: flex;
   flex-direction: column;
@@ -106,8 +106,9 @@ h1 {
 
 .board {
   width: 100%;
-  height: var(--board-h);
-  flex: 0 0 var(--board-h);
+  flex: 1;
+  min-height: 0;
+  height: auto;
   display: grid;
   grid-template-columns: minmax(220px, 260px) minmax(0, 1.45fr) minmax(240px, 300px);
   grid-template-rows: auto minmax(0, 1fr);
@@ -123,6 +124,7 @@ h1 {
   border-radius: 24px;
   background: var(--card);
   box-shadow: var(--shadow);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 .pane-head {
@@ -331,14 +333,14 @@ input[type=range] {
 .primary:hover { background: var(--accent-dark); }
 .primary:disabled { opacity: .55; cursor: wait; box-shadow: none; }
 
-.sheet { padding: 12px 16px 10px; }
-.ledger { background: var(--accent); }
+.sheet { padding: 12px 16px 16px; }
+.ledger { background: var(--accent); border-color: transparent; }
 .ledger .pane-head { background: transparent; padding-bottom: 2px; }
 .ledger .archive {
   display: none;
   flex: 1;
   min-height: 0;
-  padding: 0 12px 12px;
+  padding: 0 12px 16px;
 }
 .ledger .archive.is-on { display: flex; }
 .ledger .section-head h2, .ledger .section-head small { color: #fff; }
@@ -636,6 +638,7 @@ input[type=text], textarea {
   align-content: start;
   gap: 8px;
   margin-top: 6px;
+  padding-bottom: 4px;
   overflow: auto;
   min-height: 0;
   flex: 1;
