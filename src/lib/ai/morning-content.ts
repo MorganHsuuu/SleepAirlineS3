@@ -253,10 +253,10 @@ function genericSceneSubject(
       keywords: [`${city} landscape`, 'natural scenery'],
     },
     food: {
-      zh: `${city}日常的餐桌風景`,
-      en: `an everyday local food scene in ${city}`,
-      detailZh: '街上常見的飲食攤與餐桌氣味',
-      keywords: [`${city} food`, 'local table'],
+      zh: `${city}熱氣騰騰的街頭飲食攤`,
+      en: `a steaming street-food stall in ${city}, with plates of food filling the foreground`,
+      detailZh: '攤位上的餐盤與熱氣就在眼前，占滿畫面前景',
+      keywords: [`${city} food stall`, 'plated food foreground'],
     },
     'street-market': {
       zh: `${city}的街道與市集節奏`,
@@ -308,6 +308,20 @@ function resolveSceneSubject(
   const landmark = trustedLandmarkSubject(input);
   if (landmark) return landmark;
   return genericSceneSubject(input.city.trim(), theme);
+}
+
+/** 沒有可查證料理／市集時，不要講「餐桌」這種生圖常常畫不出來的東西。 */
+function arrivalThemeForDestination(
+  input: MorningContentInput,
+  randomValue: number
+): ArrivalSceneTheme {
+  const theme = selectArrivalSceneTheme(randomValue);
+  if (knownSceneSubjects(input)?.[theme.id]) return theme;
+  if (trustedLandmarkSubject(input)) return theme;
+  if (theme.id === 'food' || theme.id === 'street-market' || theme.id === 'culture-life') {
+    return ARRIVAL_SCENE_THEMES.find((item) => item.id === 'nature') ?? theme;
+  }
+  return theme;
 }
 
 const UNSAFE_VOICE = /獨自|孤單|寂寞|孤獨|一個人|沒有人|被丟下|失敗|浪費|掙扎|撐過|逃避|黑暗|迷失|你應該|你必須|振作|正向一點|一定會很棒|別難過|做得很好|又撐過一夜|alone|lonely|by yourself|isolated|abandoned|cheer up|you should|you must/i;
@@ -789,7 +803,7 @@ export function generateMorningArrival(
   input: MorningContentInput,
   randomValue: number = Math.random()
 ): Promise<MorningContent> {
-  const theme = selectArrivalSceneTheme(randomValue);
+  const theme = arrivalThemeForDestination(input, randomValue);
   const safe = fallbackMorning(input, theme);
   return withTimeout(requestMorning(input, theme), 12_000, () => safe).catch(() => safe);
 }

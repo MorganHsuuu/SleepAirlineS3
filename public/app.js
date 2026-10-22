@@ -1174,7 +1174,12 @@ async function doLand() {
       await Promise.race([landPromise, delay(5000)]);
     }
     if (!state.destination) state.destination = destinationFor(state.direction);
-    sceneryJob = sceneryJob.then((url) => url || requestPreviewScenery(state.destination));
+    sceneryJob = sceneryJob.then((url) => {
+      if (url) return url;
+      // 研究航班的圖由 /api/arrival-voice 對齊廣播主題；預覽圖是地標明信片，會跟語音對不上。
+      if (state.researchFlight) return null;
+      return requestPreviewScenery(state.destination);
+    });
     paintDestCopy(state.destination);
     weatherJob ||= loadWeather(state.destination);
     const landingLine = () => `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css?v=hub-1">
+  <link rel="stylesheet" href="/review.css?v=hub-2">
 </head>
 <body class="gate-on">
   <div class="desk">
@@ -147,22 +147,20 @@
       </main>
 
       <aside class="ledger pane">
-        <div class="pane-head">航班內容切換</div>
-        <section class="archive">
-          <div class="section-head">
-            <small>Live</small>
-            <h2>真實飛行</h2>
-            <span class="count" id="live-count">0</span>
-          </div>
-          <p class="hint">掃航線、有沒有圖、缺不缺廣播。</p>
+        <div class="pane-head">航班內容</div>
+        <div class="archive-switch" role="tablist" aria-label="真實飛行或手動生成">
+          <button type="button" class="archive-tab is-on" id="tab-live" data-archive="live" role="tab" aria-selected="true">
+            真實飛行 <span class="count" id="live-count">0</span>
+          </button>
+          <button type="button" class="archive-tab" id="tab-lab" data-archive="lab" role="tab" aria-selected="false">
+            手動生成 <span class="count" id="lab-count">0</span>
+          </button>
+        </div>
+        <section class="archive is-on" id="archive-live">
+          <p class="hint">真實航班可直接評分與評論，也會校正之後的生成。</p>
           <div class="sample-list" id="live-list"></div>
         </section>
-        <section class="archive">
-          <div class="section-head">
-            <small>Lab</small>
-            <h2>手動生成</h2>
-            <span class="count" id="lab-count">0</span>
-          </div>
+        <section class="archive" id="archive-lab" hidden>
           <p class="hint">審查台手動產的測試，按生成時間排列。</p>
           <div class="sample-list" id="sample-list"></div>
         </section>
@@ -190,6 +188,6 @@
   <div class="toast" id="toast" hidden></div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js?v=hub-1"></script>
+  <script src="/review.js?v=hub-2"></script>
 </body>
 </html>

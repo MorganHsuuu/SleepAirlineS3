@@ -26,11 +26,14 @@ import {
   createReviewSample,
   getReviewSample,
   getReviewStoreStatus,
+  isLiveOverlaySample,
   listReviewSamples,
+  liveOverlaySampleId,
   loadReviewImage,
   toReviewClient,
   updateReviewSample,
 } from './src/lib/notion/reviews';
+import { parseReviewEntries, scoreForAccount } from './src/lib/review/ratings';
 import { findOriginByLocation, globeHop, globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
 import { loadReviewCalibration } from './src/lib/review/calibration';
 import {
@@ -1168,7 +1171,7 @@ app.post('/api/review/logout', (_req, res) => {
 app.get('/api/review/samples', async (req, res) => {
   try {
     const [samples, review, live] = await Promise.all([
-      listReviewSamples(40),
+      listReviewSamples(80),
       getReviewStoreStatus(),
       listRecentLiveFlights(32)
         .then((flights) => ({ flights, flightsError: '' }))
@@ -1180,9 +1183,25 @@ app.get('/api/review/samples', async (req, res) => {
           };
         }),
     ]);
+    const overlays = new Map(
+      samples.filter(isLiveOverlaySample).map((item) => [item.sampleId, item])
+    );
+    const labSamples = samples.filter((item) => !isLiveOverlaySample(item));
+    const account = reviewAccountFromRequest(req);
     res.json({
-      samples: samples.map((item) => reviewClient(req, item)),
-      flights: live.flights,
+      samples: labSamples.map((item) => reviewClient(req, item)),
+      flights: live.flights.map((flight) => {
+        const overlay = overlays.get(liveOverlaySampleId(flight.flightId));
+        const comments = overlay?.comments || '';
+        return {
+          ...flight,
+          comments,
+          ratings: parseReviewEntries(comments),
+          myScore: scoreForAccount(comments, account),
+          textScore: overlay?.textScore ?? null,
+          reviewer: overlay?.reviewer || '',
+        };
+      }),
       flightsError: live.flightsError,
       ...review,
       openaiReady: Boolean(openAiApiKey()),
@@ -1484,12 +1503,64 @@ app.post('/api/review/comment', async (req, res) => {
       return;
     }
     const sampleId = String(req.body?.sampleId || '');
+    const source = String(req.body?.source || 'lab');
     const comment = String(req.body?.comment || '').trim();
     const rawScore = req.body?.textScore;
     const textScore = rawScore === '' || rawScore == null ? null : Number(rawScore);
     if (!sampleId) { res.status(400).json({ error: '請先選一筆測試內容。' }); return; }
     if (!comment && !(Number.isFinite(textScore) && textScore >= 1)) {
       res.status(400).json({ error: '請先寫評論或拉文字評分。' });
+      return;
+    }
+    if (source === 'live') {
+      const flight = await getFlightByFlightId(sampleId);
+      if (!flight) {
+        res.status(404).json({ error: '找不到這班真實航班。' });
+        return;
+      }
+      const overlay = await appendReviewComment(
+        liveOverlaySampleId(flight.flightId),
+        comment,
+        account,
+        textScore,
+        {
+          phase: 'landing',
+          routeDirection: flight.routeDirection,
+          durationMinutes: flight.flightDurationMinutes || 0,
+          departureLocation: flight.departureLocation || '',
+          arrivalLocation: flight.arrivalLocation || '',
+          takeoffBroadcast: flight.takeoffBroadcast || '',
+          landingBroadcast: flight.captainBroadcast || '',
+        }
+      );
+      const comments = overlay.comments || '';
+      res.json({
+        sample: {
+          source: 'live',
+          sampleId: flight.flightId,
+          flightId: flight.flightId,
+          passengerName: flight.passengerName || '',
+          phase: flight.status,
+          routeDirection: flight.routeDirection || 'eastbound',
+          durationMinutes: flight.flightDurationMinutes || 0,
+          landingHour: null,
+          departureLocation: flight.departureLocation || '',
+          arrivalLocation: flight.arrivalLocation || '',
+          takeoffBroadcast: flight.takeoffBroadcast || '',
+          landingBroadcast: flight.captainBroadcast || '',
+          hasImage: flight.status === 'landed',
+          imageUrl: flight.status === 'landed'
+            ? `/api/scenery-image?flightId=${encodeURIComponent(flight.flightId)}`
+            : '',
+          imagePrompt: '',
+          comments,
+          ratings: parseReviewEntries(comments),
+          myScore: scoreForAccount(comments, account),
+          textScore: overlay.textScore,
+          reviewer: overlay.reviewer,
+          generatedAt: flight.landingTime || flight.takeoffTime || flight.updatedAt || flight.createdAt || '',
+        },
+      });
       return;
     }
     const sample = await appendReviewComment(sampleId, comment, account, textScore);

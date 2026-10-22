@@ -153,11 +153,13 @@ export async function generateLandingScenery(
   const imagePrompt = aligned
     ? [
         aligned,
-        `The scene is pure, beautiful scenery of ${place} itself.`,
+        `The scene is ${place} itself.`,
         `No airplane, no airplane window or window frame, no wing, no cabin interior, no reflections.`,
-        `Keep the same place, the same cultural detail, and the same weather as the narration.`,
-        `Make that local cultural character the dominant subject: architecture, materials, street life, food, transport, or landscape that belongs to this exact place.`,
-        `Do not replace it with a generic suburb or with a landmark from a different city.`,
+        `Keep the same place, the same named subject, and the same weather as the narration.`,
+        `The exact subject named in the narration must occupy most of the frame and be unmistakable.`,
+        `If the narration names food, a dining table, a stall, a market, or a building, that object must appear large in the foreground.`,
+        `Do not replace it with a distant landscape, sky, or generic town overview.`,
+        `Do not substitute a landmark from a different city.`,
         `Absolutely no text, letters, numbers, signs, logos, or watermarks.`,
         `No close-up faces. No dark, gloomy, empty, or threatening mood.`,
       ].join(' ')

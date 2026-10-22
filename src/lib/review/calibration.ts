@@ -75,7 +75,7 @@ function blockFor(samples: ReviewSample[], kind: 'takeoff' | 'landing'): string 
 
 export async function loadReviewCalibration(): Promise<{ takeoff: string; landing: string }> {
   try {
-    const samples = await listReviewSamples(40);
+    const samples = await listReviewSamples(80);
     return {
       takeoff: blockFor(samples, 'takeoff'),
       landing: blockFor(samples, 'landing'),

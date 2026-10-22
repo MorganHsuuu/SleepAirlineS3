@@ -18,6 +18,7 @@ export interface LiveReviewFlight {
   landingBroadcast: string;
   hasImage: boolean;
   imageUrl: string;
+  imagePrompt: string;
   comments: string;
   reviewer: string;
   textScore: number | null;
@@ -59,6 +60,7 @@ export function toLiveReviewFlight(flight: Flight): LiveReviewFlight {
     imageUrl: flight.status === 'landed'
       ? `/api/scenery-image?flightId=${encodeURIComponent(flight.flightId)}`
       : '',
+    imagePrompt: '',
     comments: '',
     reviewer: '',
     textScore: null,

@@ -27,6 +27,14 @@ export function isSystemReviewSample(sample: { sampleId?: string }): boolean {
   return String(sample.sampleId || '').startsWith('SYS-');
 }
 
+export function isLiveOverlaySample(sample: { sampleId?: string }): boolean {
+  return String(sample.sampleId || '').startsWith('LIVE-');
+}
+
+export function liveOverlaySampleId(flightId: string): string {
+  return `LIVE-${String(flightId || '').trim()}`;
+}
+
 export interface ReviewSample {
   notionId: string;
   sampleId: string;
@@ -144,7 +152,7 @@ export async function listReviewSamples(limit = 24): Promise<ReviewSample[]> {
   const client = getNotionClient();
   const response = await client.databases.query({
     database_id: dbId,
-    page_size: Math.min(limit + 4, 50),
+    page_size: Math.min(Math.max(limit, 1), 100),
     sorts: [{ timestamp: 'created_time', direction: 'descending' }],
   });
 
@@ -254,9 +262,13 @@ export async function appendReviewComment(
   sampleId: string,
   comment: string,
   reviewer: string,
-  textScore?: number | null
+  textScore?: number | null,
+  seed?: Partial<ReviewSample>
 ): Promise<ReviewSample> {
-  const current = await getReviewSample(sampleId);
+  let current = await getReviewSample(sampleId);
+  if (!current && seed) {
+    current = await createReviewSample({ ...seed, sampleId });
+  }
   if (!current) throw new Error('找不到這筆測試內容。');
   await ensureReviewTextScoreProperty();
   const name = reviewer.trim();

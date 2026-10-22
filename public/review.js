@@ -26,6 +26,7 @@ const state = {
   direction: 2,
   sampleId: '',
   source: 'lab',
+  archive: 'live',
   busy: false,
   account: '',
   samples: [],
@@ -166,11 +167,47 @@ function paintControls() {
 function setBusy(busy, message) {
   state.busy = busy;
   $('btn-flight').disabled = busy;
-  $('btn-comment').disabled = busy || state.source === 'live';
+  $('btn-comment').disabled = busy;
   document.querySelectorAll('input[name="generate-mode"]').forEach((input) => {
     input.disabled = busy;
   });
   if (message) toast(message);
+}
+
+function setArchive(kind) {
+  state.archive = kind === 'lab' ? 'lab' : 'live';
+  const liveOn = state.archive === 'live';
+  $('tab-live').classList.toggle('is-on', liveOn);
+  $('tab-lab').classList.toggle('is-on', !liveOn);
+  $('tab-live').setAttribute('aria-selected', liveOn ? 'true' : 'false');
+  $('tab-lab').setAttribute('aria-selected', liveOn ? 'false' : 'true');
+  $('archive-live').classList.toggle('is-on', liveOn);
+  $('archive-lab').classList.toggle('is-on', !liveOn);
+  $('archive-live').hidden = !liveOn;
+  $('archive-lab').hidden = liveOn;
+}
+
+function paintImagePrompt(text) {
+  const el = $('image-prompt');
+  const prompt = String(text || '').trim();
+  el.textContent = prompt ? `生圖 prompt　${prompt}` : '';
+  el.hidden = !prompt;
+}
+
+async function fillLivePrompt(sample) {
+  if (sample?.source !== 'live' || sample.imagePrompt) return;
+  const flightId = sample.flightId || sample.sampleId;
+  if (!flightId) return;
+  try {
+    const res = await fetch(`/api/scenery?flightId=${encodeURIComponent(flightId)}`);
+    const data = await res.json();
+    const prompt = data?.scenery?.imagePrompt || '';
+    if (!prompt) return;
+    sample.imagePrompt = prompt;
+    if (state.sampleId === sample.sampleId && state.source === 'live') {
+      paintImagePrompt(prompt);
+    }
+  } catch { /* prompt is optional */ }
 }
 
 function formatWhen(iso) {
@@ -211,7 +248,7 @@ function renderRecordButton(sample, kind) {
   if (sample.durationMinutes) bits.push(escapeHtml(formatDuration(sample.durationMinutes)));
   if (sample.myScore != null) bits.push(`<em class="${sample.myScore >= 8 ? 'ok' : sample.myScore <= 4 ? 'warn' : ''}">我的${sample.myScore}分</em>`);
   else if ((sample.ratings || []).some((item) => item.score != null)) bits.push('有評分');
-  if (kind === 'lab' && sample.comments) bits.push('有評論');
+  if (sample.comments) bits.push('有評論');
   const when = recordWhen(sample);
   if (when) bits.push(escapeHtml(when));
   return `<button type="button" class="sample-item${active}" data-id="${escapeHtml(sample.sampleId)}" data-source="${kind}">
@@ -236,28 +273,24 @@ function renderSample(sample) {
   ].filter(Boolean).join(' · ');
   $('takeoff-copy').textContent = sample.takeoffBroadcast || '還沒有起飛文字。';
   $('landing-copy').textContent = sample.landingBroadcast || '還沒有降落文字。';
-  $('image-prompt').textContent = sample.imagePrompt || '';
+  paintImagePrompt(sample.imagePrompt);
   paintScenery(
     sampleImageSrc(sample),
     state.source === 'live'
       ? '這班真實飛行還沒有降落風景。'
       : '選擇「文字＋圖片」時會一起生成風景。',
   );
-  const bar = $('comment-bar');
-  if (state.source === 'live') {
-    bar.classList.add('is-locked');
-    $('comments').textContent = '真實航班只供對照閱讀，評論請寫在手動生成。';
-    $('btn-comment').disabled = true;
-  } else {
-    bar.classList.remove('is-locked');
-    renderComments(sample);
-    $('text-score').value = String(sample.myScore || 5);
-    paintScoreReadout();
-    $('comment').placeholder = state.account ? `以 @${state.account} 寫評論` : '對這段語音／圖片的評論';
-    $('btn-comment').disabled = state.busy;
-  }
+  renderComments(sample);
+  $('text-score').value = String(sample.myScore || 5);
+  paintScoreReadout();
+  $('comment').placeholder = state.account
+    ? `以 @${state.account} 寫評論`
+    : '對這段語音／圖片的評論';
+  $('btn-comment').disabled = state.busy;
   $('origin-note').textContent = `下一班從${originLabel()}接著飛`;
+  setArchive(state.source);
   renderList();
+  void fillLivePrompt(sample);
 }
 
 function renderList(flightsError = '') {
@@ -275,8 +308,13 @@ function renderList(flightsError = '') {
 
 function upsertSample(sample) {
   if (!sample) return;
-  const rest = state.samples.filter((item) => item.sampleId !== sample.sampleId);
-  state.samples = [sample, ...rest].slice(0, 40);
+  if (sample.source === 'live') {
+    const rest = state.flights.filter((item) => item.sampleId !== sample.sampleId);
+    state.flights = [sample, ...rest];
+  } else {
+    const rest = state.samples.filter((item) => item.sampleId !== sample.sampleId);
+    state.samples = [sample, ...rest].slice(0, 40);
+  }
   renderSample(sample);
 }
 
@@ -438,6 +476,7 @@ async function generateFlight() {
     if (!res.ok) throw new Error(data.error || '生成失敗');
     applyStore(data.review);
     upsertSample(data.sample);
+    setArchive('lab');
     toast(data.warning || (includeImage ? '已新增文字與圖片' : '已新增一筆文字紀錄'));
     await flyGlobe(data.route || state.preview);
   } catch (err) {
@@ -502,8 +541,8 @@ async function saveComment() {
     setAccount('');
     return;
   }
-  if (!state.sampleId || state.source === 'live') {
-    toast(state.source === 'live' ? '真實航班只供對照，請改選手動生成再寫評論。' : '請先生成一筆內容。');
+  if (!state.sampleId) {
+    toast('請先選一筆內容。');
     return;
   }
   const comment = $('comment').value.trim();
@@ -519,6 +558,7 @@ async function saveComment() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sampleId: state.sampleId,
+        source: state.source,
         comment,
         textScore,
       }),
@@ -617,6 +657,8 @@ function bindArchive(box) {
 
 bindArchive($('sample-list'));
 bindArchive($('live-list'));
+$('tab-live').addEventListener('click', () => setArchive('live'));
+$('tab-lab').addEventListener('click', () => setArchive('lab'));
 
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();

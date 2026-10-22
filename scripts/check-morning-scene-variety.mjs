@@ -184,12 +184,13 @@ try {
       { city: 'Exampleville', country: 'Exampleland' },
       0.55
     );
-    assert.match(result.localFeature, /日常的餐桌風景/);
-    assert.match(result.voiceText, /日常的餐桌風景/);
-    assert.match(result.imagePrompt, /everyday local food scene/i);
+    assert.match(result.localFeature, /自然地貌與天光/);
+    assert.match(result.voiceText, /自然地貌與天光/);
+    assert.match(result.imagePrompt, /natural landscape/i);
+    assert.doesNotMatch(result.voiceText, /餐桌|飲食攤|料理/);
     assert.doesNotMatch(
       `${result.voiceText} ${result.imagePrompt}`,
-      /真實城市風貌|街道尺度|建築材料|料理|dish|landmark|地標/i
+      /真實城市風貌|街道尺度|建築材料|料理|dish|landmark|地標|dining table|food stall/i
     );
   });
 
