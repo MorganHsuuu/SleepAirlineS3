@@ -745,7 +745,6 @@ body.gate-on .desk { filter: blur(8px); pointer-events: none; }
   outline: 2px solid #fff;
   outline-offset: 3px;
   pointer-events: none;
-  transition: top .32s ease, left .32s ease, width .32s ease, height .32s ease;
 }
 .tour-card {
   position: absolute;
@@ -754,7 +753,6 @@ body.gate-on .desk { filter: blur(8px); pointer-events: none; }
   border-radius: 20px;
   background: #fff;
   box-shadow: 0 18px 40px rgba(20, 48, 86, .24);
-  transition: top .32s ease, left .32s ease;
 }
 .tour-kicker {
   margin: 0 0 4px;

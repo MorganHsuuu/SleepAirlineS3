@@ -730,21 +730,25 @@ const TOUR_KEY = 'sleep-review-tour-v2';
 const TOUR_STEPS = [
   {
     id: 'tour-console',
+    prefer: 'below',
     title: '上方可生成',
     copy: '設航向與時間，再按開始生成。可只做文字，也可連風景圖一起做。',
   },
   {
     id: 'tour-ledger',
+    prefer: 'right',
     title: '左選航班',
     copy: '切換真實飛行或手動生成，點一筆就能開始看。',
   },
   {
     id: 'tour-sheet',
+    prefer: 'right',
     title: '中看廣播與圖',
     copy: '起飛廣播、降落廣播和降落風景都在這裡。',
   },
   {
     id: 'tour-judge',
+    prefer: 'left',
     title: '右評 1–5 分',
     copy: '選等級，再寫回饋。分數會記在你的帳號下面。',
   },
@@ -789,32 +793,66 @@ function placeTour() {
   overlay.classList.remove('is-center');
   hole.hidden = false;
   const pad = 7;
+  const margin = 16;
+  const gap = 16;
+  const vw = innerWidth;
+  const vh = innerHeight;
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  const box = target.getBoundingClientRect();
-  hole.style.left = `${Math.max(8, box.left - pad)}px`;
-  hole.style.top = `${Math.max(8, box.top - pad)}px`;
-  hole.style.width = `${Math.min(innerWidth - 16, box.width + pad * 2)}px`;
-  hole.style.height = `${Math.min(innerHeight - 16, box.height + pad * 2)}px`;
-
-  const holeBox = hole.getBoundingClientRect();
+  const raw = target.getBoundingClientRect();
+  const holeRect = {
+    left: Math.max(8, raw.left - pad),
+    top: Math.max(8, raw.top - pad),
+    right: Math.min(vw - 8, raw.right + pad),
+    bottom: Math.min(vh - 8, raw.bottom + pad),
+  };
   const cw = card.offsetWidth;
   const ch = card.offsetHeight;
-  const gap = 14;
-  let left = holeBox.left;
-  let top = holeBox.bottom + gap;
-  const roomRight = innerWidth - holeBox.right - 16;
-  if (holeBox.height > holeBox.width * 1.15 && roomRight > cw + gap) {
-    left = holeBox.right + gap;
-    top = holeBox.top;
-  } else if (top + ch > innerHeight - 16) {
-    top = holeBox.top - ch - gap;
+  const space = (side) => {
+    if (side === 'right') return vw - margin - holeRect.right;
+    if (side === 'left') return holeRect.left - margin;
+    if (side === 'below') return vh - margin - holeRect.bottom;
+    return holeRect.top - margin;
+  };
+  const need = (side) => (side === 'right' || side === 'left' ? cw + gap : ch + gap);
+  const order = [step.prefer, 'right', 'left', 'below', 'above'].filter((side, index, list) => (
+    side && list.indexOf(side) === index
+  ));
+  const side = order.find((item) => space(item) >= need(item))
+    || order.reduce((best, item) => (space(item) > space(best) ? item : best));
+
+  if (side === 'right' && space('right') < need('right')) {
+    holeRect.right = Math.max(holeRect.left + 96, vw - margin - cw - gap);
+  } else if (side === 'left' && space('left') < need('left')) {
+    holeRect.left = Math.min(holeRect.right - 96, margin + cw + gap);
+  } else if (side === 'below' && space('below') < need('below')) {
+    holeRect.bottom = Math.max(holeRect.top + 96, vh - margin - ch - gap);
+  } else if (side === 'above' && space('above') < need('above')) {
+    holeRect.top = Math.min(holeRect.bottom - 96, margin + ch + gap);
   }
-  if (top < 16) top = 16;
-  if (top + ch > innerHeight - 16) top = Math.max(16, innerHeight - 16 - ch);
-  if (left + cw > innerWidth - 16) left = innerWidth - 16 - cw;
-  if (left < 16) left = 16;
-  card.style.left = `${left}px`;
-  card.style.top = `${top}px`;
+
+  hole.style.left = `${holeRect.left}px`;
+  hole.style.top = `${holeRect.top}px`;
+  hole.style.width = `${Math.max(80, holeRect.right - holeRect.left)}px`;
+  hole.style.height = `${Math.max(80, holeRect.bottom - holeRect.top)}px`;
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  let left = margin;
+  let top = margin;
+  if (side === 'right') {
+    left = holeRect.right + gap;
+    top = clamp(holeRect.top, margin, vh - margin - ch);
+  } else if (side === 'left') {
+    left = holeRect.left - gap - cw;
+    top = clamp(holeRect.top, margin, vh - margin - ch);
+  } else if (side === 'below') {
+    top = holeRect.bottom + gap;
+    left = clamp(holeRect.left + (holeRect.right - holeRect.left - cw) / 2, margin, vw - margin - cw);
+  } else {
+    top = holeRect.top - gap - ch;
+    left = clamp(holeRect.left + (holeRect.right - holeRect.left - cw) / 2, margin, vw - margin - cw);
+  }
+  card.style.left = `${clamp(left, margin, vw - margin - cw)}px`;
+  card.style.top = `${clamp(top, margin, vh - margin - ch)}px`;
 }
 
 function closeTour() {
