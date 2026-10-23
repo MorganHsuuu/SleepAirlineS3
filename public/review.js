@@ -866,8 +866,9 @@ function showTourStep(index) {
   placeTour();
 }
 
-function startTour() {
-  if (tour.open || document.body.classList.contains('gate-on')) return;
+function startTour(force) {
+  if (document.body.classList.contains('gate-on')) return;
+  if (tour.open && !force) return;
   tour.open = true;
   tour.index = 0;
   $('review-tour').hidden = false;
@@ -883,6 +884,7 @@ function maybeStartTour() {
   });
 }
 
+$('btn-tour').addEventListener('click', () => startTour(true));
 $('tour-skip').addEventListener('click', closeTour);
 $('tour-next').addEventListener('click', () => {
   if (tour.index >= TOUR_STEPS.length - 1) {
