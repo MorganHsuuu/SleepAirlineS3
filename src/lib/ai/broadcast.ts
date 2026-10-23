@@ -220,6 +220,7 @@ Writing:
 - Never output a blunt slogan; write as a captain PA with imagery
 - Social info: one rewritten sentence max; never paste [squad social] verbatim
 - Do not invent places, times, or names
+- If [review calibration] is present: match the specificity of high-score examples; do not repeat stock scenery or problems named in comments / low scores; never copy the sample PA text
 - Output PA text only — no titles, quotes, or notes`;
   }
 
@@ -251,20 +252,20 @@ ${isTakeoff
 ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 【當地資訊】中的文化、天氣僅供改寫融入，禁止整段照搬或列點
 - 降落廣播：說出城市名之後，必須用一句話幫旅客把這個地方放到地圖上——洲或海洋＋國家＋一個幾乎不會錯的身份（首都／島國／海外領地／某國城市）。例如東京：「這裡是亞洲，日本的首都」；太平洋小島：「這裡是南太平洋，屬於新喀里多尼亞」；冰島：「這裡是北大西洋，冰島的首都」。禁止東北亞、西歐這種細分區，禁止人口數字、冷門歷史、百科條列。
-- 降落廣播：必須用一兩句自然帶出當地文化特色或社交習俗，並點一下當地天氣（溫度、晴雨），
-  像機長提醒乘客下機前的心理準備，不要像氣象報告或旅遊手冊
+- 降落廣播：必須用兩句自然帶出這個地方特有的文化、環境、市集、表演或生活場景，並點一下當地天氣與當地時間；禁止「自然地貌與天光」「山、水或開闊地貌」這類任何城市都能套的風景句。可提這班飛了多久、從哪裡來；若是再次降落同一座城市，輕輕提一句。像機長看著窗外講故事，不要像氣象報告或百科。
 - 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
   不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
 - 降落廣播：當地語言問候之後，緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
 - 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主
 ` : ''}
 寫作：
-- 繁體中文，${isTakeoff ? '80–110' : '90–130'} 字，最多不超過 ${isTakeoff ? '130' : '160'} 字
+- 繁體中文，${isTakeoff ? '80–110' : '110–160'} 字，最多不超過 ${isTakeoff ? '130' : '190'} 字
 - ${isTakeoff ? '起飛廣播 4–5 句：①歡迎搭乘 Sleep Airline＋機長身分，緊接著必須原句說出「我們從{廣播用地名的城市}出發，航向{方向}」，城市名不可省略、不可改成「這裡」或「當地」 ②每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ③剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
 - 刪掉「有任何需求」「祝您旅途愉快」「期待美好瞬間」等套話；起飛結尾固定句「Sleep Airline 感謝您的搭乘」除外
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
 - 不得編造未提供的地名、時間、人名；相關乘客只能用系統提供的名字
+- 若 user 提供【審查校正】，必須吸收：靠近高分範例的具體程度；評語與低分指出的空話、套句、重複風景句不要再寫。不要複製校正區的廣播原文
 - 直接輸出廣播正文，不加標題、引號或說明`;
 }
 
@@ -362,9 +363,9 @@ ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n`
 【同組社交】
 ${buildSocialBlock(input.socialCue, locale)}
 
-請宣布：醒來抵達、飛了多久、從哪到哪；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
+請宣布：醒來抵達、飛了多久、從哪到哪、當地時間；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
 說出抵達城市後立刻用一句話定位這個地方（洲或海洋、國家、首都或島國），讓沒聽過這地名的人也知道在哪；
-必須融入一筆當地文化或天氣（改寫）；用一句話點出社交情境，合併成一段流暢廣播，勿列點、勿照搬。
+必須融入這個地方特有的文化、環境、市集或表演（改寫），禁止「自然地貌與天光」「山、水或開闊地貌」這類套句；用一句話點出社交情境，合併成一段流暢廣播，勿列點、勿照搬。
 若【同組社交】不是 solo：必須在開場問候後的前兩句內明確說出「你與哪位隊友或小隊發生了什麼關係」
 （例如共享夜空、接力、靠近、同向、分頭飛、先後降落），不要只把社交資訊放在結尾。`;
 
@@ -374,8 +375,8 @@ ${buildSocialBlock(input.socialCue, locale)}
       { role: 'system', content: systemPrompt },
       { role: 'user', content: isTakeoff ? takeoffUser : landingUser },
     ],
-    max_tokens: isTakeoff ? 260 : 280,
-    temperature: isTakeoff ? 0.7 : 0.55,
+    max_tokens: isTakeoff ? 260 : 360,
+    temperature: isTakeoff ? 0.7 : 0.7,
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
@@ -523,11 +524,20 @@ export function fallbackCaptainBroadcast(
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
   const hello = arrivalHello(localContext?.localTimeLabel);
   const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}，` : '';
+  const dur = formatDuration(durationMinutes, locale);
+  const fromCity = departureLabel.split(',')[0].trim();
+  const journeyBit = [
+    fromCity ? `這一班從${fromCity}飛來` : '',
+    dur ? `在空中待了${dur}` : '',
+  ].filter(Boolean).join('，');
+  const cultureBit = localContext?.culture
+    ? `${localContext.culture.split(/[；;。]/)[0]?.trim()}。`
+    : '';
   const where = placeOrientationLine(
     localContext?.cityName || arrivalLocation || '',
     localContext?.countryName || '',
     localContext?.countryIso
   );
   const whereBit = where ? `${where}。` : '';
-  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}窗外的風景正慢慢展開。歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
+  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}${journeyBit ? `${journeyBit}。` : ''}${cultureBit}歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }

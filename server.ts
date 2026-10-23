@@ -781,6 +781,53 @@ app.post('/api/flight/land', async (req, res) => {
   }
 });
 
+function cityKey(location: string | null | undefined): string {
+  return String(location || '').split(',')[0].trim().toLocaleLowerCase();
+}
+
+async function landingJourneyHints(flight: {
+  flightId: string;
+  passengerId: string;
+  groupId: string;
+  arrivalLocation: string | null;
+}): Promise<{ previousArrival: string | null; returnVisit: boolean; visitCount: number }> {
+  const city = cityKey(flight.arrivalLocation);
+  let hops: Array<{
+    flightId: string;
+    passengerId: string;
+    status: string;
+    arrivalLocation: string | null;
+    landingTime: string | null;
+    takeoffTime: string;
+  }> = [];
+  try {
+    if (flight.groupId) {
+      hops = (await getGroupFlights(flight.groupId, 48)).filter(
+        (item) => item.passengerId === flight.passengerId && item.status === 'landed'
+      );
+    }
+  } catch {
+    hops = [];
+  }
+  if (!hops.length) {
+    const last = await getLastLandedFlight(flight.passengerId).catch(() => null);
+    if (last) hops = [last];
+  }
+  hops.sort((a, b) => {
+    const ta = Date.parse(a.landingTime || a.takeoffTime || '') || 0;
+    const tb = Date.parse(b.landingTime || b.takeoffTime || '') || 0;
+    return tb - ta;
+  });
+  const others = hops.filter((item) => item.flightId !== flight.flightId);
+  const previousArrival = others[0]?.arrivalLocation || null;
+  const priorSame = others.filter((item) => city && cityKey(item.arrivalLocation) === city).length;
+  return {
+    previousArrival,
+    returnVisit: priorSame > 0,
+    visitCount: priorSame + 1,
+  };
+}
+
 // 下降過程中生成：當地早晨語音、對齊的風景，以及同一段話的語音檔。
 app.post('/api/arrival-voice', async (req, res) => {
   try {
@@ -805,6 +852,7 @@ app.post('/api/arrival-voice', async (req, res) => {
       : null;
 
     const landingCalibration = (await loadReviewCalibration()).landing;
+    const journey = await landingJourneyHints(flight);
     const morning = await generateMorningArrival({
       country: known?.country || country,
       city: known?.city || city,
@@ -813,6 +861,12 @@ app.post('/api/arrival-voice', async (req, res) => {
       weatherSummary: local?.weatherSummary,
       localTimeLabel: local?.localTimeLabel,
       reviewCalibration: landingCalibration || undefined,
+      departureLocation: flight.departureLocation,
+      flightDurationMinutes: flight.flightDurationMinutes,
+      previousArrival: journey.previousArrival,
+      returnVisit: journey.returnVisit,
+      visitCount: journey.visitCount,
+      cultureNote: local?.culture,
     });
     const [speechAudioBase64] = await Promise.all([
       generateSpeechWithBudget(morning.voiceText, broadcastStyle),
@@ -1388,6 +1442,9 @@ app.post('/api/review/generate', async (req, res) => {
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,
         reviewCalibration: calibration.landing || undefined,
+        departureLocation: route.departureLocation,
+        flightDurationMinutes: route.durationMinutes,
+        cultureNote: arrLocal?.culture,
       });
       sample = await updateReviewSample(sample.sampleId, {
         landingBroadcast: morning.voiceText,
@@ -1430,6 +1487,9 @@ app.post('/api/review/generate', async (req, res) => {
         weatherSummary: arrLocal?.weatherSummary,
         localTimeLabel: arrLocal?.localTimeLabel,
         reviewCalibration: calibration.landing || undefined,
+        departureLocation: route.departureLocation,
+        flightDurationMinutes: route.durationMinutes,
+        cultureNote: arrLocal?.culture,
       }),
     ]);
 

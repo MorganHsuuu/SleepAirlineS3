@@ -167,7 +167,7 @@ try {
       { city: 'New Taipei City', country: 'Taiwan' },
       0.3
     );
-    assert.match(newTaipei.localFeature, /自然地貌與天光/);
+    assert.match(newTaipei.localFeature, /土地、風向與天色|土地與天色/);
     assert.doesNotMatch(
       `${newTaipei.voiceText} ${newTaipei.imagePrompt}`,
       /Yangmingshan|陽明山|真實城市風貌|街道尺度|建築材料/i
@@ -179,18 +179,65 @@ try {
     assert.match(`${taipeiZh.voiceText} ${taipeiZh.imagePrompt}`, /Yangmingshan|陽明山/i);
   });
 
+  await verifyGap('旅程、回訪與文化會進入 fallback 語音', async () => {
+    const result = await generateMorningArrival(
+      {
+        city: 'Taipei',
+        country: 'Taiwan',
+        localTimeLabel: '當地上午 8:10',
+        weatherSummary: '氣溫 24°C，大致晴朗',
+        departureLocation: 'Tokyo, Japan',
+        flightDurationMinutes: 185,
+        previousArrival: 'Osaka, Japan',
+        returnVisit: true,
+        visitCount: 2,
+        cultureNote: '台灣的夜市與便利商店是深夜社交核心，一句「呷飽沒？」就是最溫暖的問候。',
+      },
+      0
+    );
+    assert.match(result.voiceText, /Tokyo/);
+    assert.match(result.voiceText, /3 小時 5 分/);
+    assert.match(result.voiceText, /第2次降落/);
+    assert.match(result.voiceText, /上午 8:10/);
+    assert.match(result.voiceText, /夜市|便利商店|呷飽沒/);
+    assert.match(result.voiceText, /Taipei 101/);
+    assert.doesNotMatch(result.voiceText, /自然地貌與天光|山、水或開闊地貌|地理樣子/);
+  });
+
+  await verifyGap('模型套用空泛自然句必須拒絕', () => {
+    const parsed = parseMorningResponse(
+      JSON.stringify({
+        destination: { country: 'Taiwan', city: 'New Taipei City' },
+        localGreeting: '你好',
+        voiceText:
+          '你好。早安，Sleep Airline 已抵達今天的目的地——New Taipei City。窗外看見的是New Taipei City的自然地貌與天光，山、水或開闊地貌構成當地的地理樣子。歡迎抵達New Taipei City，今天的旅程從這裡開始。',
+        localFeature: 'New Taipei City的自然地貌與天光',
+        imagePrompt: 'Natural landforms and sky light in New Taipei City, realistic, no text',
+        imageKeywords: ['natural landforms'],
+        sceneTheme: {
+          themeId: 'nature',
+          subject: { zh: 'New Taipei City的自然地貌與天光', en: 'natural landforms and sky light' },
+        },
+        safetyCheck: SAFE_SAFETY_CHECK,
+      }),
+      { city: 'New Taipei City', country: 'Taiwan' },
+      'nature'
+    );
+    assert.equal(parsed, null);
+  });
+
   await verifyGap('未知城市安全降級而不捏造料理', async () => {
     const result = await generateMorningArrival(
       { city: 'Exampleville', country: 'Exampleland' },
       0.55
     );
-    assert.match(result.localFeature, /自然地貌與天光/);
-    assert.match(result.voiceText, /自然地貌與天光/);
-    assert.match(result.imagePrompt, /natural landscape/i);
-    assert.doesNotMatch(result.voiceText, /餐桌|飲食攤|料理/);
+    assert.match(result.localFeature, /街頭飲食攤/);
+    assert.match(result.voiceText, /街頭飲食攤/);
+    assert.match(result.imagePrompt, /street-food stall/i);
+    assert.doesNotMatch(result.voiceText, /自然地貌與天光|山、水或開闊地貌|餐桌/);
     assert.doesNotMatch(
       `${result.voiceText} ${result.imagePrompt}`,
-      /真實城市風貌|街道尺度|建築材料|料理|dish|landmark|地標|dining table|food stall/i
+      /真實城市風貌|街道尺度|建築材料|dining table/i
     );
   });
 
