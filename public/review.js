@@ -530,6 +530,7 @@ function setAccount(account) {
     pill.textContent = `@${state.account}`;
     out.hidden = false;
     document.body.classList.remove('gate-on');
+    maybeStartTour();
   } else {
     pill.hidden = true;
     out.hidden = true;
@@ -724,6 +725,140 @@ async function bootReview() {
   } catch { /* stay on the gate */ }
   setAccount('');
 }
+
+const TOUR_KEY = 'sleep-review-tour-v2';
+const TOUR_STEPS = [
+  {
+    id: 'tour-console',
+    title: '上方可生成',
+    copy: '設航向與時間，再按開始生成。可只做文字，也可連風景圖一起做。',
+  },
+  {
+    id: 'tour-ledger',
+    title: '左選航班',
+    copy: '切換真實飛行或手動生成，點一筆就能開始看。',
+  },
+  {
+    id: 'tour-sheet',
+    title: '中看廣播與圖',
+    copy: '起飛廣播、降落廣播和降落風景都在這裡。',
+  },
+  {
+    id: 'tour-judge',
+    title: '右評 1–5 分',
+    copy: '選等級，再寫回饋。分數會記在你的帳號下面。',
+  },
+  {
+    id: '',
+    title: '評論會改進生成',
+    copy: '系統會根據評論自動調整生成狀態，讓下次體驗更好。',
+  },
+];
+
+const tour = { index: 0, open: false };
+
+function tourSeen() {
+  try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; }
+}
+
+function markTourSeen() {
+  try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* ignore */ }
+}
+
+function placeTour() {
+  const step = TOUR_STEPS[tour.index];
+  const target = step.id ? $(step.id) : null;
+  const hole = $('tour-hole');
+  const card = $('tour-card');
+  const overlay = $('review-tour');
+  if (!hole || !card || !overlay) return;
+
+  $('tour-step').textContent = `${tour.index + 1} / ${TOUR_STEPS.length}`;
+  $('tour-title').textContent = step.title;
+  $('tour-copy').textContent = step.copy;
+  $('tour-next').textContent = tour.index === TOUR_STEPS.length - 1 ? '開始審查' : '下一步';
+
+  if (!target) {
+    overlay.classList.add('is-center');
+    hole.hidden = true;
+    card.style.left = '';
+    card.style.top = '';
+    return;
+  }
+
+  overlay.classList.remove('is-center');
+  hole.hidden = false;
+  const pad = 7;
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const box = target.getBoundingClientRect();
+  hole.style.left = `${Math.max(8, box.left - pad)}px`;
+  hole.style.top = `${Math.max(8, box.top - pad)}px`;
+  hole.style.width = `${Math.min(innerWidth - 16, box.width + pad * 2)}px`;
+  hole.style.height = `${Math.min(innerHeight - 16, box.height + pad * 2)}px`;
+
+  const holeBox = hole.getBoundingClientRect();
+  const cw = card.offsetWidth;
+  const ch = card.offsetHeight;
+  const gap = 14;
+  let left = holeBox.left;
+  let top = holeBox.bottom + gap;
+  const roomRight = innerWidth - holeBox.right - 16;
+  if (holeBox.height > holeBox.width * 1.15 && roomRight > cw + gap) {
+    left = holeBox.right + gap;
+    top = holeBox.top;
+  } else if (top + ch > innerHeight - 16) {
+    top = holeBox.top - ch - gap;
+  }
+  if (top < 16) top = 16;
+  if (top + ch > innerHeight - 16) top = Math.max(16, innerHeight - 16 - ch);
+  if (left + cw > innerWidth - 16) left = innerWidth - 16 - cw;
+  if (left < 16) left = 16;
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+}
+
+function closeTour() {
+  tour.open = false;
+  $('review-tour').hidden = true;
+  markTourSeen();
+}
+
+function showTourStep(index) {
+  tour.index = Math.max(0, Math.min(TOUR_STEPS.length - 1, index));
+  placeTour();
+}
+
+function startTour() {
+  if (tour.open || document.body.classList.contains('gate-on')) return;
+  tour.open = true;
+  tour.index = 0;
+  $('review-tour').hidden = false;
+  placeTour();
+}
+
+function maybeStartTour() {
+  if (!state.account || document.body.classList.contains('gate-on')) return;
+  const force = new URLSearchParams(location.search).has('tour');
+  if (!force && tourSeen()) return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(startTour);
+  });
+}
+
+$('tour-skip').addEventListener('click', closeTour);
+$('tour-next').addEventListener('click', () => {
+  if (tour.index >= TOUR_STEPS.length - 1) {
+    closeTour();
+    return;
+  }
+  showTourStep(tour.index + 1);
+});
+window.addEventListener('keydown', (event) => {
+  if (!tour.open) return;
+  if (event.key === 'Escape') closeTour();
+  if (event.key === 'ArrowRight') $('tour-next').click();
+});
+window.addEventListener('resize', () => { if (tour.open) placeTour(); });
 
 bindDial();
 paintControls();

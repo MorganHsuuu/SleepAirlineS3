@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/review.css?v=hub-5">
+  <link rel="stylesheet" href="/review.css?v=hub-9">
 </head>
 <body class="gate-on">
   <div class="desk">
@@ -32,7 +32,7 @@
     <p class="banner" id="store-banner" hidden></p>
 
     <div class="board">
-      <aside class="console pane">
+      <aside class="console pane" id="tour-console">
         <div class="pane-head">生成內容</div>
         <div class="console-strip">
           <section class="console-heading">
@@ -90,7 +90,7 @@
         </div>
       </aside>
 
-      <main class="sheet pane">
+      <main class="sheet pane" id="tour-sheet">
         <div class="meta-row">
           <h2 id="route-line">臺北出發 · 向東 · 1 小時 30 分</h2>
           <div class="meta-tags">
@@ -127,7 +127,7 @@
         </div>
       </main>
 
-      <aside class="ledger pane">
+      <aside class="ledger pane" id="tour-ledger">
         <div class="pane-head">航班內容</div>
         <div class="archive-switch" role="tablist" aria-label="真實飛行或手動生成">
           <button type="button" class="archive-tab is-on" id="tab-live" data-archive="live" role="tab" aria-selected="true">
@@ -147,7 +147,7 @@
         </section>
       </aside>
 
-      <aside class="judge pane">
+      <aside class="judge pane" id="tour-judge">
         <div class="pane-head">評分</div>
         <div class="grades" role="radiogroup" aria-label="五級評分">
           <button type="button" class="grade" data-score="1"><b>1</b><span>很差</span></button>
@@ -185,8 +185,20 @@
     </form>
   </div>
   <div class="toast" id="toast" hidden></div>
+  <div class="tour" id="review-tour" hidden>
+    <div class="tour-hole" id="tour-hole"></div>
+    <div class="tour-card" id="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+      <p class="tour-kicker" id="tour-step">1 / 5</p>
+      <h2 id="tour-title">上方可生成</h2>
+      <p id="tour-copy">設航向與時間，再按開始生成。</p>
+      <div class="tour-actions">
+        <button type="button" class="ghost" id="tour-skip">跳過</button>
+        <button type="button" class="primary" id="tour-next">下一步</button>
+      </div>
+    </div>
+  </div>
   <script src="/vendor/d3.min.js"></script>
   <script src="/globe.js"></script>
-  <script src="/review.js?v=hub-5"></script>
+  <script src="/review.js?v=hub-9"></script>
 </body>
 </html>
