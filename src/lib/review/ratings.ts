@@ -5,6 +5,15 @@ export type ReviewEntry = {
   at: string;
 };
 
+/** 讀取與寫入都用 1–5。大於 5 的舊 10 分制折半。 */
+export function normalizeReviewScore(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  const n = Math.round(Number(value));
+  if (n <= 0) return null;
+  if (n > 5) return Math.max(1, Math.min(5, Math.round(n / 2)));
+  return Math.max(1, Math.min(5, n));
+}
+
 function clipAccount(value: string): string {
   return value.replace(/^@/, '').trim().slice(0, 20);
 }
@@ -54,7 +63,7 @@ function parseHeader(header: string): Pick<ReviewEntry, 'account' | 'score' | 'a
   };
 }
 
-export function parseReviewEntries(comments: string): ReviewEntry[] {
+function collectReviewEntries(comments: string, normalize: boolean): ReviewEntry[] {
   const text = (comments || '').trim();
   if (!text) return [];
   const entries: ReviewEntry[] = [];
@@ -66,12 +75,20 @@ export function parseReviewEntries(comments: string): ReviewEntry[] {
     const peeled = peelTimestamp(match[2], header.at);
     entries.push({
       account: header.account,
-      score: header.score,
+      score: normalize ? normalizeReviewScore(header.score) : header.score,
       at: peeled.at,
       comment: peeled.comment,
     });
   }
   return entries;
+}
+
+export function parseReviewEntries(comments: string): ReviewEntry[] {
+  return collectReviewEntries(comments, true);
+}
+
+export function parseReviewEntriesRaw(comments: string): ReviewEntry[] {
+  return collectReviewEntries(comments, false);
 }
 
 export function formatReviewEntry(entry: ReviewEntry): string {
@@ -92,10 +109,11 @@ export function upsertReviewEntry(
   const rest = parseReviewEntries(comments).filter(
     (item) => item.account.toLowerCase() !== name.toLowerCase()
   );
+  const nextScore = normalizeReviewScore(score);
   rest.push({
     account: name,
-    score,
-    comment: comment.trim() || (score != null ? `文字評分 ${score} 分` : ''),
+    score: nextScore,
+    comment: comment.trim() || (nextScore != null ? `文字評分 ${nextScore} 分` : ''),
     at: stamp,
   });
   return rest;

@@ -15,6 +15,7 @@ import {
 import { REVIEW_DB_TITLE, getReviewProperties } from './review-schema';
 import { attachFileUploadToProperty, uploadImageToNotion } from './notion-file-upload';
 import {
+  normalizeReviewScore,
   parseReviewEntries,
   scoreForAccount,
   serializeReviewEntries,
@@ -50,7 +51,7 @@ export interface ReviewSample {
   imageUrl: string;
   comments: string;
   reviewer: string;
-  /** 1–10；尚未評分為 null */
+  /** 1–5；尚未評分為 null。舊的 6–10 會在讀取時折半。 */
   textScore: number | null;
   createdAt: string;
   updatedAt: string;
@@ -67,8 +68,7 @@ const RICH_TEXT_CHUNK = 2000;
 const COMMENTS_LIMIT = 18000;
 
 function clampTextScore(value: number | null | undefined): number | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return Math.max(1, Math.min(10, Math.round(value)));
+  return normalizeReviewScore(value);
 }
 
 function readTextAll(props: Record<string, unknown>, key: string): string {

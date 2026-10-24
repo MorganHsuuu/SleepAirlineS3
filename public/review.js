@@ -15,13 +15,14 @@ const GRADE_LABELS = ['', '很差', '偏差', '普通', '不錯', '很好'];
 
 function toStoredScore(grade) {
   const n = Math.max(1, Math.min(5, Math.round(Number(grade) || 3)));
-  return n * 2;
+  return n;
 }
 
 function fromStoredScore(score) {
   const n = Number(score);
   if (!Number.isFinite(n) || n <= 0) return 3;
-  return Math.max(1, Math.min(5, Math.round(n / 2)));
+  if (n > 5) return Math.max(1, Math.min(5, Math.round(n / 2)));
+  return Math.max(1, Math.min(5, Math.round(n)));
 }
 
 function gradeLabel(grade) {

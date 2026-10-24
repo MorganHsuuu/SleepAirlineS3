@@ -1,5 +1,5 @@
 import { listReviewSamples, type ReviewSample } from '../notion/reviews';
-import { parseReviewEntries } from './ratings';
+import { normalizeReviewScore, parseReviewEntries } from './ratings';
 
 function clip(text: string, max = 140): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -40,9 +40,11 @@ function pickRated(samples: ReviewSample[], kind: 'takeoff' | 'landing'): RatedR
       continue;
     }
     if (item.textScore != null) {
+      const score = normalizeReviewScore(item.textScore);
+      if (score == null) continue;
       rows.push({
         sampleId: item.sampleId,
-        score: item.textScore,
+        score,
         account: item.reviewer,
         note: item.comments,
         text,
@@ -88,8 +90,8 @@ function blockFor(samples: ReviewSample[], kind: 'takeoff' | 'landing'): string 
   const rated = pickRated(samples, kind);
   const notes = pickNotes(samples, kind);
   if (!rated.length && !notes.length) return '';
-  const good = rated.filter((item) => item.score >= 8).slice(0, 3);
-  const bad = rated.filter((item) => item.score <= 4).slice(-3).reverse();
+  const good = rated.filter((item) => item.score >= 4).slice(0, 3);
+  const bad = rated.filter((item) => item.score <= 2).slice(-3).reverse();
   const fallbackGood = good.length ? good : rated.slice(0, 1);
   const fallbackBad = bad.length ? bad : (rated.length > 1 ? rated.slice(-1) : []);
   const lines = [

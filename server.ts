@@ -33,7 +33,7 @@ import {
   toReviewClient,
   updateReviewSample,
 } from './src/lib/notion/reviews';
-import { parseReviewEntries, scoreForAccount } from './src/lib/review/ratings';
+import { normalizeReviewScore, parseReviewEntries, scoreForAccount } from './src/lib/review/ratings';
 import { findOriginByLocation, globeHop, globePoints, localContextFor, simulateRoute } from './src/lib/review/simulate';
 import { loadReviewCalibration } from './src/lib/review/calibration';
 import {
@@ -1566,7 +1566,7 @@ app.post('/api/review/comment', async (req, res) => {
     const source = String(req.body?.source || 'lab');
     const comment = String(req.body?.comment || '').trim();
     const rawScore = req.body?.textScore;
-    const textScore = rawScore === '' || rawScore == null ? null : Number(rawScore);
+    const textScore = rawScore === '' || rawScore == null ? null : normalizeReviewScore(Number(rawScore));
     if (!sampleId) { res.status(400).json({ error: '請先選一筆測試內容。' }); return; }
     if (!comment && !(Number.isFinite(textScore) && textScore >= 1)) {
       res.status(400).json({ error: '請先寫評論或拉文字評分。' });
