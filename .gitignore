@@ -11,3 +11,5 @@ api/index.js.map
 .env*
 .superpowers/
 .worktrees/
+
+__pycache__/

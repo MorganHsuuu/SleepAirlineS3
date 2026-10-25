@@ -1,0 +1,17 @@
+{
+  "secret": "test-only-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "deviceId": "SA-112233445566",
+  "salt": "000102030405060708090a0b0c0d0e0f",
+  "nonce": "000102030405060708090a0b",
+  "payload": {
+    "id": 1,
+    "op": "provision",
+    "args": {
+      "ssid": "測試教室",
+      "password": "test-only",
+      "grant": "test-only-grant"
+    }
+  },
+  "key": "4529782c7aa583a1911197180c77c7ba34de041e19d2186323b192d8e4eb8f68",
+  "ciphertext": "000102030405060708090a0b40f060b4bfb2a3412b247926ed2b88a17eb696a235789bfcd045e349ad323e88bd971823d575a154f75fc3ddb6ca256f8ef944faffd1e76a9f81cbcd83577d45a850895dd40c7ad855aee4943788d2f2c71289768e1a697c755eda048eb8e5c77561f3b9e870633b02c8c8e74c72c9d6e1473846468824cc69"
+}
