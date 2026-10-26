@@ -82,7 +82,10 @@ p{{line-height:1.7;color:#cedcdb}}.qr{{background:white;border-radius:16px;paddi
 .card span{{color:#a8c1c4}}.card strong{{font-weight:500;overflow-wrap:anywhere;text-align:right}}
 label{{display:block;margin:20px 0;color:#cedcdb}}input,select{{width:100%;min-height:50px;margin-top:8px;padding:12px;background:#f4f1e9;border:0;border-radius:4px;color:#102c32;font:inherit}}
 button{{width:100%;min-height:56px;margin-top:20px;border:0;background:#e1bc75;color:#102c32;font:inherit;font-weight:600}}
-small{{color:#9fb6b8}}a{{color:#e1bc75}}.error{{color:#ffbdad}}</style></head><body><main>
+small{{color:#9fb6b8}}a{{color:#e1bc75}}.error{{color:#ffbdad}}
+.route{{border-top:1px solid #496067;border-bottom:1px solid #496067;padding:15px 0;margin:24px 0;color:#cedcdb;line-height:1.8}}
+.route strong{{color:#e1bc75;font-weight:500}}.return-app{{display:block;text-align:center;margin-top:20px;padding:16px;border:1px solid #e1bc75;text-decoration:none}}.return-app[hidden]{{display:none}}
+</style></head><body><main>
 <div class="brand">SLEEP<br>AIRLINE</div>{content}</main><script>{script}</script></body></html>"""
 
 
@@ -167,11 +170,12 @@ class Kiosk:
             image = f'<div class="qr"><img src="data:image/png;base64,{qr}" alt="配對 QR Code"></div>'
         except ImportError:
             image = '<p class="error">缺少 QR 程式庫，請安裝 python3-qrcode。</p>'
-        content = f'''<p class="eyebrow">FIRST CONNECTION · 首次連線</p><h1>請用手機掃描<br>裝置配對碼</h1>
-<p>先在手機連網時掃描。APP 會引導你暫時加入下方的裝置 Wi-Fi，再於手機輸入家中的 Wi-Fi 密碼。</p>{image}
+        content = f'''<p class="eyebrow">FIRST CONNECTION · 登機前準備</p><h1>請用手機掃描<br>裝置配對碼</h1>
+<p>手機保持上網並掃描 QR。接著依照 APP 指示，暫時連入裝置網路，設定日常 Wi-Fi。</p>{image}
 <div class="card"><span>裝置代碼</span><strong>{self.state['deviceId']}</strong></div>
-<div class="card"><span>暫時 Wi-Fi</span><strong>{self.state.get('hotspotSsid', '—')}</strong></div>
-<div class="card"><span>暫時密碼</span><strong>{self.state.get('hotspotPassword', '—')}</strong></div>
+<div class="card"><span>裝置暫時 Wi-Fi</span><strong>{self.state.get('hotspotSsid', '—')}</strong></div>
+<div class="card"><span>裝置暫時密碼</span><strong>{self.state.get('hotspotPassword', '—')}</strong></div>
+<p><small>連上裝置 Wi-Fi 時，手機顯示「無網路」是正常的；請保持連線並依照 APP 指示繼續。</small></p>
 <p id="progress">{self.message}</p>'''
         revision = self.state.get("setupRevision", 0)
         script = f"""const setupRevision={revision};setInterval(async()=>{{try{{const s=await (await fetch('/api/status')).json();
@@ -181,12 +185,15 @@ document.getElementById('progress').textContent=s.message||'';}catch{}},3000);""
         return html_page("首次連線", content, script)
 
     def setup_page(self):
-        content = '''<p class="eyebrow">DEVICE WI-FI · 裝置配網</p><h1>連接家中的<br>Wi-Fi</h1>
-<p>這個頁面由樹莓派在本機提供。你輸入的家中 Wi-Fi 密碼只會送到裝置，不會傳到 Vercel。</p>
-<form id="form"><label>Wi-Fi 名稱 / SSID<input id="ssid" required autocomplete="off" placeholder="輸入家中 Wi-Fi 名稱"></label>
-<label>Wi-Fi 密碼<input id="password" type="password" autocomplete="new-password" placeholder="家中 Wi-Fi 密碼"></label>
-<button type="submit">開始連線 ↗</button></form><p id="result" role="status"></p>
-<p><small>連線時手機會離開裝置熱點。請回到原本的 Wi-Fi 或行動網路，再返回 APP 查看綁定結果。</small></p>'''
+        return_url = APP_URL + "?pairing=return"
+        content = f'''<p class="eyebrow">DEVICE WI-FI · 設定日常網路</p><h1>讓裝置加入<br>Wi-Fi</h1>
+<p>現在手機連著裝置的暫時 Wi-Fi，顯示「無網路」是正常的。請輸入裝置日後要使用的 Wi-Fi；不是暫時 Wi-Fi 的密碼。</p>
+<div class="route"><strong>現在：手機 → 裝置</strong><br>送出後：裝置加入日常 Wi-Fi，手機回到原本網路。</div>
+<form id="form"><label>日常 Wi-Fi 名稱 / SSID<input id="ssid" required autocomplete="off" placeholder="輸入裝置要連的 Wi-Fi 名稱"></label>
+<label>日常 Wi-Fi 密碼<input id="password" type="password" autocomplete="new-password" placeholder="輸入這個 Wi-Fi 的密碼"></label>
+<button type="submit">將網路資料送給裝置 ↗</button></form><p id="result" role="status"></p>
+<a id="return-app" class="return-app" href="{return_url}" hidden>手機恢復上網後，返回 APP 確認 ↗</a>
+<p><small>密碼只會傳給眼前的裝置，不會送到 Vercel。送出後，裝置暫時 Wi-Fi 會關閉；手機請切回原本 Wi-Fi 或行動網路，再回 APP 確認。</small></p>'''
         script = """const p=new URLSearchParams(location.hash.slice(1));history.replaceState(null,'',location.pathname);
 const form=document.getElementById('form'),result=document.getElementById('result');
 form.addEventListener('submit',async e=>{e.preventDefault();form.querySelector('button').disabled=true;
@@ -194,8 +201,10 @@ try{const response=await fetch('/api/provision',{method:'POST',headers:{'Content
 body:JSON.stringify({ssid:document.getElementById('ssid').value,password:document.getElementById('password').value,
 grant:p.get('grant'),setupCode:p.get('code')})});
 if(!response.ok)throw new Error((await response.json()).error||'無法開始配網');
-result.textContent='裝置正在連線。請切回原本網路，再返回 Sleep Airline APP 查看結果。';
-}catch(err){result.textContent=err.message;form.querySelector('button').disabled=false;}});"""
+result.textContent='網路資料已送給裝置。裝置暫時 Wi-Fi 即將關閉；請讓手機恢復上網，再按下方按鈕返回 APP。';
+document.getElementById('return-app').hidden=false;
+document.getElementById('return-app').scrollIntoView({block:'center'});
+}catch(err){result.textContent=err instanceof TypeError?'未收到裝置回覆。請先查看裝置螢幕是否正在連線，不要立即重複送出。':err.message;form.querySelector('button').disabled=false;}});"""
         return html_page("設定 Wi-Fi", content, script)
 
     def offline_page(self):
