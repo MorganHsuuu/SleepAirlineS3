@@ -22,8 +22,8 @@ self.addEventListener('push', (event) => {
     tag: payload.tag || LANDING_REMINDER_TAG,
     renotify: false,
     requireInteraction: true,
-    icon: '/media/icon-192.png?v=3',
-    badge: '/images/favicon-32.png?v=3',
+    icon: '/images/brand-logo.png?v=4',
+    badge: '/images/brand-logo.png?v=4',
     data: { url: payload.url || '/' },
   }));
 });
@@ -49,8 +49,8 @@ self.addEventListener('message', (event) => {
     tag: data.tag || LANDING_REMINDER_TAG,
     renotify: false,
     requireInteraction: true,
-    icon: '/media/icon-192.png?v=3',
-    badge: '/images/favicon-32.png?v=3',
+    icon: '/images/brand-logo.png?v=4',
+    badge: '/images/brand-logo.png?v=4',
     data: { url: data.url || '/' },
   }));
 });

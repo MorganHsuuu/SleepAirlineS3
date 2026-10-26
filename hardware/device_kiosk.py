@@ -70,6 +70,9 @@ def cloud_post(path, payload, timeout=12):
 
 
 def html_page(title, content, script="", page_class=""):
+    logo_path = Path(__file__).resolve().parents[1] / "public/images/brand-logo.png"
+    logo = (f'<img src="data:image/png;base64,{base64.b64encode(logo_path.read_bytes()).decode()}" alt="Sleep Airline">'
+            if logo_path.is_file() else 'SLEEP<span>AIRLINE</span>')
     pairing_page = page_class in ("device-onboarding", "phone-setup")
     header_en = "FIRST CONNECTION" if pairing_page else "DEVICE DISPLAY"
     active_steps = 1 if page_class == "device-onboarding" else 2
@@ -85,8 +88,8 @@ def html_page(title, content, script="", page_class=""):
 *{{box-sizing:border-box}}html{{-webkit-text-size-adjust:100%}}
 body{{margin:0;min-height:100dvh;padding:clamp(22px,4vw,42px);display:flex;justify-content:center}}
 main{{width:min(100%,640px)}}.masthead{{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}}
-.brand{{font-size:clamp(22px,4vw,30px);line-height:1.12;letter-spacing:.23em;font-weight:400}}
-.brand span{{display:block}}.masthead-note{{padding-top:3px;text-align:right;font-size:11px;letter-spacing:.12em}}
+.brand{{position:relative;width:48px;height:64px;overflow:hidden;font-size:clamp(22px,4vw,30px);line-height:1.12;letter-spacing:.23em;font-weight:400}}
+.brand img{{position:absolute;width:100px;height:100px;left:-27px;top:-18px}}.brand span{{display:block}}.masthead-note{{padding-top:3px;text-align:right;font-size:11px;letter-spacing:.12em}}
 .masthead-note small{{display:block;margin-top:4px;font-family:var(--mono);font-size:8px;letter-spacing:.17em;color:var(--muted)}}
 .progress-rule{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:28px 0 32px}}
 .progress-rule i{{height:2px;background:var(--line)}}.progress-rule i.active{{background:var(--ink)}}
@@ -120,7 +123,7 @@ button:disabled{{opacity:.55;cursor:default}}.return-app{{background:transparent
 .scan-layout{{grid-template-columns:clamp(175px,37vw,200px) minmax(0,1fr)}}.scan-step{{padding:9px 0}}.card{{padding:9px 0}}
 .device-status{{margin-top:12px}}}}
 </style></head><body class="{page_class}"><main>
-<header class="masthead"><div class="brand">SLEEP<span>AIRLINE</span></div>
+<header class="masthead"><div class="brand">{logo}</div>
 <div class="masthead-note">{title}<small>{header_en}</small></div></header>
 {progress}
 {content}</main><script>{script}</script></body></html>"""

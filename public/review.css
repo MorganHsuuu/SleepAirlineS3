@@ -46,13 +46,7 @@ body {
 .brand-mark {
   width: 42px;
   height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, #4d8fff, var(--accent));
-  color: #fff;
-  font-size: 18px;
-  box-shadow: 0 8px 18px rgba(47, 123, 255, .28);
+  object-fit: contain;
 }
 .eyebrow {
   margin: 0 0 1px;
