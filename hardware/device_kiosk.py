@@ -73,9 +73,8 @@ def html_page(title, content, script="", page_class=""):
     pairing_page = page_class in ("device-onboarding", "phone-setup")
     header_en = "FIRST CONNECTION" if pairing_page else "DEVICE DISPLAY"
     active_steps = 1 if page_class == "device-onboarding" else 2
-    progress = ('<div class="progress-rule" aria-hidden="true">' +
-                ''.join(f'<i class="{"active" if index < active_steps else ""}"></i>' for index in range(3)) +
-                '</div>') if pairing_page else ''
+    markers = ''.join('<i class="active"></i>' if index < active_steps else '<i></i>' for index in range(3))
+    progress = f'<div class="progress-rule" aria-hidden="true">{markers}</div>' if pairing_page else ''
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-store"><title>{title} · SLEEP AIRLINE</title>
@@ -94,8 +93,8 @@ main{{width:min(100%,640px)}}.masthead{{display:flex;justify-content:space-betwe
 .eyebrow{{font-family:var(--mono);font-size:10px;letter-spacing:.17em;color:var(--muted)}}
 .eyebrow{{margin:0}}h1{{font-size:clamp(32px,6vw,46px);font-weight:400;line-height:1.2;letter-spacing:.11em;margin:10px 0 16px}}
 p{{margin:0;line-height:1.65;color:var(--muted);font-size:14px}}.lead{{max-width:570px;color:var(--ink)}}
-.scan-layout{{display:grid;grid-template-columns:236px minmax(0,1fr);gap:24px;align-items:start;margin:30px 0 28px}}
-.qr{{width:236px;max-width:100%;padding:12px;background:white;border:1px solid var(--line);border-radius:5px}}
+.scan-layout{{display:grid;grid-template-columns:clamp(175px,37vw,236px) minmax(0,1fr);gap:24px;align-items:start;margin:30px 0 28px}}
+.qr{{width:100%;max-width:236px;padding:12px;background:white;border:1px solid var(--line);border-radius:5px}}
 .qr img{{display:block;width:100%;height:auto;image-rendering:pixelated}}.scan-steps{{border-top:1px solid var(--ink)}}
 .scan-step{{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;border-bottom:1px solid var(--line);padding:13px 0}}
 .scan-step b{{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--muted)}}
@@ -114,10 +113,11 @@ input{{display:block;width:100%;min-height:54px;margin-top:8px;padding:12px 14px
 input:focus{{border-color:var(--ink);outline:1px solid var(--ink)}}button,.return-app{{width:100%;min-height:58px;display:flex;align-items:center;justify-content:space-between;margin-top:24px;padding:15px 18px;border:1px solid var(--ink);background:var(--ink);color:white;font:inherit;font-size:15px;text-align:left;cursor:pointer;text-decoration:none}}
 button:disabled{{opacity:.55;cursor:default}}.return-app{{background:transparent;color:var(--ink)}}.return-app[hidden]{{display:none}}
 .form-result{{margin-top:17px;color:var(--ink)}}.fine-print{{margin-top:20px;font-size:12px}}.error{{color:#8b4139}}
-@media(max-width:560px){{.scan-layout{{grid-template-columns:1fr;gap:14px;margin:22px 0}}.qr{{width:min(72vw,236px)}}
-.scan-step{{padding:10px 0}}.route{{grid-template-columns:1fr;gap:12px}}.masthead-note{{font-size:9px}}}}
-@media(max-height:800px) and (min-width:561px){{.progress-rule{{margin:17px 0 20px}}.scan-layout{{margin:18px 0;gap:18px}}
-.qr{{width:200px}}.scan-layout{{grid-template-columns:200px minmax(0,1fr)}}.scan-step{{padding:9px 0}}.card{{padding:9px 0}}
+@media(max-width:560px){{.scan-layout{{gap:14px;margin:22px 0}}.route{{grid-template-columns:1fr;gap:12px}}.masthead-note{{font-size:9px}}}}
+@media(max-width:440px){{.scan-layout{{grid-template-columns:1fr}}.qr{{width:min(72vw,236px)}}.scan-step{{padding:10px 0}}}}
+@media(max-height:800px) and (min-width:441px){{body{{padding:20px}}h1{{font-size:clamp(32px,5vw,38px);margin:8px 0 10px}}.lead{{font-size:13px;line-height:1.5}}
+.progress-rule{{margin:17px 0 20px}}.scan-layout{{margin:18px 0;gap:18px}}
+.scan-layout{{grid-template-columns:clamp(175px,37vw,200px) minmax(0,1fr)}}.scan-step{{padding:9px 0}}.card{{padding:9px 0}}
 .device-status{{margin-top:12px}}}}
 </style></head><body class="{page_class}"><main>
 <header class="masthead"><div class="brand">SLEEP<span>AIRLINE</span></div>
