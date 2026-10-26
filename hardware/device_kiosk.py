@@ -69,21 +69,64 @@ def cloud_post(path, payload, timeout=12):
         return json.load(response)
 
 
-def html_page(title, content, script=""):
+def html_page(title, content, script="", page_class=""):
+    logo_path = Path(__file__).resolve().parents[1] / "public/images/brand-logo.png"
+    logo = (f'<img src="data:image/png;base64,{base64.b64encode(logo_path.read_bytes()).decode()}" alt="Sleep Airline">'
+            if logo_path.is_file() else 'SLEEP<span>AIRLINE</span>')
+    pairing_page = page_class in ("device-onboarding", "phone-setup")
+    header_en = "FIRST CONNECTION" if pairing_page else "DEVICE DISPLAY"
+    active_steps = 1 if page_class == "device-onboarding" else 2
+    markers = ''.join('<i class="active"></i>' if index < active_steps else '<i></i>' for index in range(3))
+    progress = f'<div class="progress-rule" aria-hidden="true">{markers}</div>' if pairing_page else ''
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-store"><title>{title} · SLEEP AIRLINE</title>
-<style>:root{{font-family:system-ui,sans-serif;color:#f4f1e9;background:#000}}
-*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:28px}}
-main{{width:min(100%,560px)}}.brand{{font-size:12px;letter-spacing:.28em;line-height:1.5;color:#b7ced0}}
-.eyebrow{{font-size:11px;letter-spacing:.18em;color:#a8c1c4;margin-top:42px}}h1{{font-size:clamp(34px,7vw,60px);font-weight:400;line-height:1.12;letter-spacing:.05em;margin:14px 0 18px}}
-p{{line-height:1.7;color:#cedcdb}}.qr{{background:white;border-radius:16px;padding:15px;width:min(80vw,260px);margin:28px 0}}
-.qr img{{display:block;width:100%}}.card{{border-top:1px solid #496067;padding:18px 0;display:flex;justify-content:space-between;gap:12px}}
-.card span{{color:#a8c1c4}}.card strong{{font-weight:500;overflow-wrap:anywhere;text-align:right}}
-label{{display:block;margin:20px 0;color:#cedcdb}}input,select{{width:100%;min-height:50px;margin-top:8px;padding:12px;background:#f4f1e9;border:0;border-radius:4px;color:#102c32;font:inherit}}
-button{{width:100%;min-height:56px;margin-top:20px;border:0;background:#e1bc75;color:#102c32;font:inherit;font-weight:600}}
-small{{color:#9fb6b8}}a{{color:#e1bc75}}.error{{color:#ffbdad}}</style></head><body><main>
-<div class="brand">SLEEP<br>AIRLINE</div>{content}</main><script>{script}</script></body></html>"""
+<style>
+:root{{font-family:'Manrope','Noto Sans TC',system-ui,sans-serif;color:#1a1c1c;background:#fbfaf7;
+--ink:#1a1c1c;--muted:#737672;--line:#d7d8d4;--paper:#fbfaf7;
+--mono:'DM Mono','SFMono-Regular',ui-monospace,monospace;-webkit-font-smoothing:antialiased}}
+*{{box-sizing:border-box}}html{{-webkit-text-size-adjust:100%}}
+body{{margin:0;min-height:100dvh;padding:clamp(22px,4vw,42px);display:flex;justify-content:center}}
+main{{width:min(100%,640px)}}.masthead{{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}}
+.brand{{position:relative;width:48px;height:64px;overflow:hidden;font-size:clamp(22px,4vw,30px);line-height:1.12;letter-spacing:.23em;font-weight:400}}
+.brand img{{position:absolute;width:100px;height:100px;left:-27px;top:-18px}}.brand span{{display:block}}.masthead-note{{padding-top:3px;text-align:right;font-size:11px;letter-spacing:.12em}}
+.masthead-note small{{display:block;margin-top:4px;font-family:var(--mono);font-size:8px;letter-spacing:.17em;color:var(--muted)}}
+.progress-rule{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:28px 0 32px}}
+.progress-rule i{{height:2px;background:var(--line)}}.progress-rule i.active{{background:var(--ink)}}
+.eyebrow{{font-family:var(--mono);font-size:10px;letter-spacing:.17em;color:var(--muted)}}
+.eyebrow{{margin:0}}h1{{font-size:clamp(32px,6vw,46px);font-weight:400;line-height:1.2;letter-spacing:.11em;margin:10px 0 16px}}
+p{{margin:0;line-height:1.65;color:var(--muted);font-size:14px}}.lead{{max-width:570px;color:var(--ink)}}
+.scan-layout{{display:grid;grid-template-columns:clamp(175px,37vw,236px) minmax(0,1fr);gap:24px;align-items:start;margin:30px 0 28px}}
+.qr{{width:100%;max-width:236px;padding:12px;background:white;border:1px solid var(--line);border-radius:5px}}
+.qr img{{display:block;width:100%;height:auto;image-rendering:pixelated}}.scan-steps{{border-top:1px solid var(--ink)}}
+.scan-step{{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;border-bottom:1px solid var(--line);padding:13px 0}}
+.scan-step b{{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--muted)}}
+.scan-step strong{{display:block;font-size:13px;font-weight:500;letter-spacing:.04em}}.scan-step small{{display:block;margin-top:4px;font-size:11px;line-height:1.5;color:var(--muted)}}
+.scan-step.current b{{color:var(--ink)}}.scan-step.current strong{{font-weight:600}}
+.credential-list{{margin-top:4px;border-top:1px solid var(--ink)}}.card{{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);padding:13px 0}}
+.card span{{color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.08em}}
+.card strong{{font-family:var(--mono);font-weight:400;font-size:12px;text-align:right;overflow-wrap:anywhere}}
+.device-onboarding .card span{{font-size:11px}}.device-onboarding .card strong{{font-size:16px;line-height:1.4}}
+.device-status{{display:flex;justify-content:space-between;gap:20px;margin-top:24px;font-family:var(--mono);font-size:11px;line-height:1.5}}
+.device-status span{{color:var(--muted)}}.device-status strong{{font-weight:400;text-align:right;overflow-wrap:anywhere}}
+.route{{display:grid;grid-template-columns:1fr 1fr;gap:15px;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);padding:14px 0;margin:25px 0}}
+.route div{{font-size:12px;line-height:1.55}}.route strong{{display:block;margin-bottom:4px;font-size:13px;font-weight:500;color:var(--ink)}}
+.route span{{color:var(--muted)}}form{{margin-top:28px}}label{{display:block;margin:17px 0;font-size:12px;letter-spacing:.05em}}
+input{{display:block;width:100%;min-height:54px;margin-top:8px;padding:12px 14px;background:white;border:1px solid #bfc2bd;border-radius:5px;color:var(--ink);font:inherit;font-size:16px}}
+input:focus{{border-color:var(--ink);outline:1px solid var(--ink)}}button,.return-app{{width:100%;min-height:58px;display:flex;align-items:center;justify-content:space-between;margin-top:24px;padding:15px 18px;border:1px solid var(--ink);background:var(--ink);color:white;font:inherit;font-size:15px;text-align:left;cursor:pointer;text-decoration:none}}
+button:disabled{{opacity:.55;cursor:default}}.return-app{{background:transparent;color:var(--ink)}}.return-app[hidden]{{display:none}}
+.form-result{{margin-top:17px;color:var(--ink)}}.fine-print{{margin-top:20px;font-size:12px}}.error{{color:#8b4139}}
+@media(max-width:560px){{.scan-layout{{gap:14px;margin:22px 0}}.route{{grid-template-columns:1fr;gap:12px}}.masthead-note{{font-size:9px}}}}
+@media(max-width:440px){{.scan-layout{{grid-template-columns:1fr}}.qr{{width:min(72vw,236px)}}.scan-step{{padding:10px 0}}}}
+@media(max-height:800px) and (min-width:441px){{body{{padding:20px}}h1{{font-size:clamp(32px,5vw,38px);margin:8px 0 10px}}.lead{{font-size:13px;line-height:1.5}}
+.progress-rule{{margin:17px 0 20px}}.scan-layout{{margin:18px 0;gap:18px}}
+.scan-layout{{grid-template-columns:clamp(175px,37vw,200px) minmax(0,1fr)}}.scan-step{{padding:9px 0}}.card{{padding:9px 0}}
+.device-status{{margin-top:12px}}}}
+</style></head><body class="{page_class}"><main>
+<header class="masthead"><div class="brand">{logo}</div>
+<div class="masthead-note">{title}<small>{header_en}</small></div></header>
+{progress}
+{content}</main><script>{script}</script></body></html>"""
 
 
 class Kiosk:
@@ -164,29 +207,43 @@ class Kiosk:
             return html_page("裝置已連線", content, f"location.replace({json.dumps(target)});")
         try:
             qr = self.current_qr()
-            image = f'<div class="qr"><img src="data:image/png;base64,{qr}" alt="配對 QR Code"></div>'
+            image = f'<div class="qr"><img src="data:image/png;base64,{qr}" alt="掃描這台裝置的配對 QR Code"></div>'
         except ImportError:
             image = '<p class="error">缺少 QR 程式庫，請安裝 python3-qrcode。</p>'
-        content = f'''<p class="eyebrow">FIRST CONNECTION · 首次連線</p><h1>請用手機掃描<br>裝置配對碼</h1>
-<p>先在手機連網時掃描。APP 會引導你暫時加入下方的裝置 Wi-Fi，再於手機輸入家中的 Wi-Fi 密碼。</p>{image}
+        content = f'''<p class="eyebrow">01 / 03 · 登機前準備</p><h1>請用手機掃描<br>這台裝置的 QR</h1>
+<p class="lead">手機保持上網，掃描配對碼。接下來可以一邊看這個畫面，一邊依照 APP 的指示操作。</p>
+<div class="scan-layout">{image}<div class="scan-steps" aria-label="配對步驟">
+<div class="scan-step current"><b>01</b><div><strong>掃描 QR</strong><small>手機保持上網，掃描配對碼並開啟 Sleep Airline APP。</small></div></div>
+<div class="scan-step"><b>02</b><div><strong>暫時連上裝置 Wi-Fi</strong><small>手機出現「無網路」是正常的，請保持連線。</small></div></div>
+<div class="scan-step"><b>03</b><div><strong>設定日常 Wi-Fi</strong><small>送出後，讓手機回到原本網路，在 APP 確認結果。</small></div></div>
+</div></div>
+<div class="credential-list">
 <div class="card"><span>裝置代碼</span><strong>{self.state['deviceId']}</strong></div>
-<div class="card"><span>暫時 Wi-Fi</span><strong>{self.state.get('hotspotSsid', '—')}</strong></div>
-<div class="card"><span>暫時密碼</span><strong>{self.state.get('hotspotPassword', '—')}</strong></div>
-<p id="progress">{self.message}</p>'''
+<div class="card"><span>裝置暫時 Wi-Fi</span><strong>{self.state.get('hotspotSsid', '—')}</strong></div>
+<div class="card"><span>裝置暫時密碼</span><strong>{self.state.get('hotspotPassword', '—')}</strong></div></div>
+<div class="device-status" role="status"><span>裝置狀態</span><strong id="progress">{self.message or '等待手機完成設定'}</strong></div>'''
         revision = self.state.get("setupRevision", 0)
         script = f"""const setupRevision={revision};setInterval(async()=>{{try{{const s=await (await fetch('/api/status')).json();
 if(s.paired)location.replace('""" + WINDOW_URL + """');
 else if(s.setupRevision!==setupRevision||s.setupCodeChanged)location.reload();
-document.getElementById('progress').textContent=s.message||'';}catch{}},3000);"""
-        return html_page("首次連線", content, script)
+document.getElementById('progress').textContent=s.message||'等待手機完成設定';
+const active=(s.status==='connecting'||s.status==='confirming')?2:0;
+document.querySelectorAll('.scan-step').forEach((item,index)=>item.classList.toggle('current',index===active));
+document.querySelectorAll('.progress-rule i').forEach((item,index)=>item.classList.toggle('active',index<=active));
+}catch{}},3000);"""
+        return html_page("首次連線", content, script, "device-onboarding")
 
     def setup_page(self):
-        content = '''<p class="eyebrow">DEVICE WI-FI · 裝置配網</p><h1>連接家中的<br>Wi-Fi</h1>
-<p>這個頁面由樹莓派在本機提供。你輸入的家中 Wi-Fi 密碼只會送到裝置，不會傳到 Vercel。</p>
-<form id="form"><label>Wi-Fi 名稱 / SSID<input id="ssid" required autocomplete="off" placeholder="輸入家中 Wi-Fi 名稱"></label>
-<label>Wi-Fi 密碼<input id="password" type="password" autocomplete="new-password" placeholder="家中 Wi-Fi 密碼"></label>
-<button type="submit">開始連線 ↗</button></form><p id="result" role="status"></p>
-<p><small>連線時手機會離開裝置熱點。請回到原本的 Wi-Fi 或行動網路，再返回 APP 查看綁定結果。</small></p>'''
+        return_url = APP_URL + "?pairing=return"
+        content = f'''<p class="eyebrow">02 / 03 · 設定日常網路</p><h1>讓裝置加入<br>Wi-Fi</h1>
+<p class="lead">這一頁由眼前的裝置提供。現在手機連著裝置暫時 Wi-Fi，顯示「無網路」是正常的。</p>
+<div class="route"><div><strong>現在 · 手機連裝置</strong><span>輸入裝置日後要使用的 Wi-Fi，與暫時網路不同。</span></div>
+<div><strong>送出後 · 回到 APP</strong><span>裝置開始連線；手機恢復上網，再確認綁定結果。</span></div></div>
+<form id="form"><label>日常 Wi-Fi 名稱 / SSID<input id="ssid" required autocomplete="off" placeholder="輸入裝置要連的 Wi-Fi 名稱"></label>
+<label>日常 Wi-Fi 密碼<input id="password" type="password" autocomplete="new-password" placeholder="輸入這個 Wi-Fi 的密碼"></label>
+<button type="submit">將網路資料送給裝置 <span>→</span></button></form><p id="result" class="form-result" role="status"></p>
+<a id="return-app" class="return-app" href="{return_url}" hidden>手機恢復上網後，返回 APP 確認 ↗</a>
+<p class="fine-print">密碼只會傳給眼前的裝置，不會送到 Vercel。送出後暫時 Wi-Fi 會關閉；請讓手機切回原本 Wi-Fi 或行動網路。</p>'''
         script = """const p=new URLSearchParams(location.hash.slice(1));history.replaceState(null,'',location.pathname);
 const form=document.getElementById('form'),result=document.getElementById('result');
 form.addEventListener('submit',async e=>{e.preventDefault();form.querySelector('button').disabled=true;
@@ -194,9 +251,11 @@ try{const response=await fetch('/api/provision',{method:'POST',headers:{'Content
 body:JSON.stringify({ssid:document.getElementById('ssid').value,password:document.getElementById('password').value,
 grant:p.get('grant'),setupCode:p.get('code')})});
 if(!response.ok)throw new Error((await response.json()).error||'無法開始配網');
-result.textContent='裝置正在連線。請切回原本網路，再返回 Sleep Airline APP 查看結果。';
-}catch(err){result.textContent=err.message;form.querySelector('button').disabled=false;}});"""
-        return html_page("設定 Wi-Fi", content, script)
+result.textContent='網路資料已送給裝置。裝置暫時 Wi-Fi 即將關閉；請讓手機恢復上網，再按下方按鈕返回 APP。';
+document.getElementById('return-app').hidden=false;
+document.getElementById('return-app').scrollIntoView({block:'center'});
+}catch(err){result.textContent=err instanceof TypeError?'未收到裝置回覆。請先查看裝置螢幕是否正在連線，不要立即重複送出。':err.message;form.querySelector('button').disabled=false;}});"""
+        return html_page("設定 Wi-Fi", content, script, "phone-setup")
 
     def offline_page(self):
         content = '''<p class="eyebrow">OFFLINE · 網路中斷</p><h1>航班暫時離線</h1>
