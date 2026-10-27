@@ -314,6 +314,8 @@ const CITY_ZH_EXTRA: Record<string, string> = {
   tarawa: '塔拉瓦',
   jolo: '霍洛',
   kasama: '笠間',
+  'cabo san lucas': '卡布聖盧卡斯',
+  'san lucas': '卡布聖盧卡斯',
   'new taipei city': '新北',
   'new taipei': '新北',
 };

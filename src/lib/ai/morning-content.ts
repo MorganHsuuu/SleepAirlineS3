@@ -254,37 +254,36 @@ function genericSceneSubject(
   spokenPlace = city
 ): SceneSubject {
   const enCity = /[A-Za-z]/.test(city) ? city : spokenPlace;
-  const zhCity = spokenPlace || city;
   const table: Record<ArrivalSceneThemeId, Omit<SceneSubject, 'isGeneric'>> = {
     landmark: {
-      zh: `${zhCity}街上的屋子與招牌`,
+      zh: '街上的屋子與招牌',
       en: `street buildings and signs in ${enCity}`,
       detailZh: '屋檐和顏色一看就是這裡',
       keywords: [`${enCity} street buildings`, `${enCity} local signs`],
     },
     nature: {
-      zh: `${zhCity}此刻的土地、風向與天色`,
+      zh: '土地與天色',
       en: `the local land, weather and sky over ${enCity}`,
       detailZh: '光跟著這裡的天氣走',
       keywords: [`${enCity} local land and sky`, `${enCity} weather light`],
     },
     food: {
-      zh: `${zhCity}熱氣騰騰的街頭飲食攤`,
+      zh: '熱氣騰騰的街頭飲食攤',
       en: `a steaming street-food stall in ${enCity}`,
       detailZh: '熱氣和餐盤就在眼前',
       keywords: [`${enCity} food stall`, 'plated food foreground'],
     },
     'street-market': {
-      zh: `${zhCity}的街道與市集`,
+      zh: '街道與攤位',
       en: `streets and market stalls in ${enCity}`,
       detailZh: '店面和人行很日常',
       keywords: [`${enCity} street`, 'market street'],
     },
     'culture-life': {
-      zh: `${zhCity}日常的街景`,
+      zh: '街上的屋子和行人',
       en: `everyday street life in ${enCity}`,
-      detailZh: '車流和生活步調都在眼前',
-      keywords: [`${enCity} daily life`, 'local culture'],
+      detailZh: '招牌和人行道很日常',
+      keywords: [`${enCity} daily life`, 'local street'],
     },
   };
   return { ...table[theme.id], isGeneric: true };
@@ -389,6 +388,7 @@ function formatFlightDurationZh(minutes?: number | null): string {
   if (!n) return '';
   const hours = Math.floor(n / 60);
   const rest = n % 60;
+  if (hours && rest === 30) return `${hours} 個半小時`;
   if (hours && rest) return `${hours} 小時 ${rest} 分`;
   if (hours) return `${hours} 小時`;
   return `${rest} 分鐘`;
@@ -515,25 +515,106 @@ function spokenWeatherLine(input: MorningContentInput): string {
     /霧/.test(summary) ? '有霧' :
     /陰/.test(summary) ? '天空陰著' :
     /多雲/.test(summary) ? '雲比較多' :
-    /晴/.test(summary) ? '天空大致晴朗' :
+    /晴/.test(summary) ? '天還算晴' :
     '';
   const bits = [
-    stamp || '',
-    temperature ? `氣溫 ${temperature} 度` : '',
+    stamp ? `現在${stamp}` : '',
+    temperature ? `大概 ${temperature} 度` : '',
     sky,
   ].filter(Boolean);
   return bits.length ? `${bits.join('，')}。` : fallbackTimeContext(input.localTimeLabel).voiceLine;
 }
 
-function spokenCultureLine(note?: string | null): string {
+function arrivalVoiceShape(input: MorningContentInput, theme: ArrivalSceneTheme): 1 | 2 | 3 | 4 | 5 {
+  const seed = `${input.city}|${input.country}|${theme.id}|${input.localTimeLabel || ''}|${input.departureLocation || ''}`;
+  let n = 0;
+  for (const ch of seed) n = (n + ch.charCodeAt(0) * 17) % 997;
+  return ((n % 5) + 1) as 1 | 2 | 3 | 4 | 5;
+}
+
+function pickCultureClause(note: string): string {
+  const clauses = note
+    .split(/[；;。]/)
+    .map((item) => item.trim())
+    .filter((item) => item && !/旅行最美的風景/.test(item));
+  if (!clauses.length) return '';
+  const ranked = clauses
+    .map((clause) => {
+      const zh = chineseCount(clause);
+      const latin = (clause.match(/[A-Za-z]/g) || []).length;
+      let score = zh * 3 - Math.min(latin, 10);
+      if (/人|見面|吃|喝|喜歡|朋友|招呼|問候|分享|鞠躬|吃飯|喝茶|攤|市|taco|sorry/i.test(clause)) score += 10;
+      if (/節|紀念|亡靈|歷史|傳統節日|繽紛色彩/.test(clause)) score -= 12;
+      return { clause, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  return ranked[0]?.clause || clauses[0];
+}
+
+function softenCultureClause(clause: string): string {
+  return clause
+    .replace(/[「"']([^」"']+)[」"']不離口[\s\S]*/u, '很愛把「$1」掛在嘴上')
+    .replace(/^(?:街頭)?\s*(.+?)是深夜社交場/u, (_, noun) => {
+      const item = String(noun || '').trim();
+      return /[A-Za-z]/.test(item) ? `很喜歡吃 ${item}，晚上常聚在一起` : `很喜歡去${item}，晚上常聚在一起`;
+    })
+    .replace(/^(.+?)是驕傲$/u, '很以$1為傲')
+    .replace(/是社交核心/g, '是大家愛去晃的地方')
+    .replace(/是國民習慣/g, '幾乎人人都會')
+    .replace(/是日常問候/g, '是很日常的打招呼')
+    .replace(/是待客之道/g, '是招待朋友的方式')
+    .replace(/是社交重地/g, '是大家愛去的地方')
+    .replace(/是生活哲學|是生活核心|是國民精神/g, '是這裡很看重的小事')
+    .replace(/別忘了說/g, '也常說')
+    .replace(/是基本禮儀/g, '')
+    .replace(/是經典/g, '很常見')
+    .replace(/\s+/g, ' ')
+    .replace(/[，,、\s]+$/u, '')
+    .trim();
+}
+
+function frameCultureHabit(habit: string, shape: 1 | 2 | 3 | 4 | 5): string {
+  const body = habit.replace(/[。！？]$/u, '').trim();
+  if (!body) return '';
+  const people = /^(當地人|這裡的人|日本人|韓國人|台灣)/.test(body);
+  const complete = people || /就是|是朋友|掛在嘴上|很喜歡|很愛/.test(body);
+  const rest = people ? body.replace(/^(當地人|這裡的人|日本人|韓國人)/, '') : body;
+  const frames = {
+    1: complete ? `${body}。` : `當地人${body}。`,
+    2: `這裡的人啊，${rest}。`,
+    3: `有個可愛的小事：${body}。`,
+    4: `跟當地人相處，常會發現${rest}。`,
+    5: complete ? `${body}。` : `${body}，挺有人味的。`,
+  } as const;
+  return frames[shape].replace(/。。+/g, '。');
+}
+
+function spokenCultureAside(
+  note: string | null | undefined,
+  theme: ArrivalSceneTheme,
+  _localTimeLabel?: string | null,
+  shape: 1 | 2 | 3 | 4 | 5 = 1
+): string {
   const raw = (note || '').trim();
   if (!raw || /旅行最美的風景/.test(raw)) return '';
-  const first = raw.split(/[；;。]/)[0]?.trim() || '';
-  if (!first) return '';
-  const latin = (first.match(/[A-Za-z]/g) || []).length;
-  const zh = chineseCount(first);
-  if (zh < 4 || latin > zh) return '';
-  return `${first}。`;
+  const clause = pickCultureClause(raw);
+  if (!clause) return '';
+  if (chineseCount(clause) < 2 && !/[A-Za-z]{3,}/.test(clause)) return '';
+  const habit = softenCultureClause(clause);
+  if (!habit) return '';
+  const foodTheme = theme.id === 'food' || theme.id === 'street-market';
+  const foodish = /餐|食|攤|麵|茶|酒|咖啡|烤|菜|料理|taco|夜市|炒|飯|糖/i.test(habit);
+  if (foodTheme && foodish) {
+    const photo = [
+      '當地人很喜歡這個，眼前就能聞到。',
+      '這就是當地人愛吃的東西，攤子就在眼前。',
+      '當地人常把這個當日常，你看，現在就有。',
+      '這裡的人超愛這個，眼前這攤就是。',
+      '當地人很喜歡吃這個，剛好攤位就在面前。',
+    ] as const;
+    return photo[shape - 1];
+  }
+  return frameCultureHabit(habit, shape);
 }
 
 const WEATHER_TERMS = [
@@ -715,29 +796,36 @@ function fallbackMorning(
   const fromSpoken = /[\u4e00-\u9fff]/.test(fromCity) && fromCity !== '這裡' ? fromCity : '';
   const duration = formatFlightDurationZh(input.flightDurationMinutes);
   const journeyLine = [
-    fromSpoken && fromSpoken !== place ? `這一班從${fromSpoken}飛來` : '',
-    duration ? `在空中待了${duration}` : '',
+    fromSpoken && fromSpoken !== place ? `從${fromSpoken}飛過來` : '',
+    duration ? `空中待了 ${duration}` : '',
   ].filter(Boolean).join('，');
   const visitCount = Math.max(0, Math.round(Number(input.visitCount) || 0));
   const previousPlace = shortPlaceName(input.previousArrival);
   const returnLine = visitCount >= 2
     ? `這是今晚第${visitCount}次降落在${place}。`
     : input.returnVisit
-      ? `這不是第一次降落在${place}。`
+      ? `這不是第一次到${place}。`
       : previousPlace && previousPlace !== place && previousPlace !== city
-        ? `上一站是${previousPlace}。`
+        ? `上一站經過${previousPlace}。`
         : '';
-  const windowLine = `窗外是${subject.zh}，${subject.detailZh}。`;
-  const voiceText = [
-    `${greeting}。${hello}，Sleep Airline 已抵達今天的目的地——${place}。`,
-    whereLine,
-    weatherLine,
-    journeyLine ? `${journeyLine}。` : '',
-    returnLine,
-    windowLine,
-    spokenCultureLine(input.cultureNote),
-    `歡迎抵達${place}，今天的旅程從這裡開始。`,
-  ].filter(Boolean).join('');
+  const shape = arrivalVoiceShape({ ...input, city, country }, theme);
+  const lookYou = theme.id === 'food' ? `你看，眼前這攤是${subject.zh}。` : `你看，眼前是${subject.zh}。`;
+  const lookPhoto = `眼前這張是${subject.zh}。`;
+  const lookPlain = `${subject.zh}就在眼前。`;
+  const lookNature = theme.id === 'nature' ? `先看到的是${subject.zh}。` : lookYou;
+  const aside = spokenCultureAside(input.cultureNote, theme, input.localTimeLabel, shape);
+  const arrive = `我們到了${place}。`;
+  const arriveSoft = `這站是${place}。`;
+  const journey = journeyLine ? `${journeyLine}。` : '';
+  const packed = [
+    '',
+    `${greeting}。${hello}，${arrive}${lookYou}${weatherLine}${whereLine}${journey}${returnLine}${aside}`,
+    `${greeting}。${hello}，${journey}${arrive}${whereLine}${lookPhoto}${returnLine}${aside}${weatherLine}`,
+    `${greeting}。${hello}，${weatherLine}${arrive}${lookNature}${whereLine}${journey}${returnLine}${aside}`,
+    `${greeting}。${hello}，${arrive}${aside}${lookYou}${whereLine}${journey}${returnLine}${weatherLine}`,
+    `${greeting}。${hello}，${journeyLine ? `${journeyLine}，才到了${place}。` : arriveSoft}${weatherLine.replace(/。$/, '，')}${lookPhoto}${whereLine}${returnLine}${aside}`,
+  ] as const;
+  const voiceText = packed[shape].replace(/，。/g, '。').replace(/。。+/g, '。');
   const subjectSafety = subject.isGeneric
     ? `Show a believable, destination-specific view of ${subject.en}; never invent a fake named attraction or recipe.`
     : `Keep this verified destination subject unchanged; do not replace it with a generic scene.`;
@@ -746,7 +834,7 @@ function fallbackMorning(
     localGreeting: greeting,
     voiceText,
     localFeature: subject.zh,
-    imagePrompt: `Beautiful scenery of ${city}, ${country}, with no airplane, window frame, wing or cabin. ${environmentImageDirections(input)} The one dominant subject is ${subject.en}, matching the narration exactly. Keep geography, architecture, ingredients, transport and cultural details authentic to this exact destination. ${subjectSafety} Never substitute another city. Calm realistic scene, welcoming, no crowds, no text`,
+    imagePrompt: `Beautiful scenery of ${city}, ${country}, with no airplane, window frame, wing or cabin. ${environmentImageDirections(input)} The one dominant subject is ${subject.en}. Show only this visual subject; do not add street-food asides unless that is the subject. Keep geography and architecture authentic to this exact destination. ${subjectSafety} Never substitute another city. Calm realistic scene, welcoming, no crowds, no text`,
     imageKeywords: subject.keywords,
     safetyCheck: {
       containsNegativeEmotionalLanguage: false,
@@ -882,38 +970,47 @@ export function parseMorningResponse(
   };
 }
 
+const VOICE_SHAPE_HINTS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: '句構一「先看照片」：問候 → 到了哪 → 眼前這張是什麼 → 隨口帶天氣 → 這地方在地圖哪 → 從哪飛來 → 一句當地人趣事。',
+  2: '句構二「先說旅程」：問候 → 從哪飛了多久才到 → 這地方在地圖哪 → 眼前這張照片 → 一句當地人趣事 → 最後才帶天氣。',
+  3: '句構三「先聊天氣」：問候 → 現在幾點幾度的感覺 → 到了哪 → 眼前照片 → 地圖位置 → 旅程 → 一句當地人趣事。',
+  4: '句構四「先講人」：問候 → 到了哪 → 先講一句當地人趣事 → 再看照片 → 地圖位置 → 旅程 → 天氣。',
+  5: '句構五「揉在一起」：問候後用兩到三句把抵達、照片、天氣、旅程、趣事交錯，不要一句一個欄位。',
+};
+
 const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛醒來、看著窗外照片的旅客。這不是醫療、治療或勵志教練。
 禁止診斷、解讀情緒，或告訴對方該有什麼感覺。
 
-語氣：溫和、平靜、中性、輕、自然、不評判、不要求。像機長帶著旅客看窗外那張照片，輕聲介紹眼前的當地特色。
+語氣：像一位溫暖、好說話的機長朋友，剛把旅客叫醒。親切、輕、自然，帶一點笑意。不要中性播報，不要百科，不要客服腔，不要每班都用同一套句型。
 禁止：「你應該」「你必須」「振作」「正向」「今天一定會很棒」「別難過」「你做得很好」「你又撐過一夜」。
 禁止孤獨、遺棄、失敗、壓力、罪惡、比較：獨自、孤單、寂寞、一個人、沒有人、失敗、浪費、掙扎、逃避、黑暗、迷失。
 禁止空話與契約用語，絕對不要寫：真實城市風貌、地理環境、街道尺度、建築材料、可查證、widely documented、urban character。
 
-voiceText 主體必須是人會講出口的繁體中文口語，約 90–140 個中文字，念出來大約 30–45 秒。短句、自然，像機長在說話。
-禁止翻譯腔與英文夾中文：不要把 Tarawa、Jolo、small talk、Po/Opo、karaoke 原封不動塞進中文句；城市若沒有常用中文譯名，改說 user 給的 spokenCity（通常是中文國名）。
-禁止把提示詞或 cultureNote 整段貼上。禁止：彷彿、為您、編織、鋪展畫面、點亮希望、內心的喧囂、隨風而去、當地航站、本班自。
-結構：
-A. 抵達：第一句用當地語言的「你好」（localGreeting，例如 Halló、こんにちは、Hola），不要用早安／Good morning／Góðan daginn 這類綁時段的問候。第二句再用中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel），然後「Sleep Airline 已抵達今天的目的地——{城市}。」禁止出現「當地白天問候 + 中文晚安」這種互相打架的開頭。
-A2. 定位：緊接著用一句話告訴剛醒來、可能沒聽過這地名的人「這個地方在世界哪裡」。必須說出洲或海洋，不要用東北亞、西歐這種細分區。東京可說「這裡是亞洲，日本的首都」；太平洋小島可說「這裡是南太平洋，屬於新喀里多尼亞」；冰島可說「這裡是北大西洋，冰島的首都」。只用地圖常識：洲或海洋、國家、首都／島國／海外領地／某國城市。禁止人口數字、冷門歷史、百科條列、導遊腔。若 user 提供 placeOrientation，改寫融入即可。
-A3. 這次旅程：若 user 提供 flightDurationMinutes 或 departureLocation，用一句話說從哪裡飛來、在空中待了多久。若 visitCount >= 2，說這是今晚第幾次降落在這座城市；否則若 returnVisit 為 true，輕輕提一句又回到這裡；若提供 previousArrival 且不是本城，可提上一站發生過什麼（只講地名，不要編情節）。不要算命、不要講情緒。
-若 user 提供 reviewCalibration，那是審查台對過往降落廣播的分數與評語。高分範例請靠近其語氣、節奏與具體程度；低分與「評：／近期評語」裡點名的空話、夜色套句、自然地貌套句、不像這個城市的內容不要再犯。不要複製校正區的原文。
-B. 嚴格採用 user message 的 sceneTheme，只選一個確實屬於這座城市、有名字的具體主題：著名景點、河岸山林、地方料理、街區市集、表演、工藝或日常文化場景。像在介紹窗外那張照片，或聽得到的當地生活。禁止任何城市都能套的空話，尤其禁止「自然地貌與天光」「山、水或開闊地貌」「地理樣子」「代表性建築與城市輪廓」。
-C. 同一個主題再補一個具體、看得見或聽得到的細節（顏色、材料、氣味、聲音、地形、市集、表演或活動），不要發明地標、料理、傳統、節慶或歷史。自然主題也要講出河、岸、山、林、港的名字或明確特徵。
-D. 若 user 提供 cultureNote，改寫成一句當地生活（飲食、禮儀、市場、交通或表演），勿整段照搬。
-E. 輕柔收尾，不下指令。例如「歡迎抵達{城市}，今天的旅程從這裡開始。」
-開頭可以先放當地語言問候，後面全部用繁體中文，不要翻譯那句問候，也不要改成英文廣播。
-若有提供天氣，voiceText 必須用一句話自然說出溫度與晴雨，例如「現在氣溫 18 度，天空大致晴朗」。
-若有提供 localTimeLabel，語音與 imagePrompt 的光線、天空和城市活動必須符合該當地時間，不可一律改成日出，也不可在深夜仍說早安。中文問候與當地語言問候都不可互相矛盾。
-內容必須能對上這個城市，不能是任何城市都適用的空話。每次降落都要讓人聽得出「就是這裡」，不要重複同一套風景句。
-voiceText、localFeature、imagePrompt 必須描述 sceneTheme 下的同一個具體主題，只能抽選一次，不可各自換題。
-回傳 sceneTheme.themeId 必須逐字等於 user message 的 sceneTheme.id。sceneTheme.subject.zh 與 sceneTheme.subject.en 是同一主題的中英文名稱；voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en，供程式驗證同步。
-若 user message 提供 reliableFallbackSubject，優先使用它。若沒有，請自行選一個廣泛記載、確實位於這座城市的具名主題，例如神社、城堡、山、港、市場或地方名物。
-imagePrompt 必須全英文，一個中文字都不能出現。必須是 voiceText 裡同一個地點、同一個主題、同一種天氣與氣氛。天空、光線、地面要和語音說的天氣一致。這個主題要成為畫面主體，讓人看得出是這個城市，不要畫成任何地方都適用的郊區住宅。可以出現屬於這個城市的代表性建築或地貌，但必須就是語音講到的那一個，禁止換成別的城市或該國另一個更有名的地標。
-若抽中的類型沒有可靠題材，改用該地真實的著名景點、自然地貌或文化場景；禁止捏造。Taipei 的可靠地標可用 Taipei 101；Cairo／Giza 可用吉薩金字塔，但埃及其他城市不可一律使用金字塔。
-非 landmark 題材也只能使用廣泛記載、可查證的當地主題；只要有任何文化或地理聲明無法確認，safetyCheck.containsUnverifiedCulturalClaim 必須據實回傳 true，不得為了通過驗證而填 false。
-imagePrompt 只描述這個地方本身的美麗風景：禁止飛機、飛機窗戶、窗框、舷窗、機翼、機艙，也不要從窗內往外看的構圖；畫面中不得有任何文字。
-依 localTimeLabel 使用合理光線，維持平靜、寫實、低刺激。不要陰鬱、空蕩到令人不安、危險或擁擠。
+voiceText 必須是人會講出口的繁體中文口語，約 80–130 個中文字。寫成一段連貫的話。
+本次必須嚴格使用 user.voiceShape 指定的那一種句構，五種如下：
+1. 先看照片：到了哪 → 眼前這張是什麼 → 天氣 → 地圖位置 → 旅程 → 趣事
+2. 先說旅程：從哪飛了多久才到 → 地圖位置 → 眼前照片 → 趣事 → 天氣
+3. 先聊天氣：現在幾點幾度的感覺 → 到了哪 → 眼前照片 → 地圖位置 → 旅程 → 趣事
+4. 先講人：到了哪 → 先講當地人趣事 → 再看照片 → 地圖位置 → 旅程 → 天氣
+5. 揉在一起：兩到三句把抵達、照片、天氣、旅程、趣事交錯，不要一句一個欄位
+開頭：當地語言「你好」（localGreeting），不要用早安／Good morning。接著中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
+禁止每次都用：「已抵達今天的目的地——」「窗外是」「歡迎抵達，今天的旅程從這裡開始」「晚上常有 X」「X 是深夜社交場」「X 是國民習慣」。
+地圖定位一句即可：洲或海洋＋國家。不要東北亞、西歐，不要百科。
+天氣用口語，例如「現在大概 18 度，天還算晴」。
+眼前／這張照片只講 sceneTheme 那一個看得見的主題。禁止「自然地貌與天光」「山、水或開闊地貌」。
+
+cultureNote 適用任何國家，一律改寫成「人會做的一件小事」，要有溫度、有點好玩。不要針對特定國家寫死句子，要依這則備註現場改寫。
+好：當地人很喜歡吃 taco，晚上常拿來當宵夜。／見面會輕輕鞠躬，吃飯前還會說いただきます。／一盤 nasi goreng 就能變成朋友。／這裡的人很愛把「sorry」掛在嘴上。
+壞：晚上常有 taco。／街頭 taco 是深夜社交場。／「sorry」不離口是國民習慣。／把 cultureNote 第一句整段貼上。
+趣事講的是人，不是畫面。除非 sceneTheme 是 food 且 subject 就是那道料理，否則不要說窗外看得到它。
+城市若沒有常用中文譯名，用 spokenCity。不要把 Tarawa、Jolo、small talk、Po/Opo 硬塞進中文句。
+禁止：彷彿、為您、編織、鋪展畫面、點亮希望、內心的喧囂、隨風而去、當地航站、本班自、車流和生活步調。
+若有 reviewCalibration，靠近高分語氣，避開評語點名的空話。不要複製校正區原文。
+visitCount >= 2 時說今晚第幾次降落。後面全部繁體中文，不要翻譯那句當地問候。
+voiceText、localFeature、imagePrompt 必須描述同一個看得見的主題；趣事旁白不必畫進圖片。
+回傳 sceneTheme.themeId 必須逐字等於 user.sceneTheme.id。voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en。
+imagePrompt 全英文，只畫看得見的主題與相符天氣，不要畫趣事旁白。禁止飛機、窗框、舷窗、機翼、機艙與畫面文字。光線符合 localTimeLabel。
+金字塔只可用於 Cairo／Giza。無法確認的文化聲明必須把 containsUnverifiedCulturalClaim 設為 true。
 
 只回 JSON：
 {"destination":{"country":"","city":""},"localGreeting":"","sceneTheme":{"themeId":"","subject":{"zh":"","en":""}},"voiceText":"","localFeature":"","imagePrompt":"","imageKeywords":[],"safetyCheck":{"containsNegativeEmotionalLanguage":false,"containsPressureLanguage":false,"containsLonelinessLanguage":false,"containsUnverifiedCulturalClaim":false}}`;
@@ -930,6 +1027,7 @@ async function requestMorning(
   const country = input.country.trim();
   const greeting = timeAdjustedGreeting(input.localGreeting || '你好', input.localTimeLabel);
   const subject = resolveSceneSubject(input, theme);
+  const voiceShape = arrivalVoiceShape(input, theme);
   const completion = await client.chat.completions.create({
     model,
     messages: [
@@ -940,6 +1038,8 @@ async function requestMorning(
           country,
           city,
           language: '繁體中文',
+          voiceShape,
+          voiceShapeHint: VOICE_SHAPE_HINTS[voiceShape],
           localGreeting: greeting || undefined,
           chineseTimeGreeting: arrivalHello(input.localTimeLabel),
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
@@ -981,16 +1081,23 @@ async function requestMorning(
             '本班自',
             '彷彿',
             '為您編織',
+            '車流和生活步調',
+            '今天的旅程從這裡開始',
+            '深夜社交場',
+            '晚上常有 taco',
+            '這裡常有',
           ],
           sceneRules: [
-            'voiceText、localFeature、imagePrompt 必須使用同一個具體主題，不得各自改選。',
-            '圖片與語音必須同步描述同一地點、天氣、時間與主體。',
+            '必須使用本次 voiceShape，不要改用其他句構，也不要每次都從抵達句開頭。',
+            'cultureNote 無論哪一國都要改寫成有人味的趣事；不要整段貼上，不要「是國民習慣／是深夜社交場／晚上常有 X」。',
+            '眼前／這張照片只講 sceneTheme 主題；趣事不要假裝畫面上有，除非 theme 是 food 且 subject 就是那道料理。',
+            'localFeature 與 imagePrompt 只描述看得見的主題，不要畫旁白裡的飲食習慣。',
             '先確認主題確實屬於這座城市；不得挪用同國其他城市的地標或文化。',
             '只使用 widely documented canonical local subject；無法確認時必須把 containsUnverifiedCulturalClaim 設為 true。',
             '若此類型沒有可靠題材，改用該地真實、有名字的著名景點、河岸山林、市場或文化場景，絕不捏造，也絕不改寫成空泛地貌套句。',
             '金字塔只可用於 Cairo／Giza；埃及其他城市不可自動使用金字塔。',
             '禁止 bannedPhrases 裡的任何套句。',
-            'voiceText 用人口語繁體中文：短句、自然；地名用 spokenCity，不要把英文城名硬塞進中文句，不要把 cultureNote 整段貼上。',
+            'voiceText 用人口語繁體中文；地名用 spokenCity，不要把 cultureNote 整段貼上。',
             'imagePrompt 全英文，不可夾中文時間或天氣原句。',
           ],
         }),

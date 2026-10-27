@@ -204,6 +204,27 @@ try {
     assert.doesNotMatch(result.voiceText, /自然地貌與天光|山、水或開闊地貌|地理樣子/);
   });
 
+  await verifyGap('文化旁白不假裝出現在圖裡', async () => {
+    const result = await generateMorningArrival(
+      {
+        city: 'Cabo San Lucas',
+        country: 'Mexico',
+        countryIso: 'MX',
+        placeLabel: '卡布聖盧卡斯',
+        localTimeLabel: '當地傍晚',
+        weatherSummary: '氣溫 27°C，大致晴朗',
+        cultureNote: '街頭 taco 是深夜社交場；亡靈節以繽紛色彩紀念摯愛。',
+        departureLocation: 'Tarawa, Kiribati',
+        flightDurationMinutes: 570,
+      },
+      0.9
+    );
+    assert.match(result.voiceText, /卡布聖盧卡斯|墨西哥/);
+    assert.match(result.voiceText, /喜歡吃\s*taco|很愛吃\s*taco/i);
+    assert.doesNotMatch(result.voiceText, /晚上常有 taco|這裡常有 taco|窗外是[^。]{0,20}taco|眼前是[^。]{0,20}taco|深夜社交場|今天的旅程從這裡開始|車流和生活步調/i);
+    assert.doesNotMatch(result.imagePrompt, /taco/i);
+  });
+
   await verifyGap('模型套用空泛自然句必須拒絕', () => {
     const parsed = parseMorningResponse(
       JSON.stringify({
