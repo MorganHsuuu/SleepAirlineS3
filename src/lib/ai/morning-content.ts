@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
 import { withTimeout } from '../with-timeout';
 import { findReliableDestinationSubject } from './destination-subjects';
-import { countryLabelZh, placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
+import { countryLabelZh, cultureNoteForIso, placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
 
 export interface MorningContent {
   destination: { country: string; city: string };
@@ -341,6 +341,7 @@ function foldPlace(value: string): string {
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase()
+    .replace(/[-—–‐'’]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -360,7 +361,7 @@ function placeNameCandidates(input: MorningContentInput): string[] {
 
 function voiceMentionsPlace(voiceText: string, input: MorningContentInput): boolean {
   const folded = foldPlace(voiceText);
-  const extras = [spokenCity(input), countryLabelZh(input.countryIso)].filter(Boolean);
+  const extras = [spokenCity(input), countryLabelZh(input.countryIso, input.country)].filter(Boolean);
   return [...placeNameCandidates(input), ...extras].some((name) => {
     if (voiceText.includes(name)) return true;
     const foldedName = foldPlace(name);
@@ -786,8 +787,9 @@ function fallbackMorning(
   const greeting = timeAdjustedGreeting(input.localGreeting || '你好', input.localTimeLabel);
   const hello = arrivalHello(input.localTimeLabel);
   const weatherLine = spokenWeatherLine(input);
-  const where = placeOrientationLine(place, country, input.countryIso);
-  const whereLine = where ? `${where}。` : '';
+  const where = placeOrientationLine(place, country, input.countryIso)
+    || (countryLabelZh(input.countryIso, country) ? `這裡屬於${countryLabelZh(input.countryIso, country)}` : '');
+  const whereLine = where ? `${where.replace(/。$/u, '')}。` : '';
   const fromCity = spokenPlaceZh(
     shortPlaceName(input.departureLocation),
     String(input.departureLocation || '').split(/[,，]/)[1]?.trim() || '',
@@ -809,11 +811,19 @@ function fallbackMorning(
         ? `上一站經過${previousPlace}。`
         : '';
   const shape = arrivalVoiceShape({ ...input, city, country }, theme);
-  const lookYou = theme.id === 'food' ? `你看，眼前這攤是${subject.zh}。` : `你看，眼前是${subject.zh}。`;
-  const lookPhoto = `眼前這張是${subject.zh}。`;
-  const lookPlain = `${subject.zh}就在眼前。`;
-  const lookNature = theme.id === 'nature' ? `先看到的是${subject.zh}。` : lookYou;
-  const aside = spokenCultureAside(input.cultureNote, theme, input.localTimeLabel, shape);
+  const lookYou = theme.id === 'food'
+    ? `你看，眼前這攤是${subject.zh}，${subject.detailZh}。`
+    : `你看，眼前是${subject.zh}，${subject.detailZh}。`;
+  const lookPhoto = `眼前這張是${subject.zh}，${subject.detailZh}。`;
+  const lookNature = theme.id === 'nature'
+    ? `先看到的是${subject.zh}，${subject.detailZh}。`
+    : lookYou;
+  const aside = spokenCultureAside(
+    input.cultureNote || cultureNoteForIso(input.countryIso),
+    theme,
+    input.localTimeLabel,
+    shape
+  );
   const arrive = `我們到了${place}。`;
   const arriveSoft = `這站是${place}。`;
   const journey = journeyLine ? `${journeyLine}。` : '';
@@ -931,7 +941,10 @@ export function parseMorningResponse(
   if (zh < 24 || zh > 220 || !city || !voiceMentionsPlace(voiceText, input) || UNSAFE_VOICE.test(voiceText)) return null;
   if (!voiceMatchesWeather(voiceText, input.weatherSummary)) return null;
   const localFeature = clean(data.localFeature);
-  if (!voiceText.includes(subjectZh) || !localFeature.includes(subjectZh)) return null;
+  const themeMeta = ARRIVAL_SCENE_THEMES.find((item) => item.id === expectedThemeId) ?? ARRIVAL_SCENE_THEMES[0];
+  const lockExact = !resolveSceneSubject(input, themeMeta).isGeneric || expectedThemeId === 'food';
+  if (lockExact && (!voiceText.includes(subjectZh) || !localFeature.includes(subjectZh))) return null;
+  if (!lockExact && !localFeature) return null;
   if (VOICE_BOILERPLATE.test(`${voiceText} ${localFeature}`)) return null;
   let imagePrompt = clean(data.imagePrompt);
   if (VOICE_BOILERPLATE.test(imagePrompt)) return null;
@@ -949,7 +962,11 @@ export function parseMorningResponse(
   ) {
     return null;
   }
-  if (!imagePrompt.toLocaleLowerCase().includes(subjectEn.toLocaleLowerCase())) return null;
+  if (lockExact && !imagePrompt.toLocaleLowerCase().includes(subjectEn.toLocaleLowerCase())) return null;
+  if (!lockExact && !imagePrompt.toLocaleLowerCase().includes(subjectEn.toLocaleLowerCase())) {
+    const time = fallbackTimeContext(input.localTimeLabel);
+    imagePrompt = `${time.imageTime} ${subjectEn} in ${city}, ${country}. Authentic destination-specific scenery, realistic, no text`;
+  }
   imagePrompt = `${imagePrompt} Server-controlled environment constraints: ${environment}`;
   const keywords = Array.isArray(data.imageKeywords)
     ? data.imageKeywords.map((item) => clean(item)).filter(Boolean).slice(0, 6)
@@ -994,6 +1011,7 @@ voiceText 必須是人會講出口的繁體中文口語，約 80–130 個中文
 4. 先講人：到了哪 → 先講當地人趣事 → 再看照片 → 地圖位置 → 旅程 → 天氣
 5. 揉在一起：兩到三句把抵達、照片、天氣、旅程、趣事交錯，不要一句一個欄位
 開頭：當地語言「你好」（localGreeting），不要用早安／Good morning。接著中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
+不可省略：地圖定位一句、眼前看得見的細節一句、當地人趣事一句。沒有 cultureNote 也要依國家常識改寫一句人會做的小事，不要只剩天氣和地名。
 禁止每次都用：「已抵達今天的目的地——」「窗外是」「歡迎抵達，今天的旅程從這裡開始」「晚上常有 X」「X 是深夜社交場」「X 是國民習慣」。
 地圖定位一句即可：洲或海洋＋國家。不要東北亞、西歐，不要百科。
 天氣用口語，例如「現在大概 18 度，天還算晴」。
@@ -1053,7 +1071,7 @@ async function requestMorning(
           previousArrival: shortPlaceName(input.previousArrival) || undefined,
           returnVisit: input.returnVisit || undefined,
           visitCount: input.visitCount && input.visitCount >= 2 ? input.visitCount : undefined,
-          cultureNote: (input.cultureNote || '').trim() || undefined,
+          cultureNote: (input.cultureNote || '').trim() || cultureNoteForIso(input.countryIso) || undefined,
           sceneTheme: {
             id: theme.id,
             label: theme.label,
@@ -1104,8 +1122,8 @@ async function requestMorning(
       },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 750,
-    temperature: 0.72,
+    max_tokens: 520,
+    temperature: 0.55,
   });
   const raw = completion.choices[0]?.message?.content?.trim() ?? '';
   return parseMorningResponse(raw, input, theme.id) ?? fallbackMorning(input, theme);
@@ -1118,5 +1136,5 @@ export function generateMorningArrival(
 ): Promise<MorningContent> {
   const theme = arrivalThemeForDestination(input, randomValue);
   const safe = fallbackMorning(input, theme);
-  return withTimeout(requestMorning(input, theme), 12_000, () => safe).catch(() => safe);
+  return withTimeout(requestMorning(input, theme), 5_000, () => safe).catch(() => safe);
 }

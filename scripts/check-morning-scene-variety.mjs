@@ -225,6 +225,30 @@ try {
     assert.doesNotMatch(result.imagePrompt, /taco/i);
   });
 
+  await verifyGap('沒進主表的國家仍要有地圖位置與當地趣事', async () => {
+    const result = await generateMorningArrival(
+      {
+        city: 'Santiago de Cuba',
+        country: 'Cuba',
+        countryIso: 'CU',
+        placeLabel: '聖地亞哥-德古巴',
+        localGreeting: 'Hola',
+        localTimeLabel: '當地傍晚',
+        weatherSummary: '氣溫 23°C，小雨',
+        cultureNote: '古巴人傍晚常在街上聽音樂、跳salsa；一杯咖啡能聊很久。',
+        departureLocation: 'Cabo San Lucas, Mexico',
+        flightDurationMinutes: 300,
+      },
+      0.3
+    );
+    assert.match(result.voiceText, /聖地亞哥|古巴/);
+    assert.match(result.voiceText, /加勒比海|屬於古巴|位於古巴/);
+    assert.match(result.voiceText, /salsa|咖啡|街上/);
+    assert.match(result.voiceText, /卡布聖盧卡斯/);
+    assert.match(result.voiceText, /5 小時/);
+    assert.doesNotMatch(result.voiceText, /今天的旅程從這裡開始|當地航站/);
+  });
+
   await verifyGap('模型套用空泛自然句必須拒絕', () => {
     const parsed = parseMorningResponse(
       JSON.stringify({

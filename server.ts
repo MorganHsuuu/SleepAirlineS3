@@ -93,7 +93,7 @@ async function generateBroadcastWithBudget(
   fallback: () => string
 ): Promise<string> {
   try {
-    return await withTimeout(generateCaptainBroadcast(input), 12_000, fallback);
+    return await withTimeout(generateCaptainBroadcast(input), 5_000, fallback);
   } catch {
     return fallback();
   }
@@ -845,7 +845,11 @@ app.post('/api/arrival-voice', async (req, res) => {
       ? await fetchLocalContext({
           cityName: known?.city || city,
           countryName: known?.country || country,
-          countryIso: known?.countryIso || 'TW',
+          countryIso: known?.countryIso || resolveCountryIso(
+            flight.arrivalLatitude,
+            flight.arrivalLongitude,
+            flight.arrivalLocation
+          ),
           latitude: flight.arrivalLatitude,
           longitude: flight.arrivalLongitude,
         }).catch(() => null)

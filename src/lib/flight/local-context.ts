@@ -114,6 +114,20 @@ const LOCAL_HELLO_BY_ISO: Record<string, string> = {
   US: 'Hello',
   CA: 'Hello',
   MX: 'Hola',
+  CU: 'Hola',
+  DO: 'Hola',
+  PR: 'Hola',
+  GT: 'Hola',
+  HN: 'Hola',
+  SV: 'Hola',
+  NI: 'Hola',
+  CR: 'Hola',
+  PA: 'Hola',
+  VE: 'Hola',
+  EC: 'Hola',
+  BO: 'Hola',
+  PY: 'Hola',
+  UY: 'Hola',
   BR: 'Olá',
   AR: 'Hola',
   CL: 'Hola',
@@ -168,6 +182,47 @@ const MACRO_REGION_EN: Record<string, string> = {
   南太平洋: 'the South Pacific',
   北大西洋: 'the North Atlantic',
   印度洋: 'the Indian Ocean',
+  加勒比海: 'the Caribbean',
+  中美洲: 'Central America',
+};
+
+/** 主表沒列到的國家：中文名、地圖區域、一句人味文化。 */
+const EXTRA_GEO: Record<string, { name: string; region: string; culture: string }> = {
+  CU: { name: '古巴', region: '加勒比海', culture: '古巴人傍晚常在街上聽音樂、跳salsa；一杯咖啡能聊很久。' },
+  DO: { name: '多明尼加', region: '加勒比海', culture: '梅倫格是日常節奏，街上很容易就有人跟著拍子走。' },
+  HT: { name: '海地', region: '加勒比海', culture: '當地人很愛分享一盤飯，見面常先問吃飽沒。' },
+  JM: { name: '牙買加', region: '加勒比海', culture: '雷鬼從街上的喇叭流出來，當地人講話也帶著拍子。' },
+  PR: { name: '波多黎各', region: '加勒比海', culture: '當地人很愛在街上跳bomba，晚餐常常拖到很晚。' },
+  TT: { name: '千里達', region: '加勒比海', culture: '旋轉烤雞和卡利普索是週末社交的固定節目。' },
+  BS: { name: '巴哈馬', region: '加勒比海', culture: '當地人講話慢、笑得開，遇人常先點頭打招呼。' },
+  BB: { name: '巴貝多', region: '加勒比海', culture: '海邊攤位的飛魚是當地人很自豪的日常。' },
+  GT: { name: '瓜地馬拉', region: '中美洲', culture: '市集裡織品顏色很亮，當地人很愛邊走邊聊。' },
+  HN: { name: '宏都拉斯', region: '中美洲', culture: '當地人招待朋友常端出一盤香蕉葉包的飯。' },
+  SV: { name: '薩爾瓦多', region: '中美洲', culture: 'pupusa 是當地人幾乎天天吃的餅，常配醃高麗菜。' },
+  NI: { name: '尼加拉瓜', region: '中美洲', culture: '傍晚廣場會聚集聊天，當地人很喜歡慢慢坐著。' },
+  CR: { name: '哥斯大黎加', region: '中美洲', culture: '當地人常把「Pura vida」掛在嘴上，遇到什麼都這樣回。' },
+  PA: { name: '巴拿馬', region: '中美洲', culture: '當地人很愛在午後喝杯咖啡，再慢慢聊下去。' },
+  BZ: { name: '貝里斯', region: '中美洲', culture: '英語、克里奧爾語混著講，當地人招呼很隨和。' },
+  VE: { name: '委內瑞拉', region: '南美洲', culture: '當地人很愛喝熱巧克力，晚上廣場常有人聊天。' },
+  EC: { name: '厄瓜多', region: '南美洲', culture: '當地人招待客人常端出一盤香蕉和魚。' },
+  BO: { name: '玻利維亞', region: '南美洲', culture: '高原上的人走路慢、招呼熱，市集是社交中心。' },
+  PY: { name: '巴拉圭', region: '南美洲', culture: '當地人很愛分享 mate，一根吸管傳著喝。' },
+  UY: { name: '烏拉圭', region: '南美洲', culture: '傍晚海邊烤爐一開，當地人就會慢慢聚過來。' },
+  NG: { name: '奈及利亞', region: '非洲', culture: '當地人招呼很響亮，一盤 jollof rice 就能變成朋友。' },
+  GH: { name: '迦納', region: '非洲', culture: '當地人很愛用「Chale」叫朋友，路上遇到都會笑著點頭。' },
+  TZ: { name: '坦尚尼亞', region: '非洲', culture: '當地人見面會說「Karibu」，請你像回到家一樣。' },
+  ET: { name: '衣索比亞', region: '非洲', culture: '咖啡儀式能聊很久，當地人請喝咖啡就是把你當朋友。' },
+  SN: { name: '塞內加爾', region: '非洲', culture: '一大盤飯大家圍著吃，當地人覺得分享比什麼都重要。' },
+  UA: { name: '烏克蘭', region: '歐洲', culture: '進門常被請吃麵包配鹽，當地人用這一盤表示歡迎。' },
+  RO: { name: '羅馬尼亞', region: '歐洲', culture: '當地人很愛在院子裡待客，晚餐常常拖得很長。' },
+  HU: { name: '匈牙利', region: '歐洲', culture: '溫泉是社交場，當地人泡完常再去喝一杯。' },
+  PK: { name: '巴基斯坦', region: '亞洲', culture: '當地人招待客人一定勸你再吃一口，拒絕會被笑。' },
+  BD: { name: '孟加拉', region: '亞洲', culture: '甜點和茶是待客日常，當地人聊天都配著一杯。' },
+  LK: { name: '斯里蘭卡', region: '亞洲', culture: '當地人很愛用咖哩配扁麵包當早餐，街上很早就有香氣。' },
+  KH: { name: '柬埔寨', region: '亞洲', culture: '當地人打招呼會微微合掌，市集裡很愛邊走邊吃。' },
+  MM: { name: '緬甸', region: '亞洲', culture: '綠茶葉沙拉是很日常的小吃，當地人很愛配茶聊。' },
+  SA: { name: '沙烏地', region: '亞洲', culture: '椰棗配咖啡是待客起手式，當地人請你吃就是歡迎。' },
+  IL: { name: '以色列', region: '亞洲', culture: '市場裡hummus 很常見，當地人很愛站著邊吃邊聊。' },
 };
 
 const COUNTRY_ZH_EXTRA: Record<string, string> = {
@@ -308,6 +363,41 @@ const COUNTRY_EN_TO_ISO: Record<string, string> = {
   kiribati: 'KI',
   micronesia: 'FM',
   'french polynesia': 'PF',
+  cuba: 'CU',
+  'dominican republic': 'DO',
+  haiti: 'HT',
+  jamaica: 'JM',
+  'puerto rico': 'PR',
+  'trinidad and tobago': 'TT',
+  bahamas: 'BS',
+  barbados: 'BB',
+  guatemala: 'GT',
+  honduras: 'HN',
+  'el salvador': 'SV',
+  nicaragua: 'NI',
+  'costa rica': 'CR',
+  panama: 'PA',
+  belize: 'BZ',
+  venezuela: 'VE',
+  ecuador: 'EC',
+  bolivia: 'BO',
+  paraguay: 'PY',
+  uruguay: 'UY',
+  nigeria: 'NG',
+  ghana: 'GH',
+  tanzania: 'TZ',
+  ethiopia: 'ET',
+  senegal: 'SN',
+  ukraine: 'UA',
+  romania: 'RO',
+  hungary: 'HU',
+  pakistan: 'PK',
+  bangladesh: 'BD',
+  'sri lanka': 'LK',
+  cambodia: 'KH',
+  myanmar: 'MM',
+  'saudi arabia': 'SA',
+  israel: 'IL',
 };
 
 const CITY_ZH_EXTRA: Record<string, string> = {
@@ -316,6 +406,7 @@ const CITY_ZH_EXTRA: Record<string, string> = {
   kasama: '笠間',
   'cabo san lucas': '卡布聖盧卡斯',
   'san lucas': '卡布聖盧卡斯',
+  'santiago de cuba': '聖地亞哥德古巴',
   'new taipei city': '新北',
   'new taipei': '新北',
 };
@@ -333,14 +424,16 @@ function foldLatin(value: string): string {
 export function countryLabelZh(iso?: string | null, countryName?: string | null): string {
   const key = (iso || '').toUpperCase();
   if (key) {
-    const named = CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || '';
+    const named = CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || EXTRA_GEO[key]?.name || '';
     if (named) return named;
   }
   const raw = (countryName || '').split(/[,，]/)[0].trim();
   if (!raw) return '';
   if (/[\u4e00-\u9fff]/.test(raw)) return raw;
   const fromEn = COUNTRY_EN_TO_ISO[foldLatin(raw)];
-  return fromEn ? (CULTURE_BY_ISO[fromEn]?.name || COUNTRY_ZH_EXTRA[fromEn] || '') : '';
+  return fromEn
+    ? (CULTURE_BY_ISO[fromEn]?.name || COUNTRY_ZH_EXTRA[fromEn] || EXTRA_GEO[fromEn]?.name || '')
+    : '';
 }
 
 function cityNameZh(city?: string | null): string {
@@ -374,10 +467,10 @@ export function placeOrientationLine(
   locale: 'zh' | 'en' = 'zh'
 ): string {
   const key = (iso || '').toUpperCase();
-  const region = key ? MACRO_REGION_BY_ISO[key] || '' : '';
+  const region = key ? MACRO_REGION_BY_ISO[key] || EXTRA_GEO[key]?.region || '' : '';
   const cityShort = (city || '').split(/[,，]/)[0].trim();
-  const named = key ? (CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || '') : '';
   const rawCountry = (country || '').split(/[,，]/)[0].trim();
+  const named = countryLabelZh(key, rawCountry);
   const countryShort = locale === 'zh'
     ? (named || (/[\u4e00-\u9fff]/.test(rawCountry) ? rawCountry : ''))
     : (named || rawCountry);
@@ -413,7 +506,10 @@ const WMO_LABELS: Record<number, string> = {
 
 function cultureForIso(iso: string): { name: string; culture: string } {
   const key = iso.toUpperCase();
-  return CULTURE_BY_ISO[key] ?? { name: key, culture: DEFAULT_CULTURE };
+  if (CULTURE_BY_ISO[key]) return CULTURE_BY_ISO[key];
+  const extra = EXTRA_GEO[key];
+  if (extra) return { name: extra.name, culture: extra.culture };
+  return { name: countryLabelZh(key) || key, culture: DEFAULT_CULTURE };
 }
 
 function localTimeLabelFromHour(hour: number, isDay: boolean): string {
@@ -443,7 +539,7 @@ async function fetchWeatherSummary(latitude: number, longitude: number): Promise
   url.searchParams.set('timezone', 'auto');
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4500);
+  const timer = setTimeout(() => controller.abort(), 2500);
   try {
     const res = await fetch(url.toString(), { signal: controller.signal });
     if (!res.ok) return null;
@@ -471,6 +567,29 @@ async function fetchWeatherSummary(latitude: number, longitude: number): Promise
   }
 }
 
+/** 從英文或中文國名回推 ISO2。 */
+export function countryIsoFromName(country?: string | null): string {
+  const raw = (country || '').split(/[,，]/).pop()?.trim() || '';
+  if (!raw) return '';
+  if (/[\u4e00-\u9fff]/.test(raw)) {
+    for (const [iso, row] of Object.entries(CULTURE_BY_ISO)) {
+      if (row.name === raw) return iso;
+    }
+    for (const [iso, row] of Object.entries(EXTRA_GEO)) {
+      if (row.name === raw) return iso;
+    }
+    for (const [iso, name] of Object.entries(COUNTRY_ZH_EXTRA)) {
+      if (name === raw) return iso;
+    }
+  }
+  return COUNTRY_EN_TO_ISO[foldLatin(raw)] || '';
+}
+
+export function cultureNoteForIso(iso?: string | null): string {
+  const { culture } = cultureForIso(iso || '');
+  return !culture || /旅行最美的風景/.test(culture) ? '' : culture;
+}
+
 /** 依座標或 displayName 回推國家 ISO2 */
 export function resolveCountryIso(
   latitude: number,
@@ -480,6 +599,8 @@ export function resolveCountryIso(
   if (displayName) {
     const exact = CITIES.find((c) => c.displayName === displayName);
     if (exact) return exact.countryIso;
+    const fromName = countryIsoFromName(displayName);
+    if (fromName) return fromName;
   }
   let nearest = CITIES[0];
   let best = Infinity;
