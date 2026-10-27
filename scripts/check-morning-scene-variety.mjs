@@ -195,7 +195,7 @@ try {
       },
       0
     );
-    assert.match(result.voiceText, /Tokyo/);
+    assert.match(result.voiceText, /東京|Tokyo/);
     assert.match(result.voiceText, /3 小時 5 分/);
     assert.match(result.voiceText, /第2次降落/);
     assert.match(result.voiceText, /上午 8:10/);
@@ -266,9 +266,9 @@ try {
           },
           randomValue
         );
-        assert.match(result.voiceText, new RegExp(localTimeLabel));
-        assert.match(result.imagePrompt, new RegExp(localTimeLabel));
-        assert.match(`${result.voiceText} ${result.imagePrompt}`, /夜間|夜晚|night/i);
+        assert.match(result.voiceText, new RegExp(localTimeLabel.replace(/^當地/, '')));
+        assert.doesNotMatch(result.imagePrompt, /[\u4e00-\u9fff]/);
+        assert.match(`${result.voiceText} ${result.imagePrompt}`, /夜裡|夜間|夜晚|晚上|深夜|入夜|night/i);
         assert.doesNotMatch(
           `${result.voiceText} ${result.imagePrompt}`,
           /清晨|晨光|morning|dawn|soft morning light/i
@@ -590,9 +590,9 @@ try {
 
     const valid = parseMorningResponse(JSON.stringify(base), input, 'nature');
     assert.ok(valid);
-    assert.match(valid.imagePrompt, /Local time: 當地深夜/);
+    assert.doesNotMatch(valid.imagePrompt, /[\u4e00-\u9fff]/);
     assert.match(valid.imagePrompt, /night lighting/i);
-    assert.match(valid.imagePrompt, /Weather: 氣溫 12°C，大雨/);
+    assert.match(valid.imagePrompt, /12°C|heavy rain/i);
   });
 
   if (gapFailures.length) {

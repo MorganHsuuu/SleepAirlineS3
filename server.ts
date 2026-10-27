@@ -867,6 +867,7 @@ app.post('/api/arrival-voice', async (req, res) => {
       returnVisit: journey.returnVisit,
       visitCount: journey.visitCount,
       cultureNote: local?.culture,
+      placeLabel: flight.arrivalLocation,
     });
     const [speechAudioBase64] = await Promise.all([
       generateSpeechWithBudget(morning.voiceText, broadcastStyle),
@@ -1445,6 +1446,7 @@ app.post('/api/review/generate', async (req, res) => {
         departureLocation: route.departureLocation,
         flightDurationMinutes: route.durationMinutes,
         cultureNote: arrLocal?.culture,
+        placeLabel: route.arrivalLocation,
       });
       sample = await updateReviewSample(sample.sampleId, {
         landingBroadcast: morning.voiceText,
@@ -1490,6 +1492,7 @@ app.post('/api/review/generate', async (req, res) => {
         departureLocation: route.departureLocation,
         flightDurationMinutes: route.durationMinutes,
         cultureNote: arrLocal?.culture,
+        placeLabel: route.arrivalLocation,
       }),
     ]);
 

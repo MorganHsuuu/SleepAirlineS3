@@ -239,6 +239,131 @@ function looksLikeCapital(city: string, iso: string): boolean {
   return aliases.some((alias) => n.includes(alias.toLowerCase()) || city.includes(alias));
 }
 
+const COUNTRY_EN_TO_ISO: Record<string, string> = {
+  japan: 'JP',
+  korea: 'KR',
+  'south korea': 'KR',
+  china: 'CN',
+  taiwan: 'TW',
+  'hong kong': 'HK',
+  thailand: 'TH',
+  vietnam: 'VN',
+  singapore: 'SG',
+  malaysia: 'MY',
+  indonesia: 'ID',
+  philippines: 'PH',
+  india: 'IN',
+  'united arab emirates': 'AE',
+  uae: 'AE',
+  turkey: 'TR',
+  russia: 'RU',
+  'united kingdom': 'GB',
+  uk: 'GB',
+  england: 'GB',
+  britain: 'GB',
+  france: 'FR',
+  germany: 'DE',
+  italy: 'IT',
+  spain: 'ES',
+  portugal: 'PT',
+  netherlands: 'NL',
+  switzerland: 'CH',
+  sweden: 'SE',
+  norway: 'NO',
+  finland: 'FI',
+  denmark: 'DK',
+  greece: 'GR',
+  poland: 'PL',
+  'czech republic': 'CZ',
+  czechia: 'CZ',
+  austria: 'AT',
+  ireland: 'IE',
+  iceland: 'IS',
+  'united states': 'US',
+  usa: 'US',
+  america: 'US',
+  canada: 'CA',
+  mexico: 'MX',
+  brazil: 'BR',
+  argentina: 'AR',
+  chile: 'CL',
+  peru: 'PE',
+  colombia: 'CO',
+  australia: 'AU',
+  'new zealand': 'NZ',
+  'south africa': 'ZA',
+  egypt: 'EG',
+  morocco: 'MA',
+  kenya: 'KE',
+  'papua new guinea': 'PG',
+  reunion: 'RE',
+  'new caledonia': 'NC',
+  palau: 'PW',
+  samoa: 'WS',
+  fiji: 'FJ',
+  tonga: 'TO',
+  vanuatu: 'VU',
+  'solomon islands': 'SB',
+  'marshall islands': 'MH',
+  kiribati: 'KI',
+  micronesia: 'FM',
+  'french polynesia': 'PF',
+};
+
+const CITY_ZH_EXTRA: Record<string, string> = {
+  tarawa: '塔拉瓦',
+  jolo: '霍洛',
+  kasama: '笠間',
+  'new taipei city': '新北',
+  'new taipei': '新北',
+};
+
+function foldLatin(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 廣播口語用的中文國名；沒有對照時回空字串。 */
+export function countryLabelZh(iso?: string | null, countryName?: string | null): string {
+  const key = (iso || '').toUpperCase();
+  if (key) {
+    const named = CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || '';
+    if (named) return named;
+  }
+  const raw = (countryName || '').split(/[,，]/)[0].trim();
+  if (!raw) return '';
+  if (/[\u4e00-\u9fff]/.test(raw)) return raw;
+  const fromEn = COUNTRY_EN_TO_ISO[foldLatin(raw)];
+  return fromEn ? (CULTURE_BY_ISO[fromEn]?.name || COUNTRY_ZH_EXTRA[fromEn] || '') : '';
+}
+
+function cityNameZh(city?: string | null): string {
+  const raw = (city || '').split(/[,，]/)[0].trim();
+  if (!raw) return '';
+  if (/[\u4e00-\u9fff]/.test(raw)) return raw;
+  const folded = foldLatin(raw);
+  if (CITY_ZH_EXTRA[folded]) return CITY_ZH_EXTRA[folded];
+  for (const aliases of Object.values(CAPITAL_ALIASES)) {
+    const hasLatin = aliases.some((alias) => !/[\u4e00-\u9fff]/.test(alias) && folded === foldLatin(alias));
+    const zh = aliases.find((alias) => /[\u4e00-\u9fff]/.test(alias));
+    if (hasLatin && zh) return zh;
+  }
+  return '';
+}
+
+/** 中文廣播用地名：有譯名用譯名，否則用中文國名，避免念出 Jolo／Tarawa。 */
+export function spokenPlaceZh(
+  city?: string | null,
+  country?: string | null,
+  iso?: string | null
+): string {
+  return cityNameZh(city) || countryLabelZh(iso, country) || '這裡';
+}
+
 /** 降落廣播用：一句話幫旅客把陌生地名放到地圖上。 */
 export function placeOrientationLine(
   city: string,
@@ -248,9 +373,12 @@ export function placeOrientationLine(
 ): string {
   const key = (iso || '').toUpperCase();
   const region = key ? MACRO_REGION_BY_ISO[key] || '' : '';
-  const cityShort = (city || '').split(',')[0].trim();
+  const cityShort = (city || '').split(/[,，]/)[0].trim();
   const named = key ? (CULTURE_BY_ISO[key]?.name || COUNTRY_ZH_EXTRA[key] || '') : '';
-  const countryShort = (locale === 'zh' && named ? named : (country || '').split(',')[0].trim());
+  const rawCountry = (country || '').split(/[,，]/)[0].trim();
+  const countryShort = locale === 'zh'
+    ? (named || (/[\u4e00-\u9fff]/.test(rawCountry) ? rawCountry : ''))
+    : (named || rawCountry);
   const capital = key ? looksLikeCapital(cityShort, key) : false;
   if (locale === 'en') {
     const regionEn = MACRO_REGION_EN[region] || region;

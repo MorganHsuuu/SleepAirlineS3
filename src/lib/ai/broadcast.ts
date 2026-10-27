@@ -4,14 +4,14 @@ import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { SocialCue } from '../../types';
 import type { LocalContext } from '../flight/local-context';
 import { arrivalHello, timeAdjustedGreeting } from './morning-content';
-import { placeOrientationLine } from '../flight/local-context';
+import { placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
 
 export type UiLocale = 'zh' | 'en';
 
 const STYLE_DESCRIPTIONS: Record<UiLocale, Record<BroadcastStyle, string>> = {
   zh: {
     formal_captain: '語氣沉穩、簡潔，像深夜航班的真正機長，不說套話。',
-    poetic: '語氣詩意、意象清楚，一兩個畫面即可，不堆砌形容。',
+    poetic: '語氣溫和、畫面清楚，一兩個看得見的東西即可；不要翻譯腔，不要「彷彿為您編織」。',
     playful: '語氣輕鬆、帶一點幽默，但仍像機長在廣播，不過度玩笑。',
     flight_attendant: '語氣溫柔、簡短，像夜航廣播，不是客服稿。',
     radio_host: '語氣像深夜電台，但你是機長，不是主持人本人。',
@@ -106,29 +106,81 @@ function hasChinese(value: string): boolean {
   return /[\u4e00-\u9fff]/.test(value);
 }
 
+function spokenHeading(routeDirection: string, locale: UiLocale): string {
+  if (locale === 'en') {
+    const label = DIRECTION_LABEL.en[routeDirection] ?? routeDirection;
+    if (label === 'auto routing') return 'along tonight’s route';
+    if (label === 'undetermined' || label === 'circular') return label === 'circular' ? 'on a looping course' : 'ahead';
+    return label;
+  }
+  const spoken: Record<string, string> = {
+    auto: '沿著今晚的航線飛',
+    eastbound: '往東飛',
+    westbound: '往西飛',
+    northbound: '往北飛',
+    southbound: '往南飛',
+    northeast: '往東北飛',
+    northwest: '往西北飛',
+    southeast: '往東南飛',
+    southwest: '往西南飛',
+    circular: '繞一圈飛',
+    unknown: '繼續往前飛',
+  };
+  return spoken[routeDirection] || '繼續往前飛';
+}
+
 function broadcastLocationLabel(
   location: string | null,
   locale: UiLocale,
   localContext?: LocalContext | null
 ): string {
   const raw = (location ?? '').trim();
-  if (!raw) return locale === 'en' ? 'the current station' : '目前航站';
+  if (!raw) return locale === 'en' ? 'here' : '這裡';
   const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
   const city = parts[0] ?? raw;
   const country = parts[parts.length - 1] ?? '';
   if (locale === 'en') {
-    if (!hasChinese(city)) return raw;
+    if (!hasChinese(city)) return city;
     if (localContext?.cityName && !hasChinese(localContext.cityName)) {
       return localContext.countryName && !hasChinese(localContext.countryName)
         ? `${localContext.cityName}, ${localContext.countryName}`
         : localContext.cityName;
     }
-    return 'your local station';
+    return localContext?.cityName && !hasChinese(localContext.cityName) ? localContext.cityName : 'here';
   }
-  if (hasChinese(city)) return raw;
-  if (localContext?.countryName && hasChinese(localContext.countryName)) return `${localContext.countryName}一帶`;
-  if (hasChinese(country)) return `${country}一帶`;
-  return '當地航站';
+  if (hasChinese(city)) return city;
+  return spokenPlaceZh(
+    localContext?.cityName || city,
+    localContext?.countryName || country,
+    localContext?.countryIso
+  );
+}
+
+function spokenWeatherBit(ctx?: LocalContext | null, locale: UiLocale = 'zh'): string {
+  const summary = (ctx?.weatherSummary || '').trim();
+  if (!summary) return '';
+  const temperature = summary.match(/(-?\d+(?:\.\d+)?)/)?.[1];
+  const degrees = temperature && Number.isFinite(Number(temperature))
+    ? String(Math.round(Number(temperature)))
+    : '';
+  if (locale === 'en') {
+    return degrees ? `It’s about ${degrees} degrees outside. ` : '';
+  }
+  if (degrees) return `外面大概 ${degrees} 度。`;
+  if (/晴/.test(summary)) return '外面天氣還算晴。';
+  if (/雨/.test(summary)) return '外面在下雨。';
+  return '';
+}
+
+function spokenCultureBit(culture?: string | null): string {
+  const raw = (culture || '').trim();
+  if (!raw || /旅行最美的風景/.test(raw)) return '';
+  const first = raw.split(/[；;。]/)[0]?.trim() || '';
+  if (!first) return '';
+  const latin = (first.match(/[A-Za-z]/g) || []).length;
+  const zh = (first.match(/[\u4e00-\u9fff]/g) || []).length;
+  if (zh < 4 || latin > zh) return '';
+  return `${first}。`;
 }
 
 function buildSocialBlock(cue: SocialCue, locale: UiLocale): string {
@@ -240,7 +292,7 @@ ${isTakeoff
     : '- 若【同組社交】是獨自／今晚第一班：改說獨自享受這片天空，不要複誦本班乘客姓名＋已起飛'}
 
 地理（非常重要）：
-- 使用【廣播用地名】；不要照念難懂的羅馬字、音標、撇號地名
+- 使用【廣播用地名】；中文廣播禁止「當地航站」「目前航站」「本班自」；沒有中文城名時改說中文國名
 - 起飛時本班目的地未知：只講出發地與航向；「醒來才知道目的地」類意思最多自然帶過一次
 - 起飛廣播禁止提本班：飛行時長、預計抵達、公里數、ETA、約 X 分鐘／小時
 - 【同組社交】的地名都是隊友的，不是本班航線；必須掛在隊友名字後面
@@ -259,8 +311,9 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主
 ` : ''}
 寫作：
-- 繁體中文，${isTakeoff ? '80–110' : '110–160'} 字，最多不超過 ${isTakeoff ? '130' : '190'} 字
-- ${isTakeoff ? '起飛廣播 4–5 句：①歡迎搭乘 Sleep Airline＋機長身分，緊接著必須原句說出「我們從{廣播用地名的城市}出發，航向{方向}」，城市名不可省略、不可改成「這裡」或「當地」 ②每次換一種夜色畫面，禁止每次都說「夜色保管目的地」 ③剛好一句睡眠小引導，只給一個動作（輕輕閉上眼睛、放下肩膀、或把今天留在地面），不要助眠課程、不要數息、不要列步驟 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
+- 繁體中文口語，${isTakeoff ? '70–100' : '110–160'} 字，最多不超過 ${isTakeoff ? '120' : '190'} 字。像機長對乘客講話，短句、自然，不要翻譯腔、不要英文夾中文
+- 禁止：彷彿、編織美夢、鋪展畫面、點亮希望、內心的喧囂、隨風而去、為您、夢幻的畫面、如綿羊、低語、保管目的地、航向向東、當地航站、本班自
+- ${isTakeoff ? '起飛廣播 4–5 句：①「歡迎搭乘 Sleep Airline，這裡是機長。」緊接著「我們從{廣播用地名}出發，{航向口語}」。航向口語用「往東飛」這種，禁止「航向向東」 ②夜色只講一樣看得見的東西（跑道燈、雲、路燈），一句就好，不要抒情比喻 ③睡眠引導只四到八個字，例如「先把眼睛閉上。」後面不要再接「讓疲憊…」 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
 - 刪掉「有任何需求」「祝您旅途愉快」「期待美好瞬間」等套話；起飛結尾固定句「Sleep Airline 感謝您的搭乘」除外
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
@@ -280,7 +333,8 @@ export async function generateCaptainBroadcast(input: BroadcastInput): Promise<s
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   const isTakeoff = input.phase === 'takeoff';
   const pax = passengerLabel(input.passengerName, locale);
-  const direction = DIRECTION_LABEL[locale][input.routeDirection] ?? input.routeDirection;
+  const heading = spokenHeading(input.routeDirection, locale);
+  const direction = heading;
   const hasLocal = !!input.localContext;
   const departureLabel = broadcastLocationLabel(input.departureLocation, locale, isTakeoff ? input.localContext : null);
   const arrivalLabel = broadcastLocationLabel(input.arrivalLocation, locale, !isTakeoff ? input.localContext : null);
@@ -322,9 +376,9 @@ ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n`
 【同組社交】
 ${socialLine}
 
-請依「4–5 句」結構寫一段流暢口語廣播，第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
-緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，航向${direction}」，這兩個詞都要出現，不可省略出發地。
-每次換一種夜色畫面。睡眠只給一個很短的動作，不要展開。
+請寫一段人會講出口的口語廣播，不要翻譯腔。第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
+緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，${direction}」。禁止「當地航站」「本班自」「航向向東」。
+夜色只講一樣看得見的東西。睡眠只給一個很短的動作，不要展開成抒情句。
 最後一句必須原句說「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫。
 ${noTeammateFacts
       ? '這次不寫任何同組社交句。'
@@ -382,13 +436,41 @@ ${buildSocialBlock(input.socialCue, locale)}
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
   const spoken = ensureWelcomeAboardPhrase(isTakeoff ? stripSoloSkyLines(raw) : raw, locale);
   return isTakeoff
-    ? ensureTakeoffClosing(ensureDepartureSpoken(spoken, departureLabel, direction, locale), locale)
+    ? ensureTakeoffClosing(
+        ensureDepartureSpoken(polishTakeoffChinese(spoken, departureLabel, heading, locale), departureLabel, heading, locale),
+        locale
+      )
     : spoken;
 }
 
 const SOLO_SKY_PATTERN = /獨享|獨自|只有你|(?:夜空|天空)[^。！？]{0,4}交給你|\balone\b|only you|(?:sky|night) to yourself/i;
 
 /** 起飛不講「獨享夜空」：模型仍寫出時整句移除 */
+function polishTakeoffChinese(
+  text: string,
+  departureLabel: string,
+  heading: string,
+  locale: UiLocale
+): string {
+  if (locale !== 'zh') return text;
+  const city = departureLabel.split(',')[0].trim();
+  let out = text
+    .replace(/當地航站|目前航站/g, city || '這裡')
+    .replace(/本班自\s*/g, '我們從')
+    .replace(/航向向東/g, '往東飛')
+    .replace(/航向向西/g, '往西飛')
+    .replace(/航向向北/g, '往北飛')
+    .replace(/航向向南/g, '往南飛')
+    .replace(/航向東北/g, '往東北飛')
+    .replace(/航向西北/g, '往西北飛')
+    .replace(/航向東南/g, '往東南飛')
+    .replace(/航向西南/g, '往西南飛');
+  if (heading && !out.includes(heading) && /往[東西南北東北西北東南西南]+飛/.test(out) === false) {
+    out = out.replace(/航向[^\s，。]{1,8}/, heading);
+  }
+  return out;
+}
+
 function ensureDepartureSpoken(text: string, departureLabel: string, direction: string, locale: UiLocale): string {
   const city = departureLabel.split(',')[0].trim();
   if (!city || text.includes(city)) return text;
@@ -400,7 +482,7 @@ function ensureDepartureSpoken(text: string, departureLabel: string, direction: 
   }
   return text.replace(
     /歡迎搭乘\s*Sleep\s*Airline，這裡是機長[。，]?\s*/i,
-    `歡迎搭乘 Sleep Airline，這裡是機長。我們從${city}出發，航向${direction}。`
+    `歡迎搭乘 Sleep Airline，這裡是機長。我們從${city}出發，${direction}。`
   );
 }
 
@@ -479,14 +561,12 @@ export function fallbackCaptainBroadcast(
 ): string {
   const locale = normalizeLocale(localeInput);
   const pax = passengerLabel(passengerName, locale);
-  const direction = DIRECTION_LABEL[locale][routeDirection] ?? routeDirection;
+  const direction = spokenHeading(routeDirection, locale);
   const departureLabel = broadcastLocationLabel(departureLocation, locale, phase === 'takeoff' ? localContext : null);
   const arrivalLabel = broadcastLocationLabel(arrivalLocation, locale, phase === 'landing' ? localContext : null);
   if (locale === 'en') {
     if (phase === 'takeoff') {
-      const wx = localContext?.weatherSummary
-        ? `${localContext.localTimeLabel ?? 'Right now'} ${localContext.weatherSummary}. `
-        : '';
+      const wx = spokenWeatherBit(localContext, 'en');
       const social = socialCueText?.trim() && !/alone|only you|to yourself|to themselves|獨享|獨自|只有你/i.test(socialCueText)
         ? ` ${socialCueText.replace(/[.!?\s]+$/g, '')}.`
         : '';
@@ -512,27 +592,24 @@ export function fallbackCaptainBroadcast(
     return `${greet}Welcome aboard Sleep Airline, this is your captain. We have arrived safely in ${arrivalLabel}. ${whereBit}${timeBit}${wxBit}${pax} flew from ${departureLabel} for ${dur || 'a stretch'}. ${cultureBit}${socialCueText}`;
   }
   if (phase === 'takeoff') {
-    const wx = localContext?.weatherSummary
-      ? `${localContext.localTimeLabel ?? '此刻'}${localContext.weatherSummary}，`
-      : '';
+    const wx = spokenWeatherBit(localContext);
     const social = socialCueText?.trim() && !/獨享|獨自|只有你|天空先交給你|夜空交給你/.test(socialCueText)
       ? ` ${socialCueText.replace(/[。！？\s]+$/g, '')}。`
       : '';
-    const sleepCue = ['請輕輕閉上眼睛。', '把肩膀放下就好。', '把今天留在地面。'][(departureLabel.length + direction.length) % 3];
-    return `歡迎搭乘 Sleep Airline，這裡是機長，各位乘客，本班自 ${departureLabel} 起飛，航向${direction}。${wx ? wx : ''}${sleepCue}${social}${TAKEOFF_CLOSING_ZH}`;
+    const sleepCue = ['先把眼睛閉上。', '肩膀放一下。', '先把今天放下。'][(departureLabel.length + direction.length) % 3];
+    return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。窗外跑道燈一排排亮著。${wx}${sleepCue}${social}${TAKEOFF_CLOSING_ZH}`;
   }
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
   const hello = arrivalHello(localContext?.localTimeLabel);
-  const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}，` : '';
+  const timeBit = spokenWeatherBit(localContext);
   const dur = formatDuration(durationMinutes, locale);
   const fromCity = departureLabel.split(',')[0].trim();
+  const fromSpoken = hasChinese(fromCity) ? fromCity : '';
   const journeyBit = [
-    fromCity ? `這一班從${fromCity}飛來` : '',
+    fromSpoken ? `這一班從${fromSpoken}飛來` : '',
     dur ? `在空中待了${dur}` : '',
   ].filter(Boolean).join('，');
-  const cultureBit = localContext?.culture
-    ? `${localContext.culture.split(/[；;。]/)[0]?.trim()}。`
-    : '';
+  const cultureBit = spokenCultureBit(localContext?.culture);
   const where = placeOrientationLine(
     localContext?.cityName || arrivalLocation || '',
     localContext?.countryName || '',
