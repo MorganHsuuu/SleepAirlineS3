@@ -50,6 +50,7 @@ const state = {
   samples: [],
   flights: [],
   preview: null,
+  pending: null,
 };
 
 function toast(message) {
@@ -314,17 +315,52 @@ function renderSample(sample) {
   void fillLivePrompt(sample);
 }
 
+function pendingCardHtml() {
+  const pending = state.pending;
+  if (!pending) return '';
+  const job = pending.includeImage ? '文字與圖片運算中' : '文字運算中';
+  return `<div class="sample-item is-pending" aria-busy="true">
+      <strong>${escapeHtml(pending.from)} → <span class="pending-to">新目的地</span></strong>
+      <small><span class="pending-dot" aria-hidden="true"></span>${escapeHtml(job)} · ${escapeHtml(pending.dir)} · ${escapeHtml(pending.duration)}</small>
+    </div>`;
+}
+
+function startPending(includeImage) {
+  state.pending = {
+    from: originLabel(),
+    dir: currentDirection().name,
+    duration: formatDuration(Number($('duration-bar').value)),
+    includeImage,
+  };
+  setArchive('lab');
+  $('source-chip').textContent = '生成中';
+  $('source-chip').className = 'chip pending';
+  $('sample-id').textContent = '運算中';
+  $('route-line').textContent = `${state.pending.from} → 新目的地運算中 · ${state.pending.dir} · ${state.pending.duration}`;
+  $('takeoff-copy').innerHTML = '<span class="copy-pending">起飛廣播正在寫…</span>';
+  $('landing-copy').innerHTML = '<span class="copy-pending">降落廣播正在寫…</span>';
+  paintImagePrompt('');
+  if (includeImage) showSceneryLoading('風景正在生成…');
+  else paintScenery('', '這次只生成文字。');
+  renderList();
+  $('sample-list').scrollTop = 0;
+}
+
 function renderList(flightsError = '') {
   const liveBox = $('live-list');
   const labBox = $('sample-list');
+  const pending = pendingCardHtml();
+  document.body.classList.toggle('is-generating', Boolean(state.pending));
   $('live-count').textContent = String(state.flights.length);
-  $('lab-count').textContent = String(state.samples.length);
+  $('lab-count').textContent = String(state.samples.length + (state.pending ? 1 : 0));
   liveBox.innerHTML = state.flights.length
     ? state.flights.map((item) => renderRecordButton(item, 'live')).join('')
     : `<p class="hint">${escapeHtml(flightsError || '還沒有從 Flight Log 讀到航班。')}</p>`;
-  labBox.innerHTML = state.samples.length
-    ? state.samples.map((item) => renderRecordButton(item, 'lab')).join('')
-    : '<p class="hint">生成第一筆後會出現在這裡。</p>';
+  if (pending || state.samples.length) {
+    labBox.innerHTML = `${pending}${state.samples.map((item) => renderRecordButton(item, 'lab')).join('')}`;
+  } else {
+    labBox.innerHTML = '<p class="hint">生成第一筆後會出現在這裡。</p>';
+  }
 }
 
 function upsertSample(sample) {
@@ -485,8 +521,9 @@ function wantsImage() {
 async function generateFlight() {
   if (state.busy) return;
   const includeImage = wantsImage();
-  setBusy(true, includeImage ? '正在生成文字與圖片…' : '正在生成起飛與降落文字…');
-  if (includeImage) showSceneryLoading();
+  const previousId = state.sampleId;
+  startPending(includeImage);
+  setBusy(true, includeImage ? '左側已出現新的一筆，正在運算…' : '左側已出現新的一筆，正在寫起飛與降落…');
   try {
     const res = await fetch('/api/review/generate', {
       method: 'POST',
@@ -495,15 +532,22 @@ async function generateFlight() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '生成失敗');
+    state.pending = null;
     applyStore(data.review);
     upsertSample(data.sample);
     setArchive('lab');
     toast(data.warning || (includeImage ? '已新增文字與圖片' : '已新增一筆文字紀錄'));
     await flyGlobe(data.route || state.preview);
   } catch (err) {
+    state.pending = null;
+    const prev = state.samples.find((item) => item.sampleId === previousId) || state.samples[0];
+    if (prev) renderSample(prev);
+    else renderList();
     toast(err.message || '生成失敗');
   } finally {
+    state.pending = null;
     setBusy(false);
+    renderList();
   }
 }
 
