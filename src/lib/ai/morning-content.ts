@@ -264,7 +264,7 @@ function genericSceneSubject(
     nature: {
       zh: '土地與天色',
       en: `the local land, weather and sky over ${enCity}`,
-      detailZh: '光跟著這裡的天氣走',
+      detailZh: '天色跟著這會兒的光在變，山邊還帶著這座城的顏色',
       keywords: [`${enCity} local land and sky`, `${enCity} weather light`],
     },
     food: {
@@ -276,13 +276,13 @@ function genericSceneSubject(
     'street-market': {
       zh: '街道與攤位',
       en: `streets and market stalls in ${enCity}`,
-      detailZh: '店面和人行很日常',
+      detailZh: '店招還開著，行人慢慢走過屋檐下',
       keywords: [`${enCity} street`, 'market street'],
     },
     'culture-life': {
       zh: '街上的屋子和行人',
       en: `everyday street life in ${enCity}`,
-      detailZh: '招牌和人行道很日常',
+      detailZh: '行人貼著招牌走，人行道上有人在聊天',
       keywords: [`${enCity} daily life`, 'local street'],
     },
   };
@@ -557,7 +557,9 @@ function softenCultureClause(clause: string): string {
     .replace(/[「"']([^」"']+)[」"']不離口[\s\S]*/u, '很愛把「$1」掛在嘴上')
     .replace(/^(?:街頭)?\s*(.+?)是深夜社交場/u, (_, noun) => {
       const item = String(noun || '').trim();
-      return /[A-Za-z]/.test(item) ? `很喜歡吃 ${item}，晚上常聚在一起` : `很喜歡去${item}，晚上常聚在一起`;
+      return /[A-Za-z]/.test(item)
+        ? `當地人很喜歡吃 ${item}，晚上常會聚在一起`
+        : `當地人很喜歡去${item}，晚上常會聚在一起`;
     })
     .replace(/^(.+?)是驕傲$/u, '很以$1為傲')
     .replace(/是社交核心/g, '是大家愛去晃的地方')
@@ -574,18 +576,23 @@ function softenCultureClause(clause: string): string {
     .trim();
 }
 
-function frameCultureHabit(habit: string, shape: 1 | 2 | 3 | 4 | 5): string {
+function withPeopleSubject(habit: string): string {
   const body = habit.replace(/[。！？]$/u, '').trim();
   if (!body) return '';
-  const people = /^(當地人|這裡的人|日本人|韓國人|台灣)/.test(body);
-  const complete = people || /就是|是朋友|掛在嘴上|很喜歡|很愛/.test(body);
-  const rest = people ? body.replace(/^(當地人|這裡的人|日本人|韓國人)/, '') : body;
+  if (/^(當地人|這裡的人|這座城的人|[^\s，。]{1,8}人)/.test(body)) return body;
+  return `當地人${body}`;
+}
+
+function frameCultureHabit(habit: string, shape: 1 | 2 | 3 | 4 | 5): string {
+  const body = withPeopleSubject(habit);
+  if (!body) return '';
+  const rest = body.replace(/^(當地人|這裡的人|這座城的人|日本人|韓國人|台灣人)/, '');
   const frames = {
-    1: complete ? `${body}。` : `當地人${body}。`,
+    1: `${body}。`,
     2: `這裡的人啊，${rest}。`,
     3: `有個可愛的小事：${body}。`,
     4: `跟當地人相處，常會發現${rest}。`,
-    5: complete ? `${body}。` : `${body}，挺有人味的。`,
+    5: `${body}。`,
   } as const;
   return frames[shape].replace(/。。+/g, '。');
 }
@@ -814,7 +821,7 @@ function fallbackMorning(
   const lookYou = theme.id === 'food'
     ? `你看，眼前這攤是${subject.zh}，${subject.detailZh}。`
     : `你看，眼前是${subject.zh}，${subject.detailZh}。`;
-  const lookPhoto = `眼前這張是${subject.zh}，${subject.detailZh}。`;
+  const lookScene = `眼前看見的是${subject.zh}，${subject.detailZh}。`;
   const lookNature = theme.id === 'nature'
     ? `先看到的是${subject.zh}，${subject.detailZh}。`
     : lookYou;
@@ -824,16 +831,18 @@ function fallbackMorning(
     input.localTimeLabel,
     shape
   );
+  const wake = '你願意的話，可以緩緩睜開眼睛，動一動身體。';
   const arrive = `我們到了${place}。`;
   const arriveSoft = `這站是${place}。`;
-  const journey = journeyLine ? `${journeyLine}。` : '';
+  const journeyAfter = journeyLine ? `${journeyLine}才到。` : '';
+  const journeyArrive = journeyLine ? `${journeyLine}，這才到了${place}。` : arriveSoft;
   const packed = [
     '',
-    `${greeting}。${hello}，${arrive}${lookYou}${weatherLine}${whereLine}${journey}${returnLine}${aside}`,
-    `${greeting}。${hello}，${journey}${arrive}${whereLine}${lookPhoto}${returnLine}${aside}${weatherLine}`,
-    `${greeting}。${hello}，${weatherLine}${arrive}${lookNature}${whereLine}${journey}${returnLine}${aside}`,
-    `${greeting}。${hello}，${arrive}${aside}${lookYou}${whereLine}${journey}${returnLine}${weatherLine}`,
-    `${greeting}。${hello}，${journeyLine ? `${journeyLine}，才到了${place}。` : arriveSoft}${weatherLine.replace(/。$/, '，')}${lookPhoto}${whereLine}${returnLine}${aside}`,
+    `${greeting}。${hello}，${wake}${arrive}${lookYou}${weatherLine}${whereLine}${journeyAfter}${returnLine}${aside}`,
+    `${greeting}。${hello}，${wake}${journeyArrive}${whereLine}${lookScene}${returnLine}${aside}${weatherLine}`,
+    `${greeting}。${hello}，${wake}${arrive}${weatherLine}${lookNature}${whereLine}${journeyAfter}${returnLine}${aside}`,
+    `${greeting}。${hello}，${wake}${arrive}${aside}${lookYou}${whereLine}${journeyAfter}${returnLine}${weatherLine}`,
+    `${greeting}。${hello}，${wake}${journeyArrive}${weatherLine.replace(/。$/, '，')}${lookScene}${whereLine}${returnLine}${aside}`,
   ] as const;
   const voiceText = packed[shape].replace(/，。/g, '。').replace(/。。+/g, '。');
   const subjectSafety = subject.isGeneric
@@ -988,11 +997,11 @@ export function parseMorningResponse(
 }
 
 const VOICE_SHAPE_HINTS: Record<1 | 2 | 3 | 4 | 5, string> = {
-  1: '句構一「先看照片」：問候 → 到了哪 → 眼前這張是什麼 → 隨口帶天氣 → 這地方在地圖哪 → 從哪飛來 → 一句當地人趣事。',
-  2: '句構二「先說旅程」：問候 → 從哪飛了多久才到 → 這地方在地圖哪 → 眼前這張照片 → 一句當地人趣事 → 最後才帶天氣。',
-  3: '句構三「先聊天氣」：問候 → 現在幾點幾度的感覺 → 到了哪 → 眼前照片 → 地圖位置 → 旅程 → 一句當地人趣事。',
-  4: '句構四「先講人」：問候 → 到了哪 → 先講一句當地人趣事 → 再看照片 → 地圖位置 → 旅程 → 天氣。',
-  5: '句構五「揉在一起」：問候後用兩到三句把抵達、照片、天氣、旅程、趣事交錯，不要一句一個欄位。',
+  1: '句構一「先看眼前」：問候 → 柔軟醒來 → 到了哪 → 眼前看見什麼 → 隨口帶天氣 → 這地方在地圖哪 → 從哪飛來才到 → 一句當地人趣事。',
+  2: '句構二「先說旅程」：問候 → 柔軟醒來 → 從哪飛了多久才到這座城 → 這地方在地圖哪 → 眼前看見什麼 → 一句當地人趣事 → 最後才帶天氣。',
+  3: '句構三「先到再天氣」：問候 → 柔軟醒來 → 先到了哪 → 再講現在幾點幾度 → 眼前看見什麼 → 地圖位置 → 旅程 → 一句當地人趣事。',
+  4: '句構四「先講人」：問候 → 柔軟醒來 → 到了哪 → 先講一句完整的當地人趣事 → 再看眼前 → 地圖位置 → 旅程 → 天氣。',
+  5: '句構五「揉在一起」：問候與柔軟醒來後，用兩到三句把抵達、眼前風景、天氣、旅程、趣事交錯，不要一句一個欄位。',
 };
 
 const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛醒來、看著窗外照片的旅客。這不是醫療、治療或勵志教練。
@@ -1003,27 +1012,31 @@ const SYSTEM_PROMPT = `你是 Sleep Airline 的抵達內容系統。對象是剛
 禁止孤獨、遺棄、失敗、壓力、罪惡、比較：獨自、孤單、寂寞、一個人、沒有人、失敗、浪費、掙扎、逃避、黑暗、迷失。
 禁止空話與契約用語，絕對不要寫：真實城市風貌、地理環境、街道尺度、建築材料、可查證、widely documented、urban character。
 
-voiceText 必須是人會講出口的繁體中文口語，約 80–130 個中文字。寫成一段連貫的話。
+voiceText 必須是人會講出口的繁體中文口語，約 90–150 個中文字。寫成一段連貫的話，句子要說完。
+開場問候後加一句柔軟醒來，例如「你願意的話，可以緩緩睜開眼睛，動一動身體。」
 本次必須嚴格使用 user.voiceShape 指定的那一種句構，五種如下：
-1. 先看照片：到了哪 → 眼前這張是什麼 → 天氣 → 地圖位置 → 旅程 → 趣事
-2. 先說旅程：從哪飛了多久才到 → 地圖位置 → 眼前照片 → 趣事 → 天氣
-3. 先聊天氣：現在幾點幾度的感覺 → 到了哪 → 眼前照片 → 地圖位置 → 旅程 → 趣事
-4. 先講人：到了哪 → 先講當地人趣事 → 再看照片 → 地圖位置 → 旅程 → 天氣
-5. 揉在一起：兩到三句把抵達、照片、天氣、旅程、趣事交錯，不要一句一個欄位
+1. 先看眼前：到了哪 → 眼前看見什麼 → 天氣 → 地圖位置 → 旅程 → 趣事
+2. 先說旅程：從哪飛了多久才到這座城 → 地圖位置 → 眼前看見什麼 → 趣事 → 天氣
+3. 先到再天氣：先到了哪 → 再講現在幾點幾度 → 眼前看見什麼 → 地圖位置 → 旅程 → 趣事
+4. 先講人：到了哪 → 先講當地人趣事 → 再看眼前 → 地圖位置 → 旅程 → 天氣
+5. 揉在一起：兩到三句把抵達、眼前風景、天氣、旅程、趣事交錯，不要一句一個欄位
 開頭：當地語言「你好」（localGreeting），不要用早安／Good morning。接著中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
 不可省略：地圖定位一句、眼前看得見的細節一句、當地人趣事一句。沒有 cultureNote 也要依國家常識改寫一句人會做的小事，不要只剩天氣和地名。
 禁止每次都用：「已抵達今天的目的地——」「窗外是」「歡迎抵達，今天的旅程從這裡開始」「晚上常有 X」「X 是深夜社交場」「X 是國民習慣」。
+禁止說「這張照片」「眼前這張照片」；要說降落到哪、眼前看見什麼，才有帶入感。
 地圖定位一句即可：洲或海洋＋國家。不要東北亞、西歐，不要百科。
-天氣用口語，例如「現在大概 18 度，天還算晴」。
-眼前／這張照片只講 sceneTheme 那一個看得見的主題。禁止「自然地貌與天光」「山、水或開闊地貌」。
+天氣用口語，例如「現在大概 18 度，天還算晴」。先到城市，再講天氣；禁止「在下雨。我們到了Ｘ。」這種先丟天氣碎片。
+光線寫具體，例如「陽光照亮了屋頂／海面」；禁止「光跟著這裡的天氣走」「很日常」。
+旅程句必須說完：從哪飛來、空中待了多久，要接到「才到」。禁止「從泰國飛過來，空中待了 8 小時。」這種沒下文。
+眼前只講 sceneTheme 那一個看得見的主題。禁止「自然地貌與天光」「山、水或開闊地貌」。店面與行人要有看得見的細節，不要用「很日常」帶過。
 
 cultureNote 適用任何國家，一律改寫成「人會做的一件小事」，要有溫度、有點好玩。不要針對特定國家寫死句子，要依這則備註現場改寫。
-好：當地人很喜歡吃 taco，晚上常拿來當宵夜。／見面會輕輕鞠躬，吃飯前還會說いただきます。／一盤 nasi goreng 就能變成朋友。／這裡的人很愛把「sorry」掛在嘴上。
-壞：晚上常有 taco。／街頭 taco 是深夜社交場。／「sorry」不離口是國民習慣。／把 cultureNote 第一句整段貼上。
+趣事必須有主詞：誰喜歡吃什麼、晚上誰聚在一起。好：當地人很喜歡吃 taco，晚上常拿來當宵夜。／見面會輕輕鞠躬，吃飯前還會說いただきます。／一盤 nasi goreng 就能變成朋友。／這裡的人很愛把「sorry」掛在嘴上。
+壞：很喜歡吃 taco，晚上常聚在一起。／晚上常有 taco。／街頭 taco 是深夜社交場。／「sorry」不離口是國民習慣。／把 cultureNote 第一句整段貼上。
 趣事講的是人，不是畫面。除非 sceneTheme 是 food 且 subject 就是那道料理，否則不要說窗外看得到它。
 城市若沒有常用中文譯名，用 spokenCity。不要把 Tarawa、Jolo、small talk、Po/Opo 硬塞進中文句。
 禁止：彷彿、為您、編織、鋪展畫面、點亮希望、內心的喧囂、隨風而去、當地航站、本班自、車流和生活步調。
-若有 reviewCalibration，靠近高分語氣，避開評語點名的空話。不要複製校正區原文。
+若有 reviewCalibration：這是審查員的生成指令，不是參考資料。今日評語權重最高，必須整段遵守，高於其他寫作習慣。靠近高分語氣，避開評語點名的空話。不要複製校正區原文。
 visitCount >= 2 時說今晚第幾次降落。後面全部繁體中文，不要翻譯那句當地問候。
 voiceText、localFeature、imagePrompt 必須描述同一個看得見的主題；趣事旁白不必畫進圖片。
 回傳 sceneTheme.themeId 必須逐字等於 user.sceneTheme.id。voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en。
@@ -1104,11 +1117,20 @@ async function requestMorning(
             '深夜社交場',
             '晚上常有 taco',
             '這裡常有',
+            '這張照片',
+            '眼前這張照片',
+            '光跟著這裡的天氣走',
+            '很日常',
+            '先把眼睛閉上。',
+            '肩膀放一下。',
           ],
           sceneRules: [
             '必須使用本次 voiceShape，不要改用其他句構，也不要每次都從抵達句開頭。',
             'cultureNote 無論哪一國都要改寫成有人味的趣事；不要整段貼上，不要「是國民習慣／是深夜社交場／晚上常有 X」。',
-            '眼前／這張照片只講 sceneTheme 主題；趣事不要假裝畫面上有，除非 theme 是 food 且 subject 就是那道料理。',
+            '眼前只講 sceneTheme 主題，不要說「這張照片」；趣事不要假裝畫面上有，除非 theme 是 food 且 subject 就是那道料理。',
+            '今日評語若出現在 reviewCalibration，必須整段當成 prompt 遵守。',
+            '句子要說完；先到城市再講天氣；趣事要有「誰」；光線與店面行人要具體，不要「很日常」「光跟著這裡的天氣走」。',
+            '問候後加一句柔軟醒來，例如緩緩睜開眼睛、動一動身體。',
             'localFeature 與 imagePrompt 只描述看得見的主題，不要畫旁白裡的飲食習慣。',
             '先確認主題確實屬於這座城市；不得挪用同國其他城市的地標或文化。',
             '只使用 widely documented canonical local subject；無法確認時必須把 containsUnverifiedCulturalClaim 設為 true。',

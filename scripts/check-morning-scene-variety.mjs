@@ -220,8 +220,10 @@ try {
       0.9
     );
     assert.match(result.voiceText, /卡布聖盧卡斯|墨西哥/);
+    assert.match(result.voiceText, /當地人|這裡的人/);
     assert.match(result.voiceText, /喜歡吃\s*taco|很愛吃\s*taco/i);
-    assert.doesNotMatch(result.voiceText, /晚上常有 taco|這裡常有 taco|窗外是[^。]{0,20}taco|眼前是[^。]{0,20}taco|深夜社交場|今天的旅程從這裡開始|車流和生活步調/i);
+    assert.match(result.voiceText, /緩緩睜開眼睛|動一動身體/);
+    assert.doesNotMatch(result.voiceText, /晚上常有 taco|這裡常有 taco|窗外是[^。]{0,20}taco|眼前是[^。]{0,20}taco|深夜社交場|今天的旅程從這裡開始|車流和生活步調|這張照片|光跟著這裡的天氣走|很日常/i);
     assert.doesNotMatch(result.imagePrompt, /taco/i);
   });
 
@@ -246,7 +248,8 @@ try {
     assert.match(result.voiceText, /salsa|咖啡|街上/);
     assert.match(result.voiceText, /卡布聖盧卡斯/);
     assert.match(result.voiceText, /5 小時/);
-    assert.doesNotMatch(result.voiceText, /今天的旅程從這裡開始|當地航站/);
+    assert.match(result.voiceText, /才到/);
+    assert.doesNotMatch(result.voiceText, /今天的旅程從這裡開始|當地航站|這張照片/);
   });
 
   await verifyGap('模型套用空泛自然句必須拒絕', () => {
