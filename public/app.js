@@ -87,6 +87,44 @@ function showToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 4500);
 }
+// Keep failures readable inside the physical window, even after the toast hides.
+let flightNoticeTimer = null;
+function showFlightNotice(message, durationMs = 0) {
+  clearTimeout(flightNoticeTimer);
+  let panel = $('flight-notice');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'flight-notice';
+    panel.setAttribute('role', 'alert');
+    const text = document.createElement('p');
+    const close = document.createElement('button');
+    close.textContent = '關閉訊息';
+    close.onclick = () => { panel.hidden = true; };
+    panel.append(text, close);
+    document.body.appendChild(panel);
+  }
+  panel.querySelector('p').textContent = message || '';
+  panel.hidden = !message;
+  if (message && durationMs) flightNoticeTimer = setTimeout(() => { panel.hidden = true; }, durationMs);
+}
+async function recoverActiveFlight(passengerId, idleOnly = false) {
+  if (!passengerId) return false;
+  const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(passengerId)}`, undefined, 10000);
+  if (state.profile?.passengerId !== passengerId || !data.activeFlight) return false;
+  if (idleOnly && (state.busy || !['ready', 'landed'].includes(state.stage))) return false;
+  adoptInFlight(data.activeFlight);
+  rememberFlightView();
+  showFlightNotice('已恢復雲端進行中的航班。進入飛行狀態後，可用降落磁簧完成這趟航程。');
+  return true;
+}
+async function recoverLandingFlight(passengerId, flightId) {
+  if (!passengerId || !flightId) return false;
+  const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(passengerId)}&flightId=${encodeURIComponent(flightId)}`, undefined, 10000);
+  if (state.profile?.passengerId !== passengerId || data.lastLandedFlight?.flightId !== flightId) return false;
+  adoptLanded(data.lastLandedFlight);
+  rememberFlightView();
+  return true;
+}
 function setCeremony(label, copy) {
   $('ceremony-tag').textContent = label;
   $('ceremony-copy').textContent = copy;
@@ -392,7 +430,7 @@ function confirmAction() {
   if (state.busy || !['ready', 'landed'].includes(state.stage)) return;
   state.headingConfirmed = true;
   const d = directions[state.direction];
-  showToast(`航向已確認：${d.name} · ${String(d.angle).padStart(3, '0')}°`);
+  showFlightNotice(`航向已確認：${d.name} · ${String(d.angle).padStart(3, '0')}°`, 4500);
   showCompass();
   syncConfirmButton();
 }
@@ -687,6 +725,7 @@ async function playBroadcast(text, speechBase64, {
 async function doTakeoff() {
   if (state.busy || state.stage !== 'ready') return;
   ensureGuestProfile();
+  showFlightNotice('');
   state.researchFlight = state.mode === 'live' && hasResearchConsent();
   state.busy = true;
   state.stage = 'takeoff'; render(); setShade('closed');
@@ -767,12 +806,28 @@ async function doTakeoff() {
     if (state.stage !== 'takeoff') return;
     markSpeechReady(false);
     window.BroadcastAudio?.stopTowerSignalLoop?.();
-    await BroadcastAudio?.stopFlightSfx?.({ fade: false });
-    await BroadcastAudio?.stopCaptainIntro?.();
-    hideCeremony(); setInflightStandby(false); setShade('open'); state.stage = 'ready'; state.researchFlight = false; render();
-    showToast(`起飛失敗：${error.message}`);
+    console.error('[flight takeoff]', error);
+    await Promise.allSettled([
+      Promise.resolve().then(() => window.BroadcastAudio?.stopFlightSfx?.({ fade: false })),
+      Promise.resolve().then(() => window.BroadcastAudio?.stopCaptainIntro?.()),
+    ]);
+    hideCeremony();
+    // A timeout/500 can happen after the server has already created the flight.
+    // Reconcile with the server before returning to ready and allowing retries.
+    if (state.researchFlight) {
+      try {
+        if (await recoverActiveFlight(state.profile?.passengerId)) {
+          showFlightNotice(`起飛流程中斷：${error.message}。雲端航班已建立，已恢復飛行畫面，可用降落磁簧完成航程。`);
+          return;
+        }
+      } catch (recoveryError) {
+        console.error('[flight recovery]', recoveryError);
+      }
+    }
+    setInflightStandby(false); setShade('open'); state.stage = 'ready'; state.researchFlight = false; render();
+    showFlightNotice(`起飛失敗：${error.message}。若網路恢復後仍無法起飛，重新整理會再次確認雲端航班。`);
   } finally {
-    if (state.stage === 'takeoff' || state.stage === 'ready') state.busy = false;
+    state.busy = false;
   }
 }
 async function requestPreviewScenery(place) {
@@ -1093,8 +1148,9 @@ function playApproachVoiceSync() {
 }
 
 async function doLand() {
-  if (state.stage !== 'cruise' && state.stage !== 'takeoff') return;
-  if (state.stage === 'landing' || state.stage === 'landed') return;
+  if (state.stage !== 'cruise' || state.busy) return;
+  const landingFlightId = state.activeFlight?.flightId;
+  showFlightNotice('');
   state.busy = true;
   state.landedLegReady = false;
   state.stage = 'landing'; render(); setShade('open');
@@ -1314,18 +1370,26 @@ async function doLand() {
     resetLandingCloudScene();
     hideCeremony();
     stopLandingVideos();
-    await BroadcastAudio?.stopFlightSfx?.({ fade: false });
-    await BroadcastAudio?.fadeOutLandingMusic?.({ ms: 500 });
+    await Promise.allSettled([
+      Promise.resolve().then(() => window.BroadcastAudio?.stopFlightSfx?.({ fade: false })),
+      Promise.resolve().then(() => window.BroadcastAudio?.fadeOutLandingMusic?.({ ms: 500 })),
+    ]);
+    if (state.stage !== 'landed' && state.researchFlight) {
+      try { await recoverLandingFlight(state.profile?.passengerId, landingFlightId); }
+      catch (recoveryError) { console.error('[landing recovery]', recoveryError); }
+    }
     if (state.stage === 'landed') {
       state.sleepDial = false;
       document.body.classList.remove('weather-focus');
       state.landedLegReady = true;
       setShade('open');
       render();
-      showToast(`降落後資訊顯示失敗：${error.message}`);
+      console.error('[flight after landing]', error);
+      showFlightNotice(`已降落，後續資訊顯示失敗：${error.message}`);
     } else {
       state.stage = 'cruise'; setInflightStandby(true); setScene('clouds'); setShade('closed'); render();
-      showToast(`降落失敗：${error.message}`);
+      console.error('[flight landing]', error);
+      showFlightNotice(`降落失敗：${error.message}`);
     }
   } finally { state.busy = false; }
 }
@@ -1546,12 +1610,25 @@ function bindDial() {
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
 function startDeviceControls() {
+  let syncedPassenger = null;
+  let nextRecoveryAt = 0;
   window.FlightDeviceControls?.start({
     getState: () => state,
     setDirection: (index) => setDirection(index),
     setSleep: (percent) => applySleepFromDevice(percent),
     confirm: () => confirmAction(),
     setPassenger: (passengerId) => {
+      if (syncedPassenger !== passengerId && Date.now() >= nextRecoveryAt) {
+        syncedPassenger = passengerId;
+        // Run after this callback installs the paired passenger profile.
+        queueMicrotask(() => {
+          void recoverActiveFlight(passengerId, true).catch((error) => {
+            nextRecoveryAt = Date.now() + 15000;
+            syncedPassenger = null; // Retry without flooding the cloud.
+            console.error('[device flight recovery]', error);
+          });
+        });
+      }
       if (state.profile?.passengerId === passengerId) return;
       state.profile = { passengerId, name: '旅人', groupId: '0001' };
       localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));

@@ -309,3 +309,10 @@ body.booting .app-shell{opacity:0;pointer-events:none}
 
 .device-error{position:fixed;z-index:10020;left:50%;bottom:max(20px,env(safe-area-inset-bottom));translate:-50% 0;width:min(760px,calc(100vw - 32px));padding:16px 20px;border:1px solid #e9b981;border-radius:10px;background:#351f21;color:#fff4e7;box-shadow:0 16px 50px rgba(0,0,0,.38);font:600 clamp(14px,2vw,18px)/1.5 system-ui,sans-serif;text-align:center}
 .device-error[hidden]{display:none}
+
+
+/* Flight errors stay inside the visible window rather than behind the shell. */
+#flight-notice{position:fixed;z-index:100;top:50%;left:50%;transform:translate(-50%,-50%);width:min(70vw,560px);max-height:65vh;overflow:auto;padding:24px;background:rgba(0,0,0,.94);border:1px solid #aaa;color:#fff;font-size:clamp(15px,2.2vw,24px);line-height:1.6;box-sizing:border-box}
+#flight-notice[hidden]{display:none}
+#flight-notice p{margin:0 0 16px;overflow-wrap:anywhere}
+#flight-notice button{padding:9px 18px;border:1px solid #aaa;background:#222;color:#fff}

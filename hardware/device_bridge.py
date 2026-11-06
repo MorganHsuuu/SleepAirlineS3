@@ -49,7 +49,7 @@ class DirectionFilter:
     Turning past NW hits the mechanical stop instead of jumping back to N.
     """
 
-    def __init__(self, minimum=0.0, maximum=3.3, reverse=False):
+    def __init__(self, minimum=0.0, maximum=3.3, reverse=True):
         self.minimum, self.maximum, self.reverse = minimum, maximum, reverse
         self.filtered = None
         self.direction = None
@@ -180,7 +180,10 @@ def main():
     parser.add_argument("--address", type=lambda value: int(value, 0), default=0x48)
     parser.add_argument("--min-voltage", type=float, default=0.0)
     parser.add_argument("--max-voltage", type=float, default=3.3)
-    parser.add_argument("--reverse", action="store_true", help="Reverse the stop-to-stop knob mapping")
+    parser.add_argument("--reverse", dest="reverse", action="store_true", default=True,
+                        help="Reverse the stop-to-stop knob mapping (device default)")
+    parser.add_argument("--no-reverse", dest="reverse", action="store_false",
+                        help="Use the original knob wiring orientation")
     parser.add_argument("--origin", default=SITE_ORIGIN, help="One allowed website origin, no trailing slash")
     parser.add_argument("--identity-file", default=None, help="Kiosk identity file; omit for standalone sensor testing")
     args = parser.parse_args()

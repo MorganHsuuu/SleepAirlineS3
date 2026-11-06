@@ -46,10 +46,9 @@
 
   function createController({ getState, setDirection, setSleep, confirm, takeoff, land, notify, setError }) {
     let previous = null;
-    let pendingLand = false;
     let adcFailed = false;
     return {
-      reset() { previous = null; pendingLand = false; },
+      reset() { previous = null; },
       accept(data) {
         if (!validSample(data)) throw new Error('Expected device_bridge.py protocol v2');
         const state = getState();
@@ -74,14 +73,12 @@
         const landEdge = !baseline && data.landCount > previous.landCount;
         const confirmEdge = !baseline && Number(data.confirmCount || 0) > Number(previous.confirmCount || 0);
         previous = { ...data };
-        if (baseline) { pendingLand = false; return; }
+        if (baseline) return;
 
         if (takeoffEdge && landEdge) {
-          pendingLand = false;
           notify('兩個磁簧同時觸發，請移開後再靠近其中一個');
           return;
         }
-        if (['ready', 'landed'].includes(state.stage)) pendingLand = false;
         if (takeoffEdge && canDepart) {
           takeoff();
           return;
@@ -89,13 +86,12 @@
         if (confirmEdge) {
           confirm?.();
         }
-        if (landEdge && ['takeoff', 'cruise'].includes(state.stage)) {
-          pendingLand = false;
-          land();
+        // Do not interrupt takeoff or replay an early landing pulse later.
+        if (landEdge && state.stage === 'takeoff') {
+          notify('起飛尚未完成，請進入飛行狀態後重新靠近降落磁簧');
           return;
         }
-        if (pendingLand && state.stage === 'cruise' && !state.busy) {
-          pendingLand = false;
+        if (landEdge && state.stage === 'cruise' && !state.busy) {
           land();
         }
       },
