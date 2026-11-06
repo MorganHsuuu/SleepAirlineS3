@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import ipaddress
 import shutil
 import subprocess
 import sys
@@ -78,6 +79,8 @@ def html_page(title, content, script="", page_class=""):
     active_steps = 1 if page_class == "device-onboarding" else 2
     markers = ''.join('<i class="active"></i>' if index < active_steps else '<i></i>' for index in range(3))
     progress = f'<div class="progress-rule" aria-hidden="true">{markers}</div>' if pairing_page else ''
+    maintenance_path = Path(__file__).resolve().parents[1] / "public/maintenance.js"
+    maintenance = maintenance_path.read_text() if maintenance_path.is_file() else ""
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-store"><title>{title} · SLEEP AIRLINE</title>
@@ -126,7 +129,7 @@ button:disabled{{opacity:.55;cursor:default}}.return-app{{background:transparent
 <header class="masthead"><div class="brand">{logo}</div>
 <div class="masthead-note">{title}<small>{header_en}</small></div></header>
 {progress}
-{content}</main><script>{script}</script></body></html>"""
+{content}</main><script>{script}</script><script>{maintenance}</script></body></html>"""
 
 
 class Kiosk:
@@ -141,6 +144,37 @@ class Kiosk:
         self.bridge = None
         self.busy = False
         self.reconfiguring = bool(args.reconfigure_wifi)
+        self.last_terminal_open = None
+
+    def open_terminal(self):
+        if not sys.platform.startswith("linux"):
+            raise RuntimeError("維護終端機需在樹莓派桌面執行")
+        with self.lock:
+            now = time.monotonic()
+            if self.last_terminal_open is not None and now - self.last_terminal_open < 5:
+                raise RuntimeError("終端機剛已開啟，請稍候再試")
+            terminal = next((path for name in ("lxterminal", "x-terminal-emulator", "foot", "xfce4-terminal", "xterm")
+                             if (path := shutil.which(name))), None)
+            if not terminal:
+                raise RuntimeError("找不到終端機，請安裝 lxterminal")
+            runtime = Path(f"/run/user/{os.getuid()}")
+            env = dict(os.environ, DISPLAY=os.environ.get("DISPLAY", ":0"),
+                       XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS=f"unix:path={runtime}/bus")
+            wayland = next((path.name for path in sorted(runtime.glob("wayland-*")) if path.is_socket()), None)
+            if wayland:
+                env["WAYLAND_DISPLAY"] = wayland
+            if (HOME / ".Xauthority").is_file():
+                env["XAUTHORITY"] = str(HOME / ".Xauthority")
+            process = subprocess.Popen([terminal], cwd=str(HOME), env=env, start_new_session=True,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                code = process.wait(timeout=0.3)
+                if code:
+                    raise RuntimeError("終端機無法連上桌面，請確認已登入樹莓派圖形桌面")
+            except subprocess.TimeoutExpired:
+                pass
+            self.last_terminal_open = now
+            return {"status": "opened"}
 
     def persist(self):
         save_state(self.state)
@@ -383,19 +417,25 @@ def handler_for(kiosk):
             self.send_header("Content-Length", str(len(encoded)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            if self.path == "/api/status" and self.headers.get("Origin") == WINDOW_ORIGIN:
+            if self.path in ("/api/status", "/api/maintenance/terminal") and self.headers.get("Origin") == WINDOW_ORIGIN:
                 self.send_header("Access-Control-Allow-Origin", WINDOW_ORIGIN)
-                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "X-Sleep-Airline-Maintenance")
                 if self.headers.get("Access-Control-Request-Private-Network") == "true":
                     self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
             self.wfile.write(encoded)
 
         def do_OPTIONS(self):
-            if self.path == "/api/status" and self.headers.get("Origin") == WINDOW_ORIGIN:
+            if (self.path == "/api/status" and self.headers.get("Origin") == WINDOW_ORIGIN) or (self.path == "/api/maintenance/terminal" and self.maintenance_allowed()):
                 self.reply(204, "")
             else:
                 self.reply(403, "Forbidden", "text/plain")
+
+        def maintenance_allowed(self):
+            origin = self.headers.get("Origin")
+            return (ipaddress.ip_address(self.client_address[0]).is_loopback
+                    and origin in (WINDOW_ORIGIN, "http://127.0.0.1:8766", "http://localhost:8766"))
 
         def do_GET(self):
             if self.path == "/device":
@@ -417,6 +457,15 @@ def handler_for(kiosk):
                 self.reply(404, "Not found", "text/plain")
 
         def do_POST(self):
+            if self.path == "/api/maintenance/terminal":
+                if not self.maintenance_allowed() or self.headers.get("X-Sleep-Airline-Maintenance") != "1":
+                    self.reply(403, '{"error":"Forbidden"}', "application/json")
+                    return
+                try:
+                    self.reply(200, json.dumps(kiosk.open_terminal()), "application/json")
+                except (OSError, RuntimeError) as error:
+                    self.reply(503, json.dumps({"error": str(error)}), "application/json")
+                return
             if self.path != "/api/provision":
                 self.reply(404, "Not found", "text/plain")
                 return
