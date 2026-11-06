@@ -367,10 +367,11 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
             except urllib.error.HTTPError as error:
                 self.online = False
                 self.message = f"雲端綁定狀態暫時無法確認（HTTP {error.code}），稍後會自動重試。"
-            except (OSError, urllib.error.URLError, ValueError):
+            except (OSError, urllib.error.URLError, ValueError) as error:
                 # Keep the existing binding during transient Internet outages.
                 self.online = False
-                self.message = "目前無法聯絡雲端服務，請檢查網路；裝置會自動重試。"
+                self.message = f"雲端連線失敗（{type(error).__name__}）：{error}。綁定已保留，每 15 秒會重試。"
+                print(self.message, file=sys.stderr, flush=True)
 
 
 def handler_for(kiosk):
@@ -474,9 +475,10 @@ def main():
         except urllib.error.HTTPError as error:
             kiosk.online = False
             kiosk.message = f"雲端綁定狀態暫時無法確認（HTTP {error.code}），稍後會自動重試。"
-        except (OSError, urllib.error.URLError, ValueError):
+        except (OSError, urllib.error.URLError, ValueError) as error:
             kiosk.online = False
-            kiosk.message = "目前無法聯絡雲端服務，請檢查網路；裝置會自動重試。"
+            kiosk.message = f"雲端連線失敗（{type(error).__name__}）：{error}。綁定已保留，每 15 秒會重試。"
+            print(kiosk.message, file=sys.stderr, flush=True)
     if not kiosk.state.get("passengerId") or args.reconfigure_wifi:
         kiosk.start_hotspot()
     Thread(target=kiosk.monitor, daemon=True).start()

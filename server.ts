@@ -959,7 +959,13 @@ app.get('/api/flight/progress', async (req, res) => {
     if (!passengerId) { res.status(400).json({ error: '請提供 passengerId。' }); return; }
 
     const flight = await getActiveFlight(passengerId);
-    if (!flight) { res.json({ activeFlight: null }); return; }
+    if (!flight) {
+      // Only return the requested landing, never an unrelated older arrival.
+      const flightId = typeof req.query.flightId === 'string' ? req.query.flightId : '';
+      const landed = flightId ? await getLastLandedFlight(passengerId) : null;
+      res.json({ activeFlight: null, lastLandedFlight: landed?.flightId === flightId ? landed : null });
+      return;
+    }
 
     const progress = calculateFlightProgress(flight.takeoffTime);
     const region = getNarrativeRegion(progress);

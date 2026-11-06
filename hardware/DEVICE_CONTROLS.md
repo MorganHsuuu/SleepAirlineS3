@@ -73,3 +73,28 @@ sudo journalctl -u sleep-airline-pairing -n 60 --no-pager
 ```
 
 裝置身分檔保存在 `~/.config/sleep-airline/device.json`，家中 Wi-Fi 密碼由 NetworkManager 保存。請勿把身分檔、暫時熱點密碼或家中 Wi-Fi 密碼貼到 GitHub。
+
+
+## 2026-11-06：航班狀態與旋鈕修正
+
+- 旋鈕預設反轉：同時影響航向與心情讀值。沿用原方向可加 `--no-reverse`；不要同時對調外側接線並反轉軟體。
+- 起飛中收到降落磁簧會忽略，不中斷也不排隊；起飛完成後須移開並重新靠近降落磁簧。
+- 起飛完成會解除 busy，才能接受後續降落；起飛失敗或回應遺失時先查雲端，若已有航班就恢復飛行畫面，不重建航班。
+- 已配對裝置開網頁時會同步雲端進行中的航班，解決「待機卻被告知尚未降落」的卡住狀況。
+- 降落失敗會查詢同一 flightId 是否已落地；若雲端已完成，保留已抵達畫面。這不會取消、刪除或重寫既有航班。
+- 起飛／降落錯誤會持續顯示在視窗中央，可關閉並在 Console 找到錯誤；確認航向也會在中央回饋。航向確認仍不是起飛必要條件。
+- 開機連線失敗會顯示連線例外種類與原因，每 15 秒重試並保留配對。實際 Wi-Fi／DNS／TLS 問題仍須依訊息排查。
+
+同學合併 PR 且 Vercel 部署完成後，網頁與 API 修正才會上線。這次也改了樹莓派橋接與離線診斷，因此在樹莓派更新安裝副本：
+
+```bash
+cd ~/SleepAirlineS3
+git pull --ff-only
+bash hardware/install-kiosk.sh
+sudo systemctl restart sleep-airline-bridge.service sleep-airline-pairing.service
+sudo reboot
+```
+
+已綁定裝置不用重新配對。不要刪除 `~/.config/sleep-airline/device.json`。
+
+實機驗收：順時針轉旋鈕確認畫面同向；待機按 GPIO22 按鈕確認回饋；起飛途中觸發降落不可中斷，飛行中重新觸發才降落；重新開啟網頁應恢復雲端既有航班。首次起飛中斷的原始原因尚未取得，修正會恢復已建立的航班並保留後續錯誤供排查。
