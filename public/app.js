@@ -1622,7 +1622,7 @@ function startDeviceControls() {
     setDirection: (index) => setDirection(index),
     setSleep: (percent) => applySleepFromDevice(percent),
     confirm: () => confirmAction(),
-    setPassenger: (passengerId) => {
+    setPassenger: (passengerId, passengerName) => {
       if (syncedPassenger !== passengerId && Date.now() >= nextRecoveryAt) {
         syncedPassenger = passengerId;
         // Run after this callback installs the paired passenger profile.
@@ -1634,8 +1634,9 @@ function startDeviceControls() {
           });
         });
       }
-      if (state.profile?.passengerId === passengerId) return;
-      state.profile = { passengerId, name: '旅人', groupId: '0001' };
+      const name = typeof passengerName === 'string' && passengerName.trim() ? passengerName.trim() : '旅人';
+      if (state.profile?.passengerId === passengerId && state.profile.name === name) return;
+      state.profile = { passengerId, name, groupId: state.profile?.groupId || '0001' };
       localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
       localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
       $('input-pid').value = passengerId;

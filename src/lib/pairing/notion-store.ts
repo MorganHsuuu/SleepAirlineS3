@@ -1,4 +1,5 @@
 import { getNotionClient, readText, readTitle, wText, wTitle } from '../notion/client';
+import { resolveDashboardDbId } from '../notion/ensure-dashboard';
 
 export const PAIRING_DATABASE_TITLE = 'Sleep Airline S3 Device Pairing';
 const requiredProperties = {
@@ -14,7 +15,7 @@ const requiredProperties = {
 type PairingProperties = Record<string, unknown>;
 type PairingPage = { id: string; properties: PairingProperties };
 
-export type PassengerRecord = { pageId: string; passengerId: string; recoveryHash: string };
+export type PassengerRecord = { pageId: string; passengerId: string; recoveryHash: string; displayName: string };
 export type DeviceRecord = {
   pageId: string;
   deviceId: string;
@@ -86,7 +87,42 @@ export async function findPassenger(id: string): Promise<PassengerRecord | null>
   const page = await byName(id);
   if (!page) return null;
   if (kind(page) !== 'Passenger' || readTitle(page.properties, 'Name') !== id) throw new PairingStoreError('pairing_record_mismatch');
-  return { pageId: page.id, passengerId: id, recoveryHash: readText(page.properties, 'Recovery Hash') };
+  return { pageId: page.id, passengerId: id, recoveryHash: readText(page.properties, 'Recovery Hash'), displayName: readText(page.properties, 'Display Name') };
+}
+
+export async function setPassengerDisplayName(passengerId: string, displayName: string): Promise<number> {
+  const passenger = await findPassenger(passengerId);
+  if (!passenger) throw new PairingStoreError('unknown_passenger');
+  const client = getNotionClient();
+  const databaseId = await pairingDatabaseId();
+  const database = await client.databases.retrieve({ database_id: databaseId });
+  const property = database.properties?.['Display Name'];
+  if (property && property.type !== 'rich_text') throw new PairingStoreError('pairing_schema_mismatch');
+  if (!property) await client.databases.update({ database_id: databaseId, properties: { 'Display Name': { rich_text: {} } } });
+  if (passenger.displayName !== displayName) {
+    await client.pages.update({ page_id: passenger.pageId, properties: { 'Display Name': wText(displayName) } });
+  }
+
+  // Repair flights created before the phone's name reached the device.
+  const dashboardId = await resolveDashboardDbId();
+  let cursor: string | undefined;
+  let updated = 0;
+  do {
+    const result = await client.databases.query({
+      database_id: dashboardId,
+      filter: { property: 'Passenger ID', rich_text: { equals: passengerId } },
+      start_cursor: cursor,
+      page_size: 100,
+    });
+    for (const page of result.results as PairingPage[]) {
+      const properties = page.properties as Record<string, unknown>;
+      if (readText(properties, 'Name') === displayName) continue;
+      await client.pages.update({ page_id: page.id, properties: { Name: wText(displayName) } });
+      updated += 1;
+    }
+    cursor = result.has_more ? result.next_cursor ?? undefined : undefined;
+  } while (cursor);
+  return updated;
 }
 
 export async function createPassenger(id: string, recoveryHash: string): Promise<boolean> {

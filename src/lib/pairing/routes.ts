@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import {
   PairingStoreError, bindDevice, createPassenger, devicesForPassenger, findDevice, findPassenger,
-  unbindDevice,
+  setPassengerDisplayName, unbindDevice,
 } from './notion-store';
 
 const router = Router();
@@ -167,7 +167,22 @@ router.get('/status', async (req, res) => {
     const id = await passenger(req);
     if (!id) return fail(res, 401, 'session_expired');
     const deviceId = (await boundDevice(id))?.deviceId || null;
-    res.json({ passengerId: id, deviceId, status: deviceId ? 'paired' : 'unpaired' });
+    const record = await findPassenger(id);
+    res.json({ passengerId: id, deviceId, status: deviceId ? 'paired' : 'unpaired', displayName: record?.displayName || '' });
+  } catch (cause) { storeFailure(res, cause); }
+});
+
+router.post('/profile', async (req, res) => {
+  try {
+    const id = await passenger(req);
+    if (!id) return fail(res, 401, 'session_expired');
+    const displayName = req.body?.displayName;
+    if (typeof displayName !== 'string' || !displayName.trim() || displayName.trim().length > 40 || /[\x00-\x1f\x7f]/.test(displayName)) {
+      return fail(res, 400, 'invalid_display_name');
+    }
+    const name = displayName.trim();
+    const updatedFlights = await setPassengerDisplayName(id, name);
+    res.json({ passengerId: id, displayName: name, updatedFlights });
   } catch (cause) { storeFailure(res, cause); }
 });
 
@@ -179,7 +194,8 @@ router.post('/devices/status', async (req, res) => {
     if (!stored || !sameHash(stored.deviceSecretHash, sha(deviceSecret))) return fail(res, 404, 'device_not_registered');
     const passengerId = stored.passengerId;
     if (passengerId && (await boundDevice(passengerId))?.deviceId !== deviceId) return fail(res, 409, 'binding_changed');
-    res.json({ deviceId, passengerId, status: passengerId ? 'paired' : 'unpaired' });
+    const record = passengerId ? await findPassenger(passengerId) : null;
+    res.json({ deviceId, passengerId, status: passengerId ? 'paired' : 'unpaired', displayName: record?.displayName || '' });
   } catch (cause) { storeFailure(res, cause); }
 });
 

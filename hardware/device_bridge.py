@@ -195,8 +195,11 @@ def make_handler(state, origin, identity_path=None):
                     identity = json.loads(Path(identity_path).read_text())
                     passenger_id = identity.get("passengerId")
                     snapshot["passengerId"] = passenger_id if isinstance(passenger_id, str) else None
+                    passenger_name = identity.get("passengerName")
+                    snapshot["passengerName"] = passenger_name if isinstance(passenger_name, str) else ""
                 except (OSError, ValueError):
                     snapshot["passengerId"] = None
+                    snapshot["passengerName"] = ""
             body = json.dumps(snapshot, allow_nan=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

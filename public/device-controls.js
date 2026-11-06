@@ -168,7 +168,7 @@
         const data = await response.json();
         if (!validSample(data)) throw new Error('請啟動新版 device_bridge.py');
         if (typeof data.passengerId === 'string' && /^PAX-[A-Z0-9]{8,32}$/.test(data.passengerId)) {
-          adapter.setPassenger?.(data.passengerId);
+          adapter.setPassenger?.(data.passengerId, data.passengerName);
         } else if (kioskDetected && data.passengerId === null) {
           root.location.replace('http://127.0.0.1:8766/device');
           return;
