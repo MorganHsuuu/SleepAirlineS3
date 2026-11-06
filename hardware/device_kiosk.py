@@ -125,6 +125,8 @@ button:disabled{{opacity:.55;cursor:default}}.return-app{{background:transparent
 .progress-rule{{margin:17px 0 20px}}.scan-layout{{margin:18px 0;gap:18px}}
 .scan-layout{{grid-template-columns:clamp(175px,37vw,200px) minmax(0,1fr)}}.scan-step{{padding:9px 0}}.card{{padding:9px 0}}
 .device-status{{margin-top:12px}}}}
+/* Reserve space behind the physical shade; keep the whole pairing block visible. */
+body.device-onboarding{{padding-top:calc(clamp(22px,4vw,42px) + 14dvh);padding-bottom:max(12dvh,22px)}}
 </style></head><body class="{page_class}"><main>
 <header class="masthead"><div class="brand">{logo}</div>
 <div class="masthead-note">{title}<small>{header_en}</small></div></header>
