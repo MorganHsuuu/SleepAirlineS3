@@ -69,11 +69,27 @@ class DirectionFilter:
         return self.direction
 
 
+class ReedFilter:
+    """Accept a whole endpoint sample only after 150 ms without a change."""
+    def __init__(self, state, sample, now, stable_seconds=0.15):
+        self.state, self.candidate, self.since = state, dict(sample), now
+        self.accepted = dict(sample)
+        self.stable_seconds = stable_seconds
+        state.reeds(sample, initial=True)
+
+    def update(self, sample, now):
+        if sample != self.candidate:
+            self.candidate, self.since = dict(sample), now
+        elif sample != self.accepted and now - self.since >= self.stable_seconds:
+            self.accepted = dict(sample)
+            self.state.reeds(sample)
+
+
 class DeviceState:
     def __init__(self):
         self.lock = Lock()
         self.data = dict(version=2, session=uuid.uuid4().hex, takeoffClosed=False,
-                         landClosed=False, confirmClosed=False,
+                         landClosed=False, confirmClosed=False, endpoint=None,
                          takeoffCount=0, landCount=0, confirmCount=0,
                          direction=None, position=None, voltage=None, adcError="Starting ADS1115")
 
@@ -84,6 +100,23 @@ class DeviceState:
             if closed and not old and not initial:
                 self.data[name + "Count"] += 1
                 print(f"{name.upper()} magnet detected", flush=True)
+
+    def reeds(self, sample, initial=False):
+        with self.lock:
+            old = {name: self.data[name + "Closed"] for name in ("takeoff", "land")}
+            for name, closed in sample.items():
+                self.data[name + "Closed"] = closed
+            active = [name for name, closed in sample.items() if closed]
+            if initial:
+                self.data["endpoint"] = active[0] if len(active) == 1 else None
+                return
+            if len(active) != 1:
+                return  # Neutral and overlapping sensors never re-arm the same end.
+            name = active[0]
+            if not old[name] and self.data["endpoint"] != name:
+                self.data["endpoint"] = name
+                self.data[name + "Count"] += 1
+                print(f"{name.upper()} magnet detected (stable endpoint)", flush=True)
 
     def adc(self, direction, voltage, error=None, position=None):
         with self.lock:
@@ -96,6 +129,12 @@ class DeviceState:
     def snapshot(self):
         with self.lock:
             return dict(self.data)
+
+
+def sample_reeds(state, stop, reeds, filtering):
+    read = lambda: {name: reed.is_pressed for name, reed in reeds.items()}
+    while not stop.wait(0.02):
+        filtering.update(read(), time.monotonic())
 
 
 def sample_adc(state, stop, args):
@@ -201,12 +240,15 @@ def main():
     state, stop = DeviceState(), Event()
     try:
         with ExitStack() as resources:
-            for name, pin in (("takeoff", args.takeoff_pin), ("land", args.land_pin),
-                              ("confirm", args.confirm_pin)):
-                reed = resources.enter_context(Button(pin, pull_up=True, bounce_time=0.05))
-                state.reed(name, reed.is_pressed, initial=True)
-                reed.when_pressed = lambda name=name: state.reed(name, True)
-                reed.when_released = lambda name=name: state.reed(name, False)
+            reeds = {name: resources.enter_context(Button(pin, pull_up=True))
+                     for name, pin in (("takeoff", args.takeoff_pin), ("land", args.land_pin))}
+            confirm = resources.enter_context(Button(args.confirm_pin, pull_up=True, bounce_time=0.05))
+            state.reed("confirm", confirm.is_pressed, initial=True)
+            confirm.when_pressed = lambda: state.reed("confirm", True)
+            confirm.when_released = lambda: state.reed("confirm", False)
+            filtering = ReedFilter(state, {name: reed.is_pressed for name, reed in reeds.items()}, time.monotonic())
+            reed_worker = Thread(target=sample_reeds, args=(state, stop, reeds, filtering), daemon=True)
+            reed_worker.start()
             server = ThreadingHTTPServer(("127.0.0.1", 8765), make_handler(state, args.origin, args.identity_file))
             resources.callback(server.server_close)
             worker = Thread(target=sample_adc, args=(state, stop, args), daemon=True)
@@ -218,6 +260,7 @@ def main():
             finally:
                 stop.set()
                 worker.join(timeout=2)
+                reed_worker.join(timeout=2)
     except KeyboardInterrupt:
         pass
     except OSError as error:

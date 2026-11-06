@@ -109,9 +109,14 @@ function showFlightNotice(message, durationMs = 0) {
 }
 async function recoverActiveFlight(passengerId, idleOnly = false) {
   if (!passengerId) return false;
+  const before = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
   const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(passengerId)}`, undefined, 10000);
   if (state.profile?.passengerId !== passengerId || !data.activeFlight) return false;
-  if (idleOnly && (state.busy || !['ready', 'landed'].includes(state.stage))) return false;
+  // A late boot lookup must not resurrect a flight after a local landing.
+  const after = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
+  if (idleOnly && (state.busy || !['ready', 'landed'].includes(state.stage)
+      || before.some((value, index) => value !== after[index]))) return false;
+  if (data.activeFlight.flightId && data.activeFlight.flightId === state.lastFlight?.flightId) return false;
   adoptInFlight(data.activeFlight);
   rememberFlightView();
   showFlightNotice('已恢復雲端進行中的航班。進入飛行狀態後，可用降落磁簧完成這趟航程。');

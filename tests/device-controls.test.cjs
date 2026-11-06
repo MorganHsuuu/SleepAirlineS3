@@ -20,7 +20,17 @@ function fixture() {
     setError: (kind, message) => errors.push([kind, message]),
   });
   return { state, actions, messages, errors, controller,
-    send: (changes = {}) => { Object.assign(sample, changes); controller.accept(sample); } };
+    send: (changes = {}) => {
+      // Simulate a magnet physically moving to the newly counted endpoint.
+      if ('takeoffCount' in changes && !('takeoffClosed' in changes)) {
+        sample.takeoffClosed = true; sample.landClosed = false;
+      }
+      if ('landCount' in changes && !('landClosed' in changes)) {
+        sample.landClosed = true;
+        if (!('takeoffCount' in changes)) sample.takeoffClosed = false;
+      }
+      Object.assign(sample, changes); controller.accept(sample);
+    } };
 }
 
 test('startup with magnets already present does not create a flight', () => {
@@ -44,6 +54,7 @@ test('early landing is consumed; only a fresh pulse after takeoff can land', () 
   assert.deepEqual(f.actions, [['takeoff',2]]);
   f.state.stage='cruise'; f.state.busy=false; f.send(); f.send();
   assert.deepEqual(f.actions, [['takeoff',2]]);
+  f.send({takeoffClosed:true,landClosed:false});
   f.send({landCount:2}); f.send();
   assert.deepEqual(f.actions, [['takeoff',2],['land']]);
 });
@@ -55,6 +66,7 @@ test('landing before departure and takeoff during landing are not replayed later
   f.send({ landCount: 2 }); f.send({ takeoffCount: 2 });
   f.state.stage = 'landed'; f.state.busy = false; f.send();
   assert.deepEqual(f.actions, [['takeoff', 2], ['land']]);
+  f.send({landClosed:true,takeoffClosed:false});
   f.send({ direction: 7, takeoffCount: 3 });
   assert.deepEqual(f.actions.slice(-2), [['direction', 7], ['takeoff', 7]]);
 });
@@ -140,4 +152,29 @@ test('Raspberry Pi kiosk or explicit device flag still probes the local bridge',
     { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0', platform: 'MacIntel' },
     { search: '?device=1' },
   ), true);
+});
+
+test('held or bouncing same endpoint cannot restart after ready/landed or a reconnect', () => {
+ const f=fixture(); f.send(); f.send({takeoffCount:1});
+ f.state.stage='ready'; f.state.busy=false;
+ f.send({takeoffClosed:false}); f.send({takeoffCount:2});
+ f.controller.reset(); f.send(); f.send({takeoffCount:3});
+ assert.deepEqual(f.actions,[['takeoff',2]]);
+});
+test('only a fresh, exclusive opposite endpoint can change flight phase', () => {
+ const f=fixture(); f.send(); f.send({takeoffCount:1});
+ f.state.stage='cruise';f.state.busy=false;
+ f.send({landCount:1,takeoffClosed:true,landClosed:true});
+ f.send({takeoffClosed:false}); // releasing overlap is not a landing event
+ assert.deepEqual(f.actions,[['takeoff',2]]);
+ f.send({landClosed:false}); f.send({landClosed:true});
+ assert.deepEqual(f.actions,[['takeoff',2],['land']]);
+ f.state.stage='landed';f.state.busy=false;
+ f.send({landClosed:false});f.send({landCount:2});
+ assert.equal(f.actions.length,2);
+ f.send({takeoffCount:2}); assert.deepEqual(f.actions.at(-1),['takeoff',2]);
+});
+test('an ended pulse counter alone cannot move the flight state', () => {
+ const f=fixture();f.send();f.send({takeoffCount:1,takeoffClosed:false});
+ assert.deepEqual(f.actions,[]);
 });

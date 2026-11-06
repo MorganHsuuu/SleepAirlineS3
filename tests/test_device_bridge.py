@@ -30,14 +30,14 @@ class BridgeTests(unittest.TestCase):
 
     def test_all_eight_directions_and_endpoints(self):
         for direction in range(8):
-            self.assertEqual(bridge.DirectionFilter().update((direction + 0.5) / 8 * 3.3), direction)
-        self.assertEqual(bridge.DirectionFilter().update(-0.001), 0)
-        self.assertEqual(bridge.DirectionFilter().update(3.31), 7)
+            self.assertEqual(bridge.DirectionFilter(reverse=False).update((direction + 0.5) / 8 * 3.3), direction)
+        self.assertEqual(bridge.DirectionFilter(reverse=False).update(-0.001), 0)
+        self.assertEqual(bridge.DirectionFilter(reverse=False).update(3.31), 7)
         self.assertEqual(bridge.DirectionFilter(reverse=True).update(0), 7)
-        self.assertEqual(bridge.DirectionFilter(0.2, 3.1).update(3.1), 7)
+        self.assertEqual(bridge.DirectionFilter(0.2, 3.1, reverse=False).update(3.1), 7)
 
     def test_knob_stop_does_not_wrap_from_northwest_to_north(self):
-        knob = bridge.DirectionFilter()
+        knob = bridge.DirectionFilter(reverse=False)
         self.assertEqual(knob.update(3.3), 7)
         self.assertEqual(knob.update(3.29), 7)
         self.assertNotEqual(knob.update(3.3), 0)
@@ -48,7 +48,7 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(direction, 0)
 
     def test_noisy_boundary_stays_stable_but_real_turn_changes_heading(self):
-        knob = bridge.DirectionFilter()
+        knob = bridge.DirectionFilter(reverse=False)
         self.assertEqual(knob.update(0.48 * 3.3), 3)
         for position in [0.499, 0.501] * 20:
             self.assertEqual(knob.update(position * 3.3), 3)
@@ -58,16 +58,14 @@ class BridgeTests(unittest.TestCase):
 
     def test_held_magnet_and_release_do_not_add_commands(self):
         state = bridge.DeviceState()
-        state.reed('takeoff', True, initial=True)
-        state.reed('takeoff', True)
+        state.reeds({'takeoff': True, 'land': False}, initial=True)
+        state.reeds({'takeoff': True, 'land': False})
+        state.reeds({'takeoff': False, 'land': False})
+        state.reeds({'takeoff': True, 'land': False})
         self.assertEqual(state.snapshot()['takeoffCount'], 0)
-        state.reed('takeoff', False)
-        state.reed('takeoff', True)
-        state.reed('takeoff', True)
-        state.reed('land', True)
-        state.reed('land', False)
+        state.reeds({'takeoff': False, 'land': True})
+        state.reeds({'takeoff': False, 'land': False})
         snapshot = state.snapshot()
-        self.assertEqual(snapshot['takeoffCount'], 1)
         self.assertEqual(snapshot['landCount'], 1)
         self.assertFalse(snapshot['landClosed'])
         state.reed('confirm', True, initial=True)
@@ -95,7 +93,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_http_snapshot_and_cors_origin_boundary(self):
         state = bridge.DeviceState()
-        state.reed('land', True)
+        state.reeds({'takeoff': False, 'land': True})
         server = bridge.ThreadingHTTPServer(('127.0.0.1', 0), bridge.make_handler(state, bridge.SITE_ORIGIN))
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()

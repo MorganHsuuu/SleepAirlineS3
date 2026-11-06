@@ -46,6 +46,7 @@
 
   function createController({ getState, setDirection, setSleep, confirm, takeoff, land, notify, setError }) {
     let previous = null;
+    let lastEndpoint = null;
     let adcFailed = false;
     return {
       reset() { previous = null; },
@@ -69,17 +70,31 @@
         // A magnet left in place must never launch a flight on page load.
         const baseline = !previous || previous.session !== data.session
           || data.takeoffCount < previous.takeoffCount || data.landCount < previous.landCount;
-        const takeoffEdge = !baseline && data.takeoffCount > previous.takeoffCount;
-        const landEdge = !baseline && data.landCount > previous.landCount;
+        const takeoffEdge = !baseline && (data.takeoffCount > previous.takeoffCount
+          || (data.takeoffClosed && !previous.takeoffClosed));
+        const landEdge = !baseline && (data.landCount > previous.landCount
+          || (data.landClosed && !previous.landClosed));
         const confirmEdge = !baseline && Number(data.confirmCount || 0) > Number(previous.confirmCount || 0);
         previous = { ...data };
-        if (baseline) return;
-
-        if (takeoffEdge && landEdge) {
-          notify('兩個磁簧同時觸發，請移開後再靠近其中一個');
+        if (baseline) {
+          if (['takeoff', 'cruise'].includes(state.stage)) lastEndpoint = 'takeoff';
+          else if (['landing', 'landed'].includes(state.stage)) lastEndpoint = 'land';
+          else if (!lastEndpoint && data.takeoffClosed !== data.landClosed) {
+            lastEndpoint = data.takeoffClosed ? 'takeoff' : 'land';
+          }
           return;
         }
-        if (takeoffEdge && canDepart) {
+
+        if ((takeoffEdge && landEdge) || (data.takeoffClosed && data.landClosed)) {
+          if (takeoffEdge || landEdge) notify('兩個磁簧同時觸發，請移開後再靠近其中一個');
+          return;
+        }
+        const freshTakeoff = takeoffEdge && data.takeoffClosed && !data.landClosed && lastEndpoint !== 'takeoff';
+        const freshLand = landEdge && data.landClosed && !data.takeoffClosed && lastEndpoint !== 'land';
+        // Visiting the opposite end re-arms the mechanism; neutral never does.
+        if (freshTakeoff) lastEndpoint = 'takeoff';
+        if (freshLand) lastEndpoint = 'land';
+        if (freshTakeoff && canDepart) {
           takeoff();
           return;
         }
@@ -87,11 +102,11 @@
           confirm?.();
         }
         // Do not interrupt takeoff or replay an early landing pulse later.
-        if (landEdge && state.stage === 'takeoff') {
+        if (freshLand && state.stage === 'takeoff') {
           notify('起飛尚未完成，請進入飛行狀態後重新靠近降落磁簧');
           return;
         }
-        if (landEdge && state.stage === 'cruise' && !state.busy) {
+        if (freshLand && state.stage === 'cruise' && !state.busy) {
           land();
         }
       },

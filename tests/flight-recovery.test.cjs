@@ -60,3 +60,12 @@ test('direct landing cannot interrupt takeoff or another busy operation',async()
  f.state.stage='takeoff'; f.state.busy=true; await f.ctx.doLand(); assert.equal(f.state.stage,'takeoff');
  f.state.stage='cruise'; await f.ctx.doLand(); assert.equal(f.state.stage,'cruise');
 });
+test('late boot response cannot resurrect a flight completed while the lookup was pending',async()=>{
+ const f=fixture();let resolve;
+ f.ctx.api=()=>new Promise(r=>{resolve=r;});
+ const pending=f.ctx.recoverActiveFlight('PAX-TEST',true);
+ f.state.stage='landed'; f.state.lastFlight={flightId:'F1'};
+ resolve({activeFlight:{flightId:'F1'}});
+ assert.equal(await pending,false); assert.equal(f.state.stage,'landed');
+ assert.deepEqual(f.calls,[]);
+});
