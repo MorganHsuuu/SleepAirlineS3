@@ -365,6 +365,7 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
                     time.sleep(min(3 * (attempt + 1), 12))
             with self.lock:
                 self.state["passengerId"] = data["passengerId"]
+                self.state["passengerName"] = data.get("displayName") or ""
                 self.state.pop("setupCode", None)
                 self.state.pop("hotspotPassword", None)
                 self.persist()
@@ -398,8 +399,12 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
                 self.message = ""
                 if data.get("status") == "unpaired":
                     self.state["passengerId"] = None
+                    self.state["passengerName"] = ""
                     self.persist()
                     self.start_hotspot()
+                elif self.state.get("passengerName") != (data.get("displayName") or ""):
+                    self.state["passengerName"] = data.get("displayName") or ""
+                    self.persist()
             except urllib.error.HTTPError as error:
                 self.online = False
                 self.message = f"雲端綁定狀態暫時無法確認（HTTP {error.code}），稍後會自動重試。"
@@ -522,6 +527,10 @@ def main():
             kiosk.message = ""
             if data.get("status") == "unpaired":
                 kiosk.state["passengerId"] = None
+                kiosk.state["passengerName"] = ""
+                kiosk.persist()
+            elif kiosk.state.get("passengerName") != (data.get("displayName") or ""):
+                kiosk.state["passengerName"] = data.get("displayName") or ""
                 kiosk.persist()
         except urllib.error.HTTPError as error:
             kiosk.online = False

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 const parentId = '3e5a7f1b413c80f592e8ce14af8c2ec0';
 const databaseId = '11111111111111111111111111111111';
+const dashboardId = '22222222222222222222222222222222';
 const passengerId = 'PAX-TEST0001';
 const deviceId = 'SA-TEST0001';
 const recoveryCode = 'recovery-code-with-at-least-32-characters';
@@ -21,11 +22,19 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
   process.env.NOTION_API_KEY = 'test-token';
   process.env.NOTION_PARENT_PAGE_ID = parentId;
   process.env.NOTION_PAIRING_DB_ID = databaseId;
+  process.env.NOTION_DASHBOARD_DB_ID = dashboardId;
   process.env.PAIRING_SIGNING_SECRET = 'a-test-signing-key-that-is-at-least-32-characters';
   const { getNotionClient } = await import('../src/lib/notion/client');
   const client = getNotionClient() as any;
   const rows: Array<{ id: string; properties: Record<string, any> }> = [];
-  client.databases.retrieve = async () => ({
+  const flights: Array<{ id: string; properties: Record<string, any> }> = [
+    { id: 'flight-1', properties: responseProperties({ 'Passenger ID': { rich_text: [{ type: 'text', text: { content: passengerId } }] }, Name: { rich_text: [{ type: 'text', text: { content: '旅人' } }] } }) },
+  ];
+  let hasDisplayName = false;
+  client.databases.retrieve = async ({ database_id }: any) => database_id === dashboardId ? ({
+    id: dashboardId, title: [{ plain_text: 'Sleep Airline S3 Sleep Sessions' }],
+    parent: { type: 'page_id', page_id: parentId }, properties: {},
+  }) : ({
     id: databaseId,
     title: [{ plain_text: 'Sleep Airline S3 Device Pairing' }],
     parent: { type: 'page_id', page_id: parentId },
@@ -33,9 +42,16 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
       ['Name', 'title'], ['Kind', 'select'], ['Recovery Hash', 'rich_text'],
       ['Device Secret Hash', 'rich_text'], ['Passenger ID', 'rich_text'],
       ['Last Grant Hash', 'rich_text'], ['Bound At', 'date'],
-    ].map(([name, type]) => [name, { type }])),
+    ].concat(hasDisplayName ? [['Display Name', 'rich_text']] : []).map(([name, type]) => [name, { type }])),
   });
-  client.databases.query = async ({ filter }: any) => {
+  client.databases.update = async ({ properties }: any) => {
+    if (properties['Display Name']) hasDisplayName = true;
+  };
+  client.databases.query = async ({ database_id, filter }: any) => {
+    if (database_id === dashboardId) return {
+      results: flights.filter(row => row.properties['Passenger ID']?.rich_text?.[0]?.plain_text === filter.rich_text.equals),
+      has_more: false, next_cursor: null,
+    };
     let selected = rows;
     if (filter.property === 'Name') {
       selected = rows.filter(row => row.properties.Name?.title?.[0]?.plain_text === filter.title.equals);
@@ -52,7 +68,7 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     return row;
   };
   client.pages.update = async ({ page_id, properties }: any) => {
-    const row = rows.find(candidate => candidate.id === page_id);
+    const row = [...rows, ...flights].find(candidate => candidate.id === page_id);
     assert.ok(row);
     Object.assign(row.properties, responseProperties(properties));
     return row;
@@ -81,6 +97,12 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     const restored = await call('/sessions', 'POST', { passengerId, recoveryCode });
     assert.equal(restored.code, 200);
     const session = restored.body.session as string;
+    const renamed = await call('/profile', 'POST', { displayName: 'Morgan' }, session);
+    assert.equal(renamed.code, 200);
+    assert.equal(renamed.body.updatedFlights, 1);
+    assert.equal(flights[0].properties.Name.rich_text[0].plain_text, 'Morgan');
+    assert.equal((await call('/profile', 'POST', { displayName: 'Morgan' }, session)).body.updatedFlights, 0);
+    assert.equal((await call('/profile', 'POST', { displayName: '  ' }, session)).code, 400);
     assert.equal((await call('/status', 'GET', undefined, session.slice(0, -1) + 'x')).code, 401);
     assert.equal((await call('/status', 'GET', undefined, session)).body.status, 'unpaired');
     const granted = await call('/grants', 'POST', { deviceId, setupCode }, session);
