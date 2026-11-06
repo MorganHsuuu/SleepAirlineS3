@@ -17,6 +17,24 @@ if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
   export WAYLAND_DISPLAY=wayland-0
 fi
 
+# Desktop autostart, labwc and manual launches share one browser owner.
+# Keep the flock parent alive until Chromium exits; an inherited FD alone can
+# be closed by Chromium and would release the lock too early.
+if [ "${1:-}" != "--kiosk-lock-held" ]; then
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "找不到 flock，請安裝 util-linux 後再啟動飛機窗。" >&2
+    exit 1
+  fi
+  LOCK_PATH="${XDG_RUNTIME_DIR}/sleep-airline-kiosk.lock"
+  if [ -n "${SSH_CONNECTION:-}" ]; then
+    nohup flock -n -E 0 "$LOCK_PATH" env -u SSH_CONNECTION bash "$0" --kiosk-lock-held \
+      >/tmp/sleep-airline-launch.log 2>&1 </dev/null &
+    echo "已要求啟動飛機窗；已有執行中的視窗時不會重複開啟。"
+    exit 0
+  fi
+  exec flock -n -E 0 "$LOCK_PATH" bash "$0" --kiosk-lock-held
+fi
+
 wait_for_site() {
   local i
   for i in $(seq 1 60); do
@@ -113,6 +131,7 @@ fi
 CHROME_ARGS=(
   "${OZONE[@]}"
   --kiosk
+  --user-data-dir="${HOME}/.cache/sleep-airline-chrome"
   --start-fullscreen
   --password-store=basic
   --noerrdialogs

@@ -109,9 +109,14 @@ function showFlightNotice(message, durationMs = 0) {
 }
 async function recoverActiveFlight(passengerId, idleOnly = false) {
   if (!passengerId) return false;
+  const before = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
   const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(passengerId)}`, undefined, 10000);
   if (state.profile?.passengerId !== passengerId || !data.activeFlight) return false;
-  if (idleOnly && (state.busy || !['ready', 'landed'].includes(state.stage))) return false;
+  // A late boot lookup must not resurrect a flight after a local landing.
+  const after = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
+  if (idleOnly && (state.busy || !['ready', 'landed'].includes(state.stage)
+      || before.some((value, index) => value !== after[index]))) return false;
+  if (data.activeFlight.flightId && data.activeFlight.flightId === state.lastFlight?.flightId) return false;
   adoptInFlight(data.activeFlight);
   rememberFlightView();
   showFlightNotice('已恢復雲端進行中的航班。進入飛行狀態後，可用降落磁簧完成這趟航程。');
@@ -1713,4 +1718,15 @@ async function init() {
   startDeviceControls();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
-void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
+// Only the owner tab may bind controls, poll sensors or start flight audio.
+void (window.KioskSession ? window.KioskSession.run(async () => {
+  showFlightNotice('');
+  await init();
+}, () => {
+  revealApp();
+  showFlightNotice('另一個飛機窗正在執行；此視窗暫停接收感測器與播放廣播。');
+}) : init()).catch((error) => {
+  console.error('[kiosk session]', error);
+  try { render(); } catch { /* DOM not ready */ }
+  revealApp();
+});

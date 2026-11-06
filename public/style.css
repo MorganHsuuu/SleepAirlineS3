@@ -316,3 +316,8 @@ body.booting .app-shell{opacity:0;pointer-events:none}
 #flight-notice[hidden]{display:none}
 #flight-notice p{margin:0 0 16px;overflow-wrap:anywhere}
 #flight-notice button{padding:9px 18px;border:1px solid #aaa;background:#222;color:#fff}
+
+/* Discreet diagnostics within the lower part of the physical window. */
+#flight-notice,.device-error,.toast{top:auto;bottom:22%;left:50%;transform:translateX(-50%);translate:none;width:min(66vw,640px);max-width:66vw;max-height:18vh;overflow:hidden;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#fff;mix-blend-mode:difference;opacity:.24;font:400 clamp(11px,1.2vw,15px)/1.5 system-ui,sans-serif;text-align:center;pointer-events:none}
+#flight-notice p{margin:0;overflow-wrap:anywhere}
+#flight-notice button{display:none}
