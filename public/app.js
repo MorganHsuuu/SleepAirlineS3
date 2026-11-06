@@ -1718,4 +1718,15 @@ async function init() {
   startDeviceControls();
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
-void init().catch(() => { try { render(); } catch { /* DOM not ready */ } revealApp(); });
+// Only the owner tab may bind controls, poll sensors or start flight audio.
+void (window.KioskSession ? window.KioskSession.run(async () => {
+  showFlightNotice('');
+  await init();
+}, () => {
+  revealApp();
+  showFlightNotice('另一個飛機窗正在執行；此視窗暫停接收感測器與播放廣播。');
+}) : init()).catch((error) => {
+  console.error('[kiosk session]', error);
+  try { render(); } catch { /* DOM not ready */ }
+  revealApp();
+});

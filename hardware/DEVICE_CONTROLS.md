@@ -118,3 +118,13 @@ sudo reboot
 - 藍牙鍵盤第一次仍需在樹莓派端完成配對／確認，可先用現有輸入設備或 SSH 操作；之後即可在藍牙範圍內用鍵盤輸入與維護，無須碰到主板。鍵盤不會把樹莓派畫面傳到另一台電腦。
 
 套用本次維護功能：PR 合併與 Vercel 部署後，在 `~/SleepAirlineS3` 執行 `git pull --ff-only`、`bash hardware/install-kiosk.sh`，然後 `sudo systemctl restart sleep-airline-bridge.service sleep-airline-pairing.service`，重新整理網頁或重開機。務必重啟配對服務，新的維護 API 與離線頁入口才會載入。
+
+## 防止重複視窗／廣播
+
+`kiosk.sh` 現在以 `/run/user/<uid>/sleep-airline-kiosk.lock` 作為共同程序鎖；桌面自動啟動、labwc 和手動重複呼叫時只保留一個啟動程序。從 SSH 啟動也會在背景保留同一把鎖。使用獨立的 `~/.cache/sleep-airline-chrome` kiosk profile，避免被一般 Chromium 視窗接收啟動請求後提前釋放鎖。關閉 Chromium 後自動釋放，無須刪除鎖檔；系統需有 util-linux 的 `flock`（Raspberry Pi OS 一般已有）。
+
+網頁另以同來源／同瀏覽器使用者資料的 Web Locks 限制裝置頁所有權：只有一頁會初始化航班控制、接收磁簧及播放廣播，其他重複頁等待；原頁關閉後才接手。普通手機／電腦訪客不受限制。不支援 Web Locks 的舊瀏覽器沿用原行為，因此 Pi 應使用既有新版 Chromium。同一台若刻意用不同瀏覽器或不同 profile 手動開啟裝置頁，不在跨分頁鎖的範圍內。
+
+先前關閉所有 Chromium 再只開一個視窗後，回音消失，支持重複頁面播放的判斷；尚未取得實機程序清單，無法宣稱已證實唯一原因。此修正保留正常的背景音樂、機長廣播與音效轉場。
+
+合併與部署後，在 Pi 執行 `git pull --ff-only`、`bash hardware/install-kiosk.sh`，再重開機，才會套用新的本機啟動鎖。驗收時連續啟動 kiosk.sh 兩次應只有一個飛機窗；同一瀏覽器另開第二個 `?kiosk=1` 頁面，應只由原頁回應磁簧與播放廣播。
