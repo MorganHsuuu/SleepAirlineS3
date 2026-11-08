@@ -145,9 +145,16 @@ router.post('/devices/complete', async (req, res) => {
     const prior = await boundDevice(data.passengerId);
     if (prior && prior.deviceId !== deviceId) return fail(res, 409, 'passenger_already_bound');
     // A lost response after Notion committed must be safe to retry with the same grant.
+    const record = await findPassenger(data.passengerId);
+    const paired = {
+      status: 'paired' as const,
+      passengerId: data.passengerId,
+      deviceId,
+      displayName: record?.displayName || '',
+    };
     if (device?.lastGrantHash === grantHash) {
       if (device.passengerId === data.passengerId && prior?.deviceId === deviceId) {
-        return res.json({ status: 'paired', passengerId: data.passengerId, deviceId });
+        return res.json(paired);
       }
       return fail(res, 409, 'grant_used');
     }
@@ -158,7 +165,7 @@ router.post('/devices/complete', async (req, res) => {
     if (!current || current.passengerId !== data.passengerId || bound?.deviceId !== deviceId) {
       return fail(res, 409, 'binding_changed');
     }
-    res.json({ status: 'paired', passengerId: data.passengerId, deviceId });
+    res.json(paired);
   } catch (cause) { storeFailure(res, cause); }
 });
 

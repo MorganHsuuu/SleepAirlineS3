@@ -456,10 +456,16 @@
     return { flights: buildBoardFlights(store.flights.map(enrichFlight), groupId) };
   }
 
-  function handleProgress(passengerId) {
+  function handleProgress(passengerId, flightId) {
     const store = loadStore();
     const f = store.flights.find((x) => x.passengerId === passengerId && x.status === 'in_flight');
-    return { activeFlight: f ? enrichFlight(f) : null };
+    if (f) return { activeFlight: enrichFlight(f), lastLandedFlight: null };
+    const landed = store.flights
+      .filter((x) => x.passengerId === passengerId && x.status === 'landed')
+      .sort((a, b) => new Date(b.landingTime || 0) - new Date(a.landingTime || 0))[0] || null;
+    if (!landed) return { activeFlight: null, lastLandedFlight: null };
+    if (flightId && landed.flightId !== flightId) return { activeFlight: null, lastLandedFlight: null };
+    return { activeFlight: null, lastLandedFlight: enrichFlight(landed) };
   }
 
   async function probe() {
@@ -521,7 +527,7 @@
     if (method === 'POST' && path === '/api/flight/land') return handleLand(body);
     if (method === 'GET' && path === '/api/board') return handleBoard(u.searchParams.get('groupId') || '');
     if (method === 'GET' && path === '/api/flight/progress') {
-      return handleProgress(u.searchParams.get('passengerId') || '');
+      return handleProgress(u.searchParams.get('passengerId') || '', u.searchParams.get('flightId') || '');
     }
     if (method === 'GET' && path === '/api/scenery') {
       return { scenery: null };

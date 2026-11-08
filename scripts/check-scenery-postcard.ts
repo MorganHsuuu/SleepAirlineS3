@@ -28,6 +28,8 @@ assert.doesNotMatch(prompt, /Pixar/i);
 assert.doesNotMatch(prompt, /warm gold, peach, fresh morning-blue/i);
 assert.match(prompt, /generic houses must never be the main subject/i);
 assert.match(prompt, /wildlife|flora|landform/i);
+assert.match(prompt, /Never a close-up of plated food/i);
+assert.match(prompt, /stalls, markets, architecture, crafts/i);
 assert.match(rioAtNight, /Christ the Redeemer/i);
 assert.match(rioAtNight, /local night/i);
 assert.match(rioAtNight, /23:30/);

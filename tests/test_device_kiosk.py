@@ -68,6 +68,14 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.kiosk.status, "ready")
         self.assertIn("Wi-Fi", self.kiosk.message)
 
+    def test_empty_cloud_display_name_does_not_erase_saved_passenger_name(self):
+        self.kiosk.state["passengerId"] = "PAX-TEST0001"
+        self.kiosk.state["passengerName"] = "小明"
+        self.kiosk.apply_cloud_identity({"status": "paired", "passengerId": "PAX-TEST0001", "displayName": ""})
+        self.assertEqual(self.kiosk.state["passengerName"], "小明")
+        self.kiosk.apply_cloud_identity({"status": "paired", "passengerId": "PAX-TEST0001", "displayName": "Morgan"})
+        self.assertEqual(self.kiosk.state["passengerName"], "Morgan")
+
 
 if __name__ == "__main__":
     unittest.main()

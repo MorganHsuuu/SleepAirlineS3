@@ -819,7 +819,7 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
   if (state.sound) {
-    void window.BroadcastAudio?.playLandingMusic?.('/media/landing.mp3', { volume: 0.32, fadeInMs: 1800, loop: true });
+    void window.BroadcastAudio?.playLandingMusic?.(`/media/${nextWakeup()}`, { volume: 0.32, fadeInMs: 1800, loop: true });
   }
   return delay(8000).then(() => {
     panel.classList.remove('beat-blur');

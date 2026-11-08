@@ -18,7 +18,8 @@ const TAKEOFF_SFX_URL = 'media/takeoff.mp3';
 /** 儀式音景切換：wakeup ↔ captain ↔ TTS */
 const CEREMONY_CROSSFADE_MS = 900;
 const CEREMONY_RESTORE_MS = 1400;
-const SPEECH_BED_VOLUME = 0.006;
+/** 機長講話時降落音樂保留的音量比例（漸弱，不暫停） */
+const SPEECH_DUCK_RATIO = 0.18;
 /** wakeup 在機長／著陸時壓低但不切斷（相對 landingVolume） */
 const WAKEUP_DUCK_RATIO = {
   captain: 0.12,
@@ -876,22 +877,20 @@ async function duckCeremonyBed() {
   if (jobs.length) await Promise.all(jobs);
 }
 
-/** 機長 TTS 前：wakeup 漸弱至無聲（避免蓋過廣播） */
+/** 機長 TTS 前：降落音樂漸弱變小聲，講完再由 restoreCeremonyBed 拉回 */
 async function muteCeremonyBedForSpeech() {
   const ms = Math.max(1100, CEREMONY_CROSSFADE_MS);
   const jobs = [];
   if (landingAudio) {
-    jobs.push(fadeLandingBedVolume(SPEECH_BED_VOLUME, ms));
+    landingPausedForCaptain = false;
+    const target = clampVolume(Math.max(0.045, landingVolume * SPEECH_DUCK_RATIO));
+    jobs.push(fadeLandingBedVolume(target, ms));
   }
   if (flightSfxAudio) {
     if (savedFlightSfxVolume == null) savedFlightSfxVolume = flightSfxAudio.volume;
     jobs.push(fadeAudioVolume(flightSfxAudio, flightSfxAudio.volume, 0, ms));
   }
   if (jobs.length) await Promise.all(jobs);
-  if (landingAudio && landingAudio.volume <= 0.01) {
-    landingPausedForCaptain = true;
-    try { landingAudio.pause(); } catch { /* noop */ }
-  }
 }
 
 async function restoreCeremonyBed({ ms = CEREMONY_RESTORE_MS } = {}) {

@@ -282,6 +282,9 @@ try {
     assert.match(result.localFeature, /街頭飲食攤/);
     assert.match(result.voiceText, /街頭飲食攤/);
     assert.match(result.imagePrompt, /street-food stall/i);
+    assert.match(result.imagePrompt, /few meters back|stall or market street/i);
+    assert.match(result.imagePrompt, /Never a close-up of plated food/i);
+    assert.doesNotMatch(result.imagePrompt, /plated food foreground/i);
     assert.doesNotMatch(result.voiceText, /自然地貌與天光|山、水或開闊地貌|餐桌/);
     assert.doesNotMatch(
       `${result.voiceText} ${result.imagePrompt}`,

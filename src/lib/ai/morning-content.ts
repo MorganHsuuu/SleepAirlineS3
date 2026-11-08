@@ -76,7 +76,7 @@ export const ARRIVAL_SCENE_THEMES: readonly ArrivalSceneTheme[] = [
     id: 'food',
     label: '當地美食',
     weight: 20,
-    instruction: '選一道可可靠確認屬於目的地的地方料理或飲食場景作為唯一主題。',
+    instruction: '選一處目的地真實的街頭攤販或飲食街景作為唯一主題；要看到攤位與街道，禁止餐盤、碗麵或食物特寫。',
   },
   {
     id: 'street-market',
@@ -128,10 +128,10 @@ const KNOWN_SCENE_SUBJECTS: Array<{
         keywords: ['Yangmingshan', 'volcanic landscape'],
       },
       food: {
-        zh: '台北牛肉麵',
-        en: 'Taipei beef noodles',
-        detailZh: '熱湯、麵條與街坊小吃店呈現城市飲食日常',
-        keywords: ['Taipei beef noodles', 'local food'],
+        zh: '台北牛肉麵攤',
+        en: 'a Taipei beef noodles stall on a neighborhood street',
+        detailZh: '騎樓邊的麵店攤位開著，熱氣從棚子底下飄出來',
+        keywords: ['Taipei beef noodle stall', 'neighborhood street'],
       },
       'street-market': {
         zh: '大稻埕迪化街',
@@ -157,10 +157,10 @@ const KNOWN_SCENE_SUBJECTS: Array<{
         keywords: ['Nile riverfront', 'Cairo'],
       },
       food: {
-        zh: '開羅庫莎麗',
-        en: 'Cairo koshari',
-        detailZh: '米飯、扁豆、麵食與番茄醬呈現常見的城市料理',
-        keywords: ['Cairo koshari', 'local food'],
+        zh: '開羅庫莎麗攤',
+        en: 'a Cairo koshari stall on a busy street',
+        detailZh: '街邊攤位和鋁鍋是整條路的一部分',
+        keywords: ['Cairo koshari stall', 'street vendor'],
       },
       'street-market': {
         zh: '汗哈利利市集',
@@ -192,10 +192,10 @@ const KNOWN_SCENE_SUBJECTS: Array<{
         keywords: ['Alexandria Mediterranean coast', 'harbour'],
       },
       food: {
-        zh: '亞歷山大港海鮮',
-        en: 'Alexandrian seafood',
-        detailZh: '地中海漁獲與港邊餐桌呈現當地飲食特色',
-        keywords: ['Alexandrian seafood', 'Mediterranean food'],
+        zh: '亞歷山大港海鮮攤',
+        en: 'a seafood stall along the Alexandria harbour',
+        detailZh: '港邊攤棚對著海，漁獲還在攤上',
+        keywords: ['Alexandria harbour seafood stall', 'waterfront vendor'],
       },
       'street-market': {
         zh: '曼希亞街區',
@@ -227,10 +227,10 @@ const KNOWN_SCENE_SUBJECTS: Array<{
         keywords: ['Mount Sashiro', 'Kasama hills'],
       },
       food: {
-        zh: '笠間栗子',
-        en: 'Kasama chestnuts',
-        detailZh: '秋季栗子與陶鄉餐桌是笠間常見的飲食風景',
-        keywords: ['Kasama chestnuts', 'local food'],
+        zh: '笠間栗子攤',
+        en: 'a Kasama chestnut stall among pottery streets',
+        detailZh: '陶鄉街道上的栗子攤，工房就在旁邊',
+        keywords: ['Kasama chestnut stall', 'pottery street'],
       },
       'street-market': {
         zh: '笠間藝術之森與陶窯街道',
@@ -270,8 +270,8 @@ function genericSceneSubject(
     food: {
       zh: '熱氣騰騰的街頭飲食攤',
       en: `a steaming street-food stall in ${enCity}`,
-      detailZh: '熱氣和餐盤就在眼前',
-      keywords: [`${enCity} food stall`, 'plated food foreground'],
+      detailZh: '攤棚、爐火和路過的人，是整條街的一部分',
+      keywords: [`${enCity} food stall`, 'street vendor scene'],
     },
     'street-market': {
       zh: '街道與攤位',
@@ -853,7 +853,7 @@ function fallbackMorning(
     localGreeting: greeting,
     voiceText,
     localFeature: subject.zh,
-    imagePrompt: `Beautiful scenery of ${city}, ${country}, with no airplane, window frame, wing or cabin. ${environmentImageDirections(input)} The one dominant subject is ${subject.en}. Show only this visual subject; do not add street-food asides unless that is the subject. Keep geography and architecture authentic to this exact destination. ${subjectSafety} Never substitute another city. Calm realistic scene, welcoming, no crowds, no text`,
+    imagePrompt: `Beautiful scenery of ${city}, ${country}, with no airplane, window frame, wing or cabin. ${environmentImageDirections(input)} The one dominant subject is ${subject.en}. Camera stands a few meters back like a traveler looking at a stall, street, building, artifact, or landscape. Never a close-up of plated food, a bowl filling the frame, or ingredients in the viewer's face. If the subject is food, show the stall or market street as part of the city. Prefer architecture, crafts, cultural atmosphere, and scenery. Show only this visual subject. Keep geography and architecture authentic to this exact destination. ${subjectSafety} Never substitute another city. Calm realistic scene, welcoming, no crowds, no text`,
     imageKeywords: subject.keywords,
     safetyCheck: {
       containsNegativeEmotionalLanguage: false,
@@ -1041,6 +1041,7 @@ visitCount >= 2 時說今晚第幾次降落。後面全部繁體中文，不要�
 voiceText、localFeature、imagePrompt 必須描述同一個看得見的主題；趣事旁白不必畫進圖片。
 回傳 sceneTheme.themeId 必須逐字等於 user.sceneTheme.id。voiceText 與 localFeature 必須逐字包含 subject.zh，imagePrompt 必須逐字包含 subject.en。
 imagePrompt 全英文，只畫看得見的主題與相符天氣，不要畫趣事旁白。禁止飛機、窗框、舷窗、機翼、機艙與畫面文字。光線符合 localTimeLabel。
+鏡頭要像旅人站在幾公尺外看攤販、街景、建築、文物或風景；禁止餐盤、碗麵、食物特寫或把料理填滿畫面。若主題是飲食，畫攤位與街道，不要畫桌上的菜。
 金字塔只可用於 Cairo／Giza。無法確認的文化聲明必須把 containsUnverifiedCulturalClaim 設為 true。
 
 只回 JSON：
@@ -1127,7 +1128,7 @@ async function requestMorning(
           sceneRules: [
             '必須使用本次 voiceShape，不要改用其他句構，也不要每次都從抵達句開頭。',
             'cultureNote 無論哪一國都要改寫成有人味的趣事；不要整段貼上，不要「是國民習慣／是深夜社交場／晚上常有 X」。',
-            '眼前只講 sceneTheme 主題，不要說「這張照片」；趣事不要假裝畫面上有，除非 theme 是 food 且 subject 就是那道料理。',
+            '眼前只講 sceneTheme 主題，不要說「這張照片」；趣事不要假裝畫面上有，除非 theme 是 food 且畫面是攤販街景。',
             '今日評語若出現在 reviewCalibration，必須整段當成 prompt 遵守。',
             '句子要說完；先到城市再講天氣；趣事要有「誰」；光線與店面行人要具體，不要「很日常」「光跟著這裡的天氣走」。',
             '問候後加一句柔軟醒來，例如緩緩睜開眼睛、動一動身體。',
@@ -1138,7 +1139,7 @@ async function requestMorning(
             '金字塔只可用於 Cairo／Giza；埃及其他城市不可自動使用金字塔。',
             '禁止 bannedPhrases 裡的任何套句。',
             'voiceText 用人口語繁體中文；地名用 spokenCity，不要把 cultureNote 整段貼上。',
-            'imagePrompt 全英文，不可夾中文時間或天氣原句。',
+            'imagePrompt 全英文，不可夾中文時間或天氣原句。鏡頭在幾公尺外看攤販、街景、建築、文物或風景；禁止餐盤、碗麵或食物特寫。',
           ],
         }),
       },

@@ -17,6 +17,7 @@ import { getNarrativeRegion } from './src/lib/flight/region';
 import { findArrivalDestination } from './src/lib/flight/direction';
 import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-context';
 import { resolveGroupSocialCue } from './src/lib/flight/social';
+import { formatSleepGuidancePrompt, loadPassengerSleepNotes } from './src/lib/flight/sleep-guidance';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
 import { generateMorningArrival } from './src/lib/ai/morning-content';
 import { generateLandingScenery } from './src/lib/ai/scenery';
@@ -306,7 +307,10 @@ app.post('/api/passenger', async (req, res) => {
     // 飛行中：直接用已查到的航班列更新姓名／小隊，不再重打 getActiveFlight
     if (result.passenger.status === 'in_flight' && result.sourcePage) {
       const patch: { passengerName?: string; groupId?: string } = {};
-      if (name && name !== result.passenger.name) patch.passengerName = name;
+      const incomingName = typeof name === 'string' ? name.trim() : '';
+      if (incomingName && incomingName !== '旅人' && incomingName !== result.passenger.name) {
+        patch.passengerName = incomingName;
+      }
       if (groupId && groupId !== result.passenger.groupId) patch.groupId = groupId;
       if (Object.keys(patch).length > 0) {
         await updateFlight(result.passenger.notionId, patch);
@@ -472,7 +476,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
 
     const groupFlights = await getGroupFlights(passenger.groupId);
     const depPlace = parseDisplayLocation(flight.departureLocation);
-    const [socialCue, depLocal] = await Promise.all([
+    const [socialCue, depLocal, sleepNotes] = await Promise.all([
       resolveSocialCueWithBudget(
         {
           passengerId,
@@ -502,7 +506,9 @@ app.post('/api/flight/takeoff', async (req, res) => {
         latitude: flight.departureLatitude,
         longitude: flight.departureLongitude,
       }).catch(() => null),
+      loadPassengerSleepNotes(passengerId).catch(() => []),
     ]);
+    const sleepGuidance = formatSleepGuidancePrompt(sleepNotes);
 
     const calibration = await loadReviewCalibration();
     const takeoffBroadcast = await generateBroadcastWithBudget(
@@ -520,6 +526,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         localContext: depLocal,
         locale: locale === 'en' ? 'en' : 'zh',
         reviewCalibration: calibration.takeoff || undefined,
+        sleepGuidance: sleepGuidance || undefined,
       },
       () => fallbackCaptainBroadcast(
         'takeoff',
@@ -530,7 +537,8 @@ app.post('/api/flight/takeoff', async (req, res) => {
         null,
         '',
         depLocal,
-        locale === 'en' ? 'en' : 'zh'
+        locale === 'en' ? 'en' : 'zh',
+        sleepNotes
       )
     );
 
@@ -925,10 +933,14 @@ app.get('/api/flight/progress', async (req, res) => {
 
     const flight = await getActiveFlight(passengerId);
     if (!flight) {
-      // Only return the requested landing, never an unrelated older arrival.
       const flightId = typeof req.query.flightId === 'string' ? req.query.flightId : '';
-      const landed = flightId ? await getLastLandedFlight(passengerId) : null;
-      res.json({ activeFlight: null, lastLandedFlight: landed?.flightId === flightId ? landed : null });
+      const landed = await getLastLandedFlight(passengerId);
+      res.json({
+        activeFlight: null,
+        lastLandedFlight: flightId
+          ? (landed?.flightId === flightId ? landed : null)
+          : landed,
+      });
       return;
     }
 

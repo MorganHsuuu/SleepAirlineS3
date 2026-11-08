@@ -130,6 +130,32 @@ async function recoverLandingFlight(passengerId, flightId) {
   rememberFlightView();
   return true;
 }
+async function recoverPairedFlight(passengerId, idleOnly = false) {
+  if (!passengerId) return false;
+  const before = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
+  const data = await api('GET', `/api/flight/progress?passengerId=${encodeURIComponent(passengerId)}`, undefined, 10000);
+  if (state.profile?.passengerId !== passengerId) return false;
+  const after = [state.stage, state.activeFlight?.flightId, state.lastFlight?.flightId, state.takeoffAt];
+  if (idleOnly && (state.busy || !['ready', 'landed', 'cruise'].includes(state.stage)
+      || before.some((value, index) => value !== after[index]))) return false;
+  if (data.activeFlight) {
+    if (data.activeFlight.flightId && data.activeFlight.flightId === state.lastFlight?.flightId) return false;
+    if (flightKey(state.activeFlight) !== flightKey(data.activeFlight) || state.stage !== 'cruise') {
+      adoptInFlight(data.activeFlight);
+    }
+    rememberFlightView();
+    showFlightNotice('已恢復雲端進行中的航班。進入飛行狀態後，可用降落磁簧完成這趟航程。');
+    return true;
+  }
+  const landed = data.lastLandedFlight;
+  if (!landed?.flightId) return false;
+  if (flightKey(state.lastFlight) !== flightKey(landed) || state.stage !== 'landed') {
+    adoptLanded(landed);
+  }
+  rememberFlightView();
+  void applyStoredScenery(landed).then(() => rememberFlightView());
+  return true;
+}
 function setCeremony(label, copy) {
   $('ceremony-tag').textContent = label;
   $('ceremony-copy').textContent = copy;
@@ -407,19 +433,11 @@ function render() {
 function syncConfirmButton() {
   const button = $('btn-confirm');
   if (!button) return;
-  const readyOrLanded = state.stage === 'ready' || state.stage === 'landed';
   if (state.sleepDial) {
     button.hidden = false;
     button.disabled = !state.sleepMoved;
     const label = $('confirm-label') || button;
     label.textContent = state.sleepMoved ? '確認心情' : '先轉動旋鈕';
-    return;
-  }
-  if (readyOrLanded && !state.busy) {
-    button.hidden = false;
-    button.disabled = false;
-    const label = $('confirm-label') || button;
-    label.textContent = state.headingConfirmed ? '航向已確認' : '確認航向';
     return;
   }
   button.hidden = true;
@@ -493,6 +511,65 @@ function applyPassengerOrigin(passenger) {
   };
   $('window-caption').textContent = `${state.origin.name}上空 · 等待出發`;
 }
+function resolvePairedPassengerName(passengerId, incomingName, current) {
+  const incoming = typeof incomingName === 'string' ? incomingName.trim() : '';
+  const currentName = String(current?.name || '').trim();
+  const placeholder = (value) => !value || value === '旅人';
+  if (incoming && !placeholder(incoming)) return incoming;
+  if (current?.passengerId === passengerId && !placeholder(currentName)) return currentName;
+  return incoming || currentName || '旅人';
+}
+
+function rememberPairedProfile(profile) {
+  state.profile = profile;
+  try {
+    localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(profile));
+    localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(profile));
+  } catch { /* storage full or private mode */ }
+  if ($('input-pid')) $('input-pid').value = profile.passengerId;
+  if ($('input-name')) $('input-name').value = profile.name;
+  if ($('input-group')) $('input-group').value = profile.groupId;
+}
+
+let pairedHydrate = { passengerId: '', promise: null };
+async function hydratePairedPassenger(passengerId) {
+  if (!passengerId || state.profile?.passengerId !== passengerId) return false;
+  if (pairedHydrate.passengerId === passengerId && pairedHydrate.promise) return pairedHydrate.promise;
+  const run = (async () => {
+    if (state.mode === 'live' && hasResearchConsent()) {
+      try {
+        const result = await api('POST', '/api/passenger', {
+          passengerId,
+          name: state.profile.name,
+          groupId: state.profile.groupId || '0001',
+          researchConsent: true,
+          stampConsent: false,
+        });
+        const notionName = resolvePairedPassengerName(passengerId, result.passenger?.name, state.profile);
+        if (notionName !== state.profile.name) {
+          rememberPairedProfile({
+            ...state.profile,
+            name: notionName,
+            groupId: result.passenger?.groupId || state.profile.groupId,
+          });
+        }
+        await restoreNotionFlight(result);
+        if (result.activeFlight || result.lastLandedFlight?.flightId) return true;
+      } catch (error) {
+        console.error('[device flight recovery]', error);
+      }
+    }
+    return recoverPairedFlight(passengerId, true);
+  })();
+  pairedHydrate = { passengerId, promise: run };
+  try {
+    return await run;
+  } catch (error) {
+    if (pairedHydrate.passengerId === passengerId) pairedHydrate = { passengerId: '', promise: null };
+    throw error;
+  }
+}
+
 function ensureGuestProfile() {
   if (state.profile?.passengerId && state.profile?.name && state.profile?.groupId) return;
   let guest = null;
@@ -659,7 +736,7 @@ async function restoreNotionFlight(passengerResult) {
     return;
   }
   const landed = passengerResult?.lastLandedFlight;
-  if (landed?.arrivalLocation) {
+  if (landed?.flightId) {
     if (flightKey(state.lastFlight) !== flightKey(landed)) adoptLanded(landed);
     rememberFlightView();
     const place = state.destination;
@@ -972,7 +1049,7 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
   if (state.sound) {
-    void window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: 0.32, fadeInMs: 1800, loop: true });
+    void window.BroadcastAudio?.playLandingMusic?.(`media/${nextWakeup()}`, { volume: 0.32, fadeInMs: 1800, loop: true });
   }
   return delay(8000).then(() => {
     panel.classList.remove('beat-blur');
@@ -1618,15 +1695,20 @@ function fireScreenFallback() {
   window.BroadcastAudio?.primeFromUserGesture?.();
   window.BroadcastAudio?.armWakeupCarrier?.();
   if (state.stage === 'landed') {
+    window.FlightDeviceControls?.consumeEndpoint?.('takeoff');
     restart();
     void doTakeoff();
     return;
   }
   if (state.stage === 'ready') {
+    window.FlightDeviceControls?.consumeEndpoint?.('takeoff');
     void doTakeoff();
     return;
   }
-  if (state.stage === 'takeoff' || state.stage === 'cruise') void doLand();
+  if (state.stage === 'takeoff' || state.stage === 'cruise') {
+    window.FlightDeviceControls?.consumeEndpoint?.('land');
+    void doLand();
+  }
 }
 
 function bindScreenFallback() {
@@ -1647,7 +1729,6 @@ function bindScreenFallback() {
 }
 
 function startDeviceControls() {
-  let syncedPassenger = null;
   let nextRecoveryAt = 0;
   window.FlightDeviceControls?.start({
     getState: () => state,
@@ -1655,25 +1736,17 @@ function startDeviceControls() {
     setSleep: (percent) => applySleepFromDevice(percent),
     confirm: () => confirmAction(),
     setPassenger: (passengerId, passengerName) => {
-      if (syncedPassenger !== passengerId && Date.now() >= nextRecoveryAt) {
-        syncedPassenger = passengerId;
-        // Run after this callback installs the paired passenger profile.
-        queueMicrotask(() => {
-          void recoverActiveFlight(passengerId, true).catch((error) => {
-            nextRecoveryAt = Date.now() + 15000;
-            syncedPassenger = null; // Retry without flooding the cloud.
-            console.error('[device flight recovery]', error);
-          });
-        });
+      const name = resolvePairedPassengerName(passengerId, passengerName, state.profile);
+      if (state.profile?.passengerId !== passengerId || state.profile.name !== name) {
+        rememberPairedProfile({ passengerId, name, groupId: state.profile?.groupId || '0001' });
       }
-      const name = typeof passengerName === 'string' && passengerName.trim() ? passengerName.trim() : '旅人';
-      if (state.profile?.passengerId === passengerId && state.profile.name === name) return;
-      state.profile = { passengerId, name, groupId: state.profile?.groupId || '0001' };
-      localStorage.setItem('sleepAirlineS3Profile', JSON.stringify(state.profile));
-      localStorage.setItem('sleepAirlineS3Guest', JSON.stringify(state.profile));
-      $('input-pid').value = passengerId;
-      $('input-name').value = state.profile.name;
-      $('input-group').value = state.profile.groupId;
+      if (Date.now() < nextRecoveryAt) return;
+      queueMicrotask(() => {
+        void hydratePairedPassenger(passengerId).catch((error) => {
+          nextRecoveryAt = Date.now() + 15000;
+          console.error('[device flight recovery]', error);
+        });
+      });
     },
     takeoff: () => {
       if (state.stage === 'landed') restart();
@@ -1750,6 +1823,11 @@ async function init() {
   }
   preloadApproachVoice();
   startDeviceControls();
+  if (isHardwareKiosk() && /^PAX-[A-Z0-9]{8,32}$/.test(state.profile?.passengerId || '')) {
+    void hydratePairedPassenger(state.profile.passengerId).catch((error) => {
+      console.error('[device flight recovery]', error);
+    });
+  }
   clockTimer = setInterval(() => { if (state.takeoffAt) $('flight-duration').textContent = formatTime(Date.now() - state.takeoffAt); }, 1000);
 }
 // Only the owner tab may bind controls, poll sensors or start flight audio.

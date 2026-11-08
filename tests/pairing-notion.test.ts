@@ -109,7 +109,9 @@ test('Notion pairing preserves the phone/Pi API contract, recovery, replay prote
     assert.equal(granted.code, 200);
     assert.equal((await call('/devices/complete', 'POST', { deviceId, deviceSecret, setupCode: 'wrong-code-with-at-least-32-characters', grant: granted.body.grant })).code, 401);
     const complete = { deviceId, deviceSecret, setupCode, grant: granted.body.grant };
-    assert.equal((await call('/devices/complete', 'POST', complete)).body.status, 'paired');
+    const paired = await call('/devices/complete', 'POST', complete);
+    assert.equal(paired.body.status, 'paired');
+    assert.equal(paired.body.displayName, 'Morgan');
     assert.equal((await call('/devices/complete', 'POST', complete)).body.status, 'paired');
     assert.equal((await call('/status', 'GET', undefined, session)).body.deviceId, deviceId);
     assert.equal((await call('/devices/status', 'POST', { deviceId, deviceSecret })).body.status, 'paired');

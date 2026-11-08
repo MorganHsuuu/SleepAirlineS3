@@ -178,3 +178,27 @@ test('an ended pulse counter alone cannot move the flight state', () => {
  const f=fixture();f.send();f.send({takeoffCount:1,takeoffClosed:false});
  assert.deepEqual(f.actions,[]);
 });
+test('reed takeoff still works when the screen fallback was not used', () => {
+ const f=fixture(); f.send(); f.send({takeoffCount:1});
+ assert.deepEqual(f.actions,[['takeoff',2]]);
+});
+test('a screen takeoff consumes the takeoff reed so the same magnet cannot fire again', () => {
+ const f=fixture(); f.send();
+ f.controller.consume('takeoff');
+ f.send({takeoffCount:1});
+ assert.deepEqual(f.actions,[]);
+ f.state.stage='cruise'; f.state.busy=false;
+ f.send({landCount:1});
+ assert.deepEqual(f.actions,[['land']]);
+});
+test('a screen landing consumes the land reed so takeoff magnet can still start the next flight', () => {
+ const f=fixture(); f.send(); f.send({takeoffCount:1});
+ f.state.stage='cruise'; f.state.busy=false;
+ f.controller.consume('land');
+ f.send({landCount:1});
+ assert.deepEqual(f.actions,[['takeoff',2]]);
+ f.state.stage='landed'; f.state.busy=false;
+ f.send({landClosed:false});
+ f.send({takeoffCount:2});
+ assert.deepEqual(f.actions.at(-1),['takeoff',2]);
+});

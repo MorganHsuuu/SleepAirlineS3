@@ -181,6 +181,18 @@ class Kiosk:
     def persist(self):
         save_state(self.state)
 
+    def apply_cloud_identity(self, data):
+        if data.get("status") == "unpaired":
+            self.state["passengerId"] = None
+            self.state["passengerName"] = ""
+            self.persist()
+            return "unpaired"
+        incoming = (data.get("displayName") or "").strip()
+        if incoming and self.state.get("passengerName") != incoming:
+            self.state["passengerName"] = incoming
+            self.persist()
+        return "paired"
+
     def start_hotspot(self):
         with self.lock:
             if (time.time() >= self.state.get("setupExpires", 0) or
@@ -365,7 +377,11 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
                     time.sleep(min(3 * (attempt + 1), 12))
             with self.lock:
                 self.state["passengerId"] = data["passengerId"]
-                self.state["passengerName"] = data.get("displayName") or ""
+                incoming_name = (data.get("displayName") or "").strip()
+                if incoming_name:
+                    self.state["passengerName"] = incoming_name
+                elif not self.state.get("passengerName"):
+                    self.state["passengerName"] = ""
                 self.state.pop("setupCode", None)
                 self.state.pop("hotspotPassword", None)
                 self.persist()
@@ -397,14 +413,8 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
                 })
                 self.online = True
                 self.message = ""
-                if data.get("status") == "unpaired":
-                    self.state["passengerId"] = None
-                    self.state["passengerName"] = ""
-                    self.persist()
+                if self.apply_cloud_identity(data) == "unpaired":
                     self.start_hotspot()
-                elif self.state.get("passengerName") != (data.get("displayName") or ""):
-                    self.state["passengerName"] = data.get("displayName") or ""
-                    self.persist()
             except urllib.error.HTTPError as error:
                 self.online = False
                 self.message = f"雲端綁定狀態暫時無法確認（HTTP {error.code}），稍後會自動重試。"
@@ -525,13 +535,7 @@ def main():
                                                    "deviceSecret": kiosk.state["deviceSecret"]})
             kiosk.online = True
             kiosk.message = ""
-            if data.get("status") == "unpaired":
-                kiosk.state["passengerId"] = None
-                kiosk.state["passengerName"] = ""
-                kiosk.persist()
-            elif kiosk.state.get("passengerName") != (data.get("displayName") or ""):
-                kiosk.state["passengerName"] = data.get("displayName") or ""
-                kiosk.persist()
+            kiosk.apply_cloud_identity(data)
         except urllib.error.HTTPError as error:
             kiosk.online = False
             kiosk.message = f"雲端綁定狀態暫時無法確認（HTTP {error.code}），稍後會自動重試。"

@@ -23,6 +23,19 @@ function readGroupId(props: Record<string, unknown>): string {
   return readSelect(props, 'Group ID') ?? '';
 }
 
+function isPlaceholderName(name: string | null | undefined): boolean {
+  const value = String(name || '').trim();
+  return !value || value === '旅人';
+}
+
+function preferredName(incoming: string | null | undefined, stored: string | null | undefined): string {
+  const next = String(incoming || '').trim();
+  const prev = String(stored || '').trim();
+  if (next && !isPlaceholderName(next)) return next;
+  if (prev && !isPlaceholderName(prev)) return prev;
+  return next || prev;
+}
+
 function resolveProfile(
   passengerId: string,
   name: string,
@@ -30,7 +43,7 @@ function resolveProfile(
 ): { name: string; groupId: string } {
   const cached = profileCache.get(passengerId);
   const resolved = {
-    name: name || cached?.name || '',
+    name: preferredName(name, cached?.name),
     groupId: groupId || cached?.groupId || '',
   };
   if (resolved.name || resolved.groupId) {
@@ -73,7 +86,7 @@ function parsePassengerFromFlightRow(
   return {
     notionId: page.id as string,
     passengerId,
-    name: overrides?.name || readText(props, 'Name'),
+    name: preferredName(overrides?.name, readText(props, 'Name')),
     groupId: overrides?.groupId || readGroupId(props),
     currentLocation,
     currentLatitude,

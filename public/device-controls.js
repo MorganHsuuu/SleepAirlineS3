@@ -50,6 +50,9 @@
     let adcFailed = false;
     return {
       reset() { previous = null; },
+      consume(endpoint) {
+        if (endpoint === 'takeoff' || endpoint === 'land') lastEndpoint = endpoint;
+      },
       accept(data) {
         if (!validSample(data)) throw new Error('Expected device_bridge.py protocol v2');
         const state = getState();
@@ -113,6 +116,11 @@
     };
   }
 
+  let activeController = null;
+  function consumeEndpoint(endpoint) {
+    activeController?.consume?.(endpoint);
+  }
+
   function start(adapter) {
     if (root.document) {
       root.document.addEventListener('pointerdown', () => {
@@ -127,6 +135,7 @@
       showError(errors.bridge || errors.adc);
     };
     const controller = createController({ ...adapter, setError });
+    activeController = controller;
     let connected = false;
     let kioskDetected = false;
     let bridgeExitCode = null;
@@ -193,7 +202,7 @@
     void poll();
   }
 
-  const api = { enabled, start, createController, shouldProbeLocalBridge };
+  const api = { enabled, start, createController, shouldProbeLocalBridge, consumeEndpoint };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlightDeviceControls = api;
 })(globalThis);

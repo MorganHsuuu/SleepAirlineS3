@@ -1,6 +1,6 @@
 /**
- * Landing ceremony must play landing.mp3 as audible music,
- * not only captain PA + airplane sfx, and not replace it with wakeup.
+ * Landing ceremony rotates wakeup1–4 instead of landing.mp3,
+ * and ducks that bed under captain speech then restores it.
  * Run: node scripts/check-landing-music.mjs
  */
 import { readFile } from 'node:fs/promises';
@@ -19,15 +19,22 @@ function sliceFn(src, name) {
 
 const playGlassRoute = sliceFn(app, 'playGlassRoute');
 const doLand = sliceFn(app, 'doLand');
-const duckCeremonyBed = sliceFn(audio, 'duckCeremonyBed');
+const playBroadcast = sliceFn(app, 'playBroadcast');
+const muteCeremonyBedForSpeech = sliceFn(audio, 'muteCeremonyBedForSpeech');
 const restoreCeremonyBed = sliceFn(audio, 'restoreCeremonyBed');
+const playCaptainBroadcast = sliceFn(audio, 'playCaptainBroadcast');
 
 const checks = [
-  ['playGlassRoute starts landing.mp3', /playLandingMusic\?\.\(['"]media\/landing\.mp3['"]/.test(playGlassRoute)],
-  ['doLand does not start wakeup as the landing bed', !/startWakeupBed\?\.?\(/.test(doLand)],
-  ['landing.mp3 stays through weather fade-out', /fadeOutLandingMusic/.test(doLand)],
-  ['duckCeremonyBed keeps landing music audible under airplane', duckCeremonyBed.includes('wakeupBedOpen') && /landingVolume/.test(duckCeremonyBed) && !/softWakeupVolume\(WAKEUP_DUCK_RATIO\.approach\)/.test(duckCeremonyBed.replace(/if\s*\(\s*wakeupBedOpen[\s\S]*?}/, ''))],
-  ['restoreCeremonyBed restores landing.mp3 volume', restoreCeremonyBed.includes('wakeupBedOpen') && restoreCeremonyBed.includes('landingVolume')],
+  ['wakeup tracks are wakeup1–4', /wakeup1\.mp3/.test(app) && /wakeup2\.mp3/.test(app) && /wakeup3\.mp3/.test(app) && /wakeup4\.mp3/.test(app)],
+  ['playGlassRoute rotates wakeup via nextWakeup', /playLandingMusic\?\.\(`media\/\$\{nextWakeup\(\)\}`/.test(playGlassRoute)],
+  ['playGlassRoute no longer plays landing.mp3', !/landing\.mp3/.test(playGlassRoute)],
+  ['doLand does not start wakeup as a crushed startWakeupBed', !/startWakeupBed\?\.?\(/.test(doLand)],
+  ['landing music stays through weather fade-out', /fadeOutLandingMusic/.test(doLand)],
+  ['landing PA restores the bed after speech', /restoreBed:\s*true/.test(doLand) && /restoreBed/.test(playBroadcast)],
+  ['muteCeremonyBedForSpeech fades the bed quieter', /fadeLandingBedVolume/.test(muteCeremonyBedForSpeech)],
+  ['muteCeremonyBedForSpeech does not pause landing music', !/\.pause\(\)/.test(muteCeremonyBedForSpeech)],
+  ['restoreCeremonyBed brings landing music back up', restoreCeremonyBed.includes('landingVolume')],
+  ['playCaptainBroadcast restores the bed when restoreBed is true', /if \(restoreBed\) await restoreCeremonyBed/.test(playCaptainBroadcast)],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);
