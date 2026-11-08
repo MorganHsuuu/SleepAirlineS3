@@ -10,7 +10,7 @@ const MASTER_VOLUME = 1.1;
 const CAPTAIN_SFX = {
   url: 'media/captain.mp3',
   seconds: 7,
-  volume: 0.95,
+  volume: 0.5,
 };
 
 const TAKEOFF_SFX_URL = 'media/takeoff.mp3';
@@ -107,7 +107,7 @@ function mixVolume(v) {
 }
 
 function mixGain(v) {
-  return Math.max(0, Number(v) * MASTER_VOLUME);
+  return Math.min(1, Math.max(0, Number(v) * MASTER_VOLUME));
 }
 
 function fadeAudioVolume(audio, from, to, ms) {
@@ -563,7 +563,7 @@ async function playCaptainIntro({ fadeInMs = 0, volume, handoff = false } = {}) 
   const cfg = { ...CAPTAIN_SFX, ...window.SLEEP_AIRLINE_CAPTAIN_SFX };
   if (!cfg.url) return false;
   const sec = Math.max(0.5, Math.min(30, Number(cfg.seconds) || 7));
-  const vol = typeof volume === 'number' ? clampVolume(volume) : (cfg.volume ?? 0.95);
+  const vol = typeof volume === 'number' ? clampVolume(volume) : (cfg.volume ?? 0.5);
   // 直接等 playTimedClip（內建 Web Audio → HTML Audio 後備與秒數上限）。
   // 舊寫法 Promise.race(play, delay) 在 play 失敗時會立刻結束，整段 captain.mp3 被跳過。
   const ok = await playTimedClip(cfg.url, {

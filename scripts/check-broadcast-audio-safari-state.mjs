@@ -101,15 +101,16 @@ window.window = window;
 
 vm.createContext(context);
 const source = await readFile(new URL('../public/broadcast-audio.js', import.meta.url), 'utf8');
-assert.match(source, /const SPEECH_BED_VOLUME = 0\.006;/);
+assert.match(source, /const SPEECH_DUCK_RATIO = 0\.18;/);
 assert.match(
   source,
-  /muteCeremonyBedForSpeech\(\)[\s\S]*fadeLandingBedVolume\(SPEECH_BED_VOLUME, ms\)/,
-  'speech must duck the landing bed to near silence',
+  /muteCeremonyBedForSpeech\(\)[\s\S]*landingVolume \* SPEECH_DUCK_RATIO/,
+  'speech must duck the landing bed quieter without pausing it',
 );
 assert.doesNotMatch(
   source,
-  /muteCeremonyBedForSpeech\(\)[\s\S]{0,500}fadeLandingBedVolume\(0\.08, ms\)/,
+  /muteCeremonyBedForSpeech\(\)[\s\S]{0,400}\.pause\(\)/,
+  'speech must not pause the landing bed',
 );
 assert.match(
   source,
@@ -173,8 +174,8 @@ assert.match(
 );
 assert.match(
   app,
-  /startWakeupBed\?\.\(armedWakeup, 0\)/,
-  'wakeup file may load at volume 0 only after the shade is fully open',
+  /playLandingMusic\?\.\(`media\/\$\{nextWakeup\(\)\}`/,
+  'landing music must rotate wakeup tracks after the window is open',
 );
 const takeoff = app.slice(app.indexOf('async function doTakeoff()'), app.indexOf('async function requestScenery('));
 assert.ok(
@@ -185,9 +186,18 @@ assert.ok(
 const landing = app.slice(app.indexOf('async function doLand()'), app.indexOf('async function submitSleepReport('));
 assert.ok(
   landing.indexOf('await delay(1000)') < landing.indexOf('playCaptainIntro?.(')
-    && landing.indexOf('playCaptainIntro?.(') < landing.indexOf('playApproachClip?.(')
-    && landing.indexOf('playApproachClip?.(') < landing.indexOf('startWakeupBed?.('),
-  'landing must wait one second, play captain, play approach voice, then fade in music',
+    && landing.indexOf('playCaptainIntro?.(') < landing.indexOf('playApproachClip?.('),
+  'descent must wait one second, play captain chime, then play approach voice',
+);
+assert.match(
+  landing,
+  /skipCaptainIntro:\s*false/,
+  'after landing, captain.mp3 must finish before the AI voice',
+);
+assert.match(
+  landing,
+  /landingCueGen \+= 1/,
+  'arrival PA must cancel the descent chime so it cannot overlap the AI voice',
 );
 assert.match(
   landing,
@@ -196,8 +206,8 @@ assert.match(
 );
 assert.match(
   landing,
-  /await Promise\.race\(\[speechPlay, delay\(18000\)\]\)/,
-  'arrival speech must finish before the post-landing UI takes over',
+  /await Promise\.race\(\[speechPlay, delay\(90000\)\]\)/,
+  'arrival chime plus speech must finish before the post-landing UI takes over',
 );
 assert.match(
   landing,

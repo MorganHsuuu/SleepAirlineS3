@@ -31,6 +31,8 @@ const checks = [
   ['doLand does not start wakeup as a crushed startWakeupBed', !/startWakeupBed\?\.?\(/.test(doLand)],
   ['landing music stays through weather fade-out', /fadeOutLandingMusic/.test(doLand)],
   ['landing PA restores the bed after speech', /restoreBed:\s*true/.test(doLand) && /restoreBed/.test(playBroadcast)],
+  ['arrival PA plays captain.mp3 first then AI voice', /skipCaptainIntro:\s*false/.test(doLand)],
+  ['arrival PA cancels descent chime before AI voice', /landingCueGen \+= 1/.test(doLand)],
   ['muteCeremonyBedForSpeech fades the bed quieter', /fadeLandingBedVolume/.test(muteCeremonyBedForSpeech)],
   ['muteCeremonyBedForSpeech does not pause landing music', !/\.pause\(\)/.test(muteCeremonyBedForSpeech)],
   ['restoreCeremonyBed brings landing music back up', restoreCeremonyBed.includes('landingVolume')],

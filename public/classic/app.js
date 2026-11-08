@@ -166,6 +166,7 @@ function shadeLip() {
 }
 function syncShadeHandle() {}
 let compassTimer = null;
+let landingCueGen = 0;
 let heading = 90;
 function wrapDelta(from, to) {
   let diff = to - from;
@@ -1010,12 +1011,13 @@ async function doLand() {
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
   window.BroadcastAudio?.primeFromUserGesture?.();
+  const cueGen = ++landingCueGen;
   void (async () => {
     if (!state.sound) return;
     await delay(1000);
-    if (state.stage !== 'landing' && state.stage !== 'landed') return;
-    await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.9, handoff: true }).catch(() => false);
-    if (state.stage !== 'landing' && state.stage !== 'landed') return;
+    if (cueGen !== landingCueGen || state.stage !== 'landing') return;
+    await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.5, handoff: true }).catch(() => false);
+    if (cueGen !== landingCueGen || state.stage !== 'landing') return;
     await window.BroadcastAudio?.playApproachClip?.().catch(() => false);
   })();
   primeLandingVideos();
@@ -1169,9 +1171,10 @@ async function doLand() {
         arrivalPrepared = await fallbackVoiceP;
       }
     }
+    landingCueGen += 1;
     const speechPlay = state.sound
       ? playBroadcast(spoken, arrivalVoice?.speechAudioBase64 || null, {
-        skipCaptainIntro: true,
+        skipCaptainIntro: false,
         restoreBed: true,
         prepared: arrivalPrepared,
         preferWebAudio: true,
@@ -1188,7 +1191,7 @@ async function doLand() {
     const weather = await weatherJob;
     await delay(500);
     requestAnimationFrame(() => setTimeout(() => image.classList.remove('developing'), 40));
-    await Promise.race([speechPlay, delay(18000)]);
+    await Promise.race([speechPlay, delay(90000)]);
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
