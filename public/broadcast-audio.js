@@ -1321,14 +1321,18 @@ async function speakText(text) {
   return speakTextOnce(text);
 }
 
-async function fetchOpenAISpeechBlob(text, style) {
+async function fetchOpenAISpeechBlob(text, style, speed) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
     const res = await fetch('/api/broadcast/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, style: style || 'formal_captain' }),
+      body: JSON.stringify({
+        text,
+        style: style || 'formal_captain',
+        ...(typeof speed === 'number' ? { speed } : {}),
+      }),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -1368,8 +1372,8 @@ async function prepareCaptainSpeechFromBase64(base64, text, style) {
 }
 
 /** 先載入語音；OpenAI 失敗時標記可走瀏覽器 TTS。 */
-async function prepareCaptainSpeech(text, style) {
-  const blob = await fetchOpenAISpeechBlob(text, style);
+async function prepareCaptainSpeech(text, style, speed) {
+  const blob = await fetchOpenAISpeechBlob(text, style, speed);
   if (blob) {
     const ready = await loadPreparedSpeechAudio(blob, text);
     if (ready) return ready;
@@ -1388,14 +1392,14 @@ async function decodePreparedSpeech(prepared) {
 }
 
 /** 起飛用：有 base64 直接轉 blob；否則等 OpenAI（塔台聲會持續），失敗才標記瀏覽器 TTS */
-async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain') {
+async function prepareTakeoffSpeech(text, speechBase64, style = 'formal_captain', speed) {
   if (speechBase64) {
     try {
       const ready = await loadPreparedSpeechAudio(base64ToMp3Blob(speechBase64), text);
       if (ready) return ready;
     } catch { /* fallback below */ }
   }
-  return prepareCaptainSpeech(text, style);
+  return prepareCaptainSpeech(text, style, speed);
 }
 
 async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio = false } = {}) {

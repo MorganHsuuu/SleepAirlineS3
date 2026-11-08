@@ -3,7 +3,7 @@ import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { LocalContext } from '../flight/local-context';
 import { arrivalHello, timeAdjustedGreeting } from './morning-content';
-import { placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
+import { farewellSpotFor, placeOrientationLine, spokenFarewellLine, spokenPlaceZh } from '../flight/local-context';
 import { fallbackSleepInvitation, type SleepNote } from '../flight/sleep-guidance';
 
 export type UiLocale = 'zh' | 'en';
@@ -196,10 +196,18 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
     }
     if (ctx.weatherSummary) lines.push(`local weather: ${ctx.weatherSummary}`);
     if (ctx.localTimeLabel) lines.push(`time of day: ${ctx.localTimeLabel}`);
+    if (phase === 'takeoff') {
+      const spot = farewellSpotFor(ctx.cityName, 'en');
+      lines.push(
+        spot
+          ? `farewell beat (rewrite into one leaving-story, like “we’ve wandered Xinyi, now leaving Taipei”): ${spot}`
+          : 'No named district: use one real local-life beat as a goodbye; never invent a neighborhood.'
+      );
+    }
     lines.push(
       phase === 'landing'
         ? 'Rewrite into one or two natural local tips for the passenger (greeting, food, etiquette). Do not copy verbatim.'
-        : 'At most one weather or atmosphere beat about departure. Do not hint at the destination.'
+        : 'At most one weather beat about departure. Do not hint at the destination.'
     );
     return lines.join('\n');
   }
@@ -213,6 +221,14 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
   }
   if (ctx.weatherSummary) lines.push(`當地天氣：${ctx.weatherSummary}`);
   if (ctx.localTimeLabel) lines.push(`時段：${ctx.localTimeLabel}`);
+  if (phase === 'takeoff') {
+    const spot = farewellSpotFor(ctx.cityName, 'zh');
+    lines.push(
+      spot
+        ? `告別場景（必須改寫成一句「逛完／走過這裡，要離開這座城市」的故事，例如「我們逛完信義區，要離開台北了」）：${spot}`
+        : '沒有指定街區：可用當地文化裡一個真實生活場景當告別，禁止編造沒聽過的區名。'
+    );
+  }
   lines.push(
     phase === 'landing'
       ? '請改寫成抵達後給乘客的一兩句在地提示（問候、飲食、社交禮儀等），勿整段照搬。'
@@ -249,14 +265,14 @@ ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 - Takeoff: at most one departure weather beat
 ` : ''}
 Writing:
-- English, ${isTakeoff ? '80–110' : '90–130'} words, hard cap ${isTakeoff ? '130' : '160'}
-- ${isTakeoff ? 'Takeoff: 4–5 sentences — ① welcome + captain + departure + heading, with a different night image each time ② one gentle sleep invitation, not a clipped command: if they are willing, close the eyes, ease the shoulders, and breathe naturally — this is a bedtime knock, never a meditation, breath-count, or step list; never only “Close your eyes.” ③ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
+- English, ${isTakeoff ? '100–150' : '90–130'} words, hard cap ${isTakeoff ? '175' : '160'}
+- ${isTakeoff ? 'Takeoff: 5–6 sentences — ① welcome + captain + departure + heading ② one leaving-story from a real local street/district (e.g. “We’ve wandered Xinyi, now leaving Taipei”); never invent a neighborhood ③ one visible night image, no purple prose ④ two gentle sleep-invitation sentences: close the eyes, ease the shoulders, breathe naturally, plus a little more companionship shaped by [sleep record]; never a meditation, breath-count, or step list; never only “Close your eyes.” ⑤ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
 - Cut stock phrases like “thank you for flying with us”${isTakeoff ? ', except the required closing sentence' : ''}
 - Never output a blunt slogan; write as a captain PA with imagery
 - Do not mention teammates, squad, friends, or other passengers
 - Do not invent places, times, or names
 - If [review calibration] is present: it is a generation prompt, not optional flavor. Today’s comments outrank other writing habits and must be followed in full; match high-score specificity; do not repeat problems named in comments / low scores; never copy the sample PA text
-- If [sleep record] is present at takeoff: it is a generation prompt. Shape the one sleep invitation from that history — encouraging, never scolding; never speak scores; suggest how they might rest tonight
+- If [sleep record] is present at takeoff: it is a generation prompt. Shape the two sleep-invitation sentences from that history — encouraging, never scolding; never speak scores; suggest how they might rest tonight
 - Output PA text only — no titles, quotes, or notes`;
   }
 
@@ -285,18 +301,18 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
   不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
 - 降落廣播：當地語言問候之後，緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
-- 起飛廣播：若提供出發地天氣，最多一句帶過，勿喧賓奪主
+- 起飛廣播：用【告別場景】寫一句剛逛完當地、正要離開的故事（例：我們逛完信義區，要離開台北了）；沒有指定街區就用當地文化裡的真實生活場景，禁止編造區名。天氣最多一句帶過，勿喧賓奪主、勿暗示目的地
 ` : ''}
 寫作：
-- 繁體中文口語，${isTakeoff ? '80–120' : '110–160'} 字，最多不超過 ${isTakeoff ? '140' : '190'} 字。像機長對乘客講話，短句、自然，不要翻譯腔、不要英文夾中文
+- 繁體中文口語，${isTakeoff ? '110–165' : '110–160'} 字，最多不超過 ${isTakeoff ? '190' : '190'} 字。像機長對乘客講話，短句、自然，不要翻譯腔、不要英文夾中文
 - 禁止：彷彿、編織美夢、鋪展畫面、點亮希望、內心的喧囂、隨風而去、為您、夢幻的畫面、如綿羊、低語、保管目的地、航向向東、當地航站、本班自
-- ${isTakeoff ? '起飛廣播 4–5 句：①「歡迎搭乘 Sleep Airline，這裡是機長。」緊接著「我們從{廣播用地名}出發，{航向口語}」。航向口語用「往東飛」這種，禁止「航向向東」 ②夜色只講一樣看得見的東西（跑道燈、雲、路燈），一句就好，不要抒情比喻 ③睡眠引導是柔軟的睡前敲門磚，用「您願意的話」邀請：閉眼、肩膀放鬆、自然呼吸，寫成一句完整話。禁止只丟「先把眼睛閉上。」或「肩膀放一下。」禁止冥想步驟、數呼吸、讓疲憊抒情 ④最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
+- ${isTakeoff ? '起飛廣播 5–6 句：①「歡迎搭乘 Sleep Airline，這裡是機長。」緊接著「我們從{廣播用地名}出發，{航向口語}」。航向口語用「往東飛」這種，禁止「航向向東」 ②用告別場景寫一句「逛完某某，要離開這座城市」的故事，要像跟人說話，不要觀光簡介 ③夜色只講一樣看得見的東西（跑道燈、雲、路燈），一句就好，不要抒情比喻 ④睡眠引導寫兩句：先用「您願意的話」邀請閉眼、肩膀放鬆、自然呼吸；再多一句陪伴，依【睡眠紀錄】溫柔調整今晚可以怎麼睡。禁止只丟「先把眼睛閉上。」禁止冥想步驟、數呼吸、讓疲憊抒情 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
 - 刪掉「有任何需求」「祝您旅途愉快」「期待美好瞬間」等套話；起飛結尾固定句「Sleep Airline 感謝您的搭乘」除外
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
 - 禁止寫隊友、同組、朋友或其他旅客的動態
 - 不得編造未提供的地名、時間、人名
 - 若 user 提供【審查校正】，那是生成指令不是可選風格：今日評語權重最高、必須整段遵守；靠近高分範例的具體程度；評語與低分指出的空話、套句、重複風景句不要再寫。不要複製校正區的廣播原文
-- 若 user 提供【睡眠紀錄】（起飛）：那是生成指令。用一句睡眠引導接住他上次怎麼醒來的感覺，溫柔鼓勵今晚可以怎麼睡；禁止責備、禁止唸分數；不要變成諮商或冥想課
+- 若 user 提供【睡眠紀錄】（起飛）：那是生成指令。用兩句睡眠引導接住他上次怎麼醒來的感覺，溫柔鼓勵今晚可以怎麼睡，比平常再多一點陪伴；禁止責備、禁止唸分數；不要變成諮商或冥想課
 - 直接輸出廣播正文，不加標題、引號或說明`;
 }
 
@@ -329,9 +345,10 @@ ${input.localContext ? `\n[local context · departure]\n${buildLocalBlock(input.
 ${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
 ${input.sleepGuidance ? `\n[sleep record]\n${input.sleepGuidance}\n` : ''}
 
-Write a fluent 4–5 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
+Write a fluent 5–6 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
+After naming the departure city, include one leaving-story from the farewell beat (wandered a real district, now leaving the city). Never invent a neighborhood.
 Vary the night image; do not reuse “the night will keep our destination”.
-Include one gentle sleep invitation shaped by [sleep record] if present: encouraging, never scolding, never speaking scores. Do not use only “Close your eyes.”
+Include two gentle sleep-invitation sentences shaped by [sleep record] if present: encouraging, never scolding, never speaking scores. Do not use only “Close your eyes.”
 The LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”
 Do not mention teammates, squad, friends, or other passengers.`
     : `【起飛廣播】
@@ -345,7 +362,8 @@ ${input.sleepGuidance ? `\n【睡眠紀錄】\n${input.sleepGuidance}\n` : ''}
 
 請寫一段人會講出口的口語廣播，不要翻譯腔。第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
 緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，${direction}」。禁止「當地航站」「本班自」「航向向東」。
-夜色只講一樣看得見的東西。睡眠引導用「您願意的話」寫成一句完整邀請，並依【睡眠紀錄】溫柔調整今晚可以怎麼睡；禁止責備、禁止唸分數。禁止只寫「先把眼睛閉上。」或「肩膀放一下。」
+出發地要有一句離開的故事：逛完或走過當地一個真實街區／地標，現在要離開這座城市，像「我們逛完信義區，要離開台北了」。必須用【告別場景】裡的地點；沒有就用當地文化裡的真實生活場景，禁止編造區名。
+夜色只講一樣看得見的東西。睡眠引導寫兩句：先用「您願意的話」邀請閉眼、肩膀放鬆、自然呼吸；再多一句陪伴，並依【睡眠紀錄】溫柔調整今晚可以怎麼睡；禁止責備、禁止唸分數。禁止只寫「先把眼睛閉上。」或「肩膀放一下。」
 最後一句必須原句說「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫。
 不要提隊友、同組、朋友或其他旅客。`;
 
@@ -389,7 +407,7 @@ ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n`
       { role: 'system', content: systemPrompt },
       { role: 'user', content: isTakeoff ? takeoffUser : landingUser },
     ],
-    max_tokens: isTakeoff ? 260 : 360,
+    max_tokens: isTakeoff ? 340 : 360,
     temperature: isTakeoff ? 0.7 : 0.7,
   });
 
@@ -530,7 +548,8 @@ export function fallbackCaptainBroadcast(
     if (phase === 'takeoff') {
       const wx = spokenWeatherBit(localContext, 'en');
       const sleepCue = fallbackSleepInvitation(sleepNotes, 'en');
-      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${TAKEOFF_CLOSING_EN}`;
+      const farewell = spokenFarewellLine(localContext?.cityName || departureLabel, 'en');
+      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${farewell}${wx}${sleepCue}${TAKEOFF_CLOSING_EN}`;
     }
     const dur = formatDuration(durationMinutes, locale);
     const greet = localContext?.morningGreeting
@@ -553,7 +572,8 @@ export function fallbackCaptainBroadcast(
   if (phase === 'takeoff') {
     const wx = spokenWeatherBit(localContext);
     const sleepCue = fallbackSleepInvitation(sleepNotes, 'zh');
-    return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。窗外跑道燈一排排亮著。${wx}${sleepCue}${TAKEOFF_CLOSING_ZH}`;
+    const farewell = spokenFarewellLine(localContext?.cityName || departureLabel, 'zh');
+    return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。${farewell}窗外跑道燈一排排亮著。${wx}${sleepCue}${TAKEOFF_CLOSING_ZH}`;
   }
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
   const hello = arrivalHello(localContext?.localTimeLabel);

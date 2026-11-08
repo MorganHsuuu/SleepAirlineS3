@@ -48,7 +48,7 @@ import { listRecentLiveFlights } from './src/lib/review/live-flights';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
-import { generateBroadcastSpeech } from './src/lib/ai/speech';
+import { generateBroadcastSpeech, TAKEOFF_SPEECH_SPEED } from './src/lib/ai/speech';
 import { getLandscapeByFlightId } from './src/lib/notion/landscape-images';
 import { backfillSceneryForFlights, generateSceneryForLanding } from './src/lib/notion/scenery-backfill';
 import { runInBackground } from './src/lib/run-in-background';
@@ -100,12 +100,13 @@ async function generateBroadcastWithBudget(
 
 async function generateSpeechWithBudget(
   text: string,
-  style: BroadcastStyle
+  style: BroadcastStyle,
+  speed = 1
 ): Promise<string | null> {
   if (!openAiApiKey() || !text?.trim()) return null;
   try {
     return await withTimeout(
-      generateBroadcastSpeech(text.trim(), style).then((buf) => buf.toString('base64')),
+      generateBroadcastSpeech(text.trim(), style, speed).then((buf) => buf.toString('base64')),
       12_000,
       () => null
     );
@@ -550,7 +551,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         socialCueText: socialCue.cueText,
         relatedPassenger: socialCue.relatedPassenger ?? '',
       }),
-      generateSpeechWithBudget(takeoffBroadcast, broadcastStyle as BroadcastStyle),
+      generateSpeechWithBudget(takeoffBroadcast, broadcastStyle as BroadcastStyle, TAKEOFF_SPEECH_SPEED),
     ]);
 
     res.json({
@@ -1100,12 +1101,13 @@ app.get('/api/workshop', async (_req, res) => {
 
 app.post('/api/broadcast/speech', async (req, res) => {
   try {
-    const { text, style } = req.body;
+    const { text, style, speed } = req.body;
     if (!text || typeof text !== 'string' || !text.trim()) {
       res.status(400).json({ error: '請提供廣播文字。' });
       return;
     }
-    const audio = await generateBroadcastSpeech(text.trim(), style as BroadcastStyle | undefined);
+    const pace = typeof speed === 'number' ? speed : 1;
+    const audio = await generateBroadcastSpeech(text.trim(), style as BroadcastStyle | undefined, pace);
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(audio);

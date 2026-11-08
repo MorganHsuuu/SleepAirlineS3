@@ -48,7 +48,7 @@ export function formatSleepGuidancePrompt(notes: SleepNote[]): string | null {
   const lines = [
     '這是這位乘客過往降落後的真實睡眠／心情紀錄，必須當成今晚起飛廣播的生成指令，不是可選彩蛋。',
     '禁止唸出分數或量表；禁止責備、檢討，也禁止比較昨晚睡得怎樣。',
-    '用一句睡眠引導，像朋友輕輕敲門，溫柔鼓勵今晚可以怎麼睡；不要變成教練、諮商或冥想課。',
+    '用兩句睡眠引導，像朋友輕輕敲門，比平常再多一點陪伴，溫柔鼓勵今晚可以怎麼睡；不要變成教練、諮商或冥想課。',
   ];
   if (mood != null) {
     lines.push(`最近一次心情 0–100（微笑高分、不笑低分）：${mood}`);
@@ -81,31 +81,31 @@ export function fallbackSleepInvitation(notes: SleepNote[] | null | undefined, l
   const mood = notes?.find((note) => typeof note.moodAfter === 'number')?.moodAfter;
   if (locale === 'en') {
     if (mood != null && mood < 40) {
-      return 'If you like, there is nothing to get right tonight — close the eyes when you are ready, and let the shoulders drop. ';
+      return 'If you like, there is nothing to get right tonight — close the eyes when you are ready, and let the shoulders drop. This flight will keep you company; there is nothing to rush. ';
     }
     if (mood != null && mood < 70) {
-      return 'If you are willing, tonight can be even softer: close the eyes, ease the shoulders, and let the breath come on its own. ';
+      return 'If you are willing, tonight can be even softer: close the eyes, ease the shoulders, and let the breath come on its own. Let this stretch of sky hold you for a while. ';
     }
     if (mood != null) {
-      return 'If you are willing, settle in that same easy way — close the eyes, ease the shoulders, and let the body rest again. ';
+      return 'If you are willing, settle in that same easy way — close the eyes, ease the shoulders, and let the body rest again. Tonight the cabin can keep that softness a little longer. ';
     }
     const cues = [
-      'If you are willing, close your eyes, ease your shoulders, and breathe naturally. ',
-      'If you like, let the eyes close, drop the shoulders, and let the breath come on its own. ',
-      'Whenever you are ready, close your eyes, soften the shoulders, and breathe naturally. ',
+      'If you are willing, close your eyes, ease your shoulders, and breathe naturally. Let this flight keep you company. ',
+      'If you like, let the eyes close, drop the shoulders, and let the breath come on its own. Nothing needs to be finished tonight. ',
+      'Whenever you are ready, close your eyes, soften the shoulders, and breathe naturally. The night can take it from here. ',
     ];
     return cues[Math.abs(Number(mood) || 0) % cues.length];
   }
   if (mood != null && mood < 40) {
-    return '您願意的話，今晚什麼都不用做好，把眼睛閉上，讓肩膀自己落下就夠了。';
+    return '您願意的話，今晚什麼都不用做好，把眼睛閉上，讓肩膀自己落下就夠了。這段飛行會慢慢陪著你，什麼都不必趕。';
   }
   if (mood != null && mood < 70) {
-    return '您願意的話，今晚可以更鬆一點：把眼睛閉上，肩膀放下，呼吸自然就好，不勉強睡著。';
+    return '您願意的話，今晚可以更鬆一點：把眼睛閉上，肩膀放下，呼吸自然就好，不勉強睡著。讓這段夜航再多陪你一會兒。';
   }
   if (mood != null) {
-    return '您願意的話，可以再把身體交給今晚這段飛行，閉上眼睛，讓肩膀鬆開。';
+    return '您願意的話，可以再把身體交給今晚這段飛行，閉上眼睛，讓肩膀鬆開。機艙可以再把那份鬆的感覺留久一點。';
   }
-  return '您願意的話，可以先把眼睛閉上，肩膀放鬆，自然而然地呼吸。';
+  return '您願意的話，可以先把眼睛閉上，肩膀放鬆，自然而然地呼吸。今晚這段飛行會慢慢陪著你，什麼都不必趕。';
 }
 
 export async function loadPassengerSleepNotes(passengerId: string): Promise<SleepNote[]> {

@@ -55,7 +55,7 @@ const state = {
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
   destination: null, busy: false, shadeHold: false, sceneryUrl: null, openaiReady: false,
-  sleepDial: false, landedLegReady: false, headingConfirmed: false, sleepMoved: false,
+  sleepDial: false, landedLegReady: false, headingConfirmed: false, headingMoved: false, sleepMoved: false,
 };
 let clockTimer = null;
 let toastTimer = null;
@@ -344,9 +344,11 @@ function hideGlassPanel(id) {
   if (id === 'glass-compass') paintLeg();
 }
 function showCompass() {
-  const weather = $('glass-weather');
-  if (weather && !weather.hidden) return;
+  hideGlassPanel('glass-weather');
+  document.body.classList.remove('weather-focus');
   const d = directions[state.direction];
+  const kicker = $('compass-kicker');
+  if (kicker) kicker.textContent = '航向確認';
   $('compass-degree').textContent = `${String(d.angle).padStart(3, '0')}°`;
   $('compass-name').textContent = d.name;
   $('compass-needle').style.transform = `translate(-50%,-100%) rotate(${heading}deg)`;
@@ -382,8 +384,8 @@ function setDirection(index) {
   spinTo(next);
   applyDirection(next);
   state.headingConfirmed = false;
+  state.headingMoved = true;
   window.BroadcastAudio?.playCompassTick?.();
-  showCompass();
   syncConfirmButton();
 }
 function render() {
@@ -424,7 +426,7 @@ function render() {
     const heading = document.querySelector('.direction-heading h2');
     const hint = document.querySelector('.direction-heading > span');
     if (heading) heading.textContent = '航向選擇';
-    if (hint) hint.textContent = '轉到底即停';
+    if (hint) hint.textContent = '轉動後按確認';
     document.querySelector('.dial-wrap')?.classList.remove('is-sleep');
   }
   syncConfirmButton();
@@ -453,9 +455,11 @@ function confirmAction() {
     return;
   }
   if (state.busy || !['ready', 'landed'].includes(state.stage)) return;
+  if (!state.headingMoved) {
+    showToast('請先轉動旋鈕，再按確認航向');
+    return;
+  }
   state.headingConfirmed = true;
-  const d = directions[state.direction];
-  showFlightNotice(`航向已確認：${d.name} · ${String(d.angle).padStart(3, '0')}°`, 4500);
   showCompass();
   syncConfirmButton();
 }
@@ -851,12 +855,12 @@ async function doTakeoff() {
     const useOpenAIVoice = !!(state.sound && parts.opening && (speech || state.openaiReady) && window.BroadcastAudio?.prepareTakeoffSpeech);
     // 不用後端整段 TTS：裡面含「祝你好眠」，會在 takeoff.mp3 之前被講完或被掐掉。
     const prepared = useOpenAIVoice
-      ? await BroadcastAudio.prepareTakeoffSpeech(parts.opening, null).catch(() => null)
+      ? await BroadcastAudio.prepareTakeoffSpeech(parts.opening, null, 'formal_captain', 0.9).catch(() => null)
       : null;
     markSpeechReady(true);
     const decoded = prepared ? BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared) : null;
     const closingPrep = useOpenAIVoice
-      ? BroadcastAudio.prepareTakeoffSpeech(parts.closing).catch(() => null)
+      ? BroadcastAudio.prepareTakeoffSpeech(parts.closing, null, 'formal_captain', 0.9).catch(() => null)
       : Promise.resolve(null);
     await leadIn;
     if (decoded) await decoded;
@@ -1519,7 +1523,7 @@ function restart({ keepShade = false } = {}) {
   state.stage = 'ready'; state.activeFlight = null; state.lastFlight = null;
   state.researchFlight = false;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null; state.landedLegReady = false;
-  state.headingConfirmed = false; state.sleepMoved = false;
+  state.headingConfirmed = false; state.headingMoved = false; state.sleepMoved = false;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('is-inflight', 'developing');
   setInflightStandby(false);
@@ -1651,8 +1655,9 @@ function bindDial() {
     paintNeedles(directions[index].angle, false);
     if (index !== state.direction) {
       applyDirection(index);
+      state.headingConfirmed = false;
+      state.headingMoved = true;
       window.BroadcastAudio?.playCompassTick?.();
-      showCompass();
     }
   };
   wrap?.addEventListener('touchstart', (event) => {

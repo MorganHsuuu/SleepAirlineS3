@@ -655,12 +655,12 @@ async function doTakeoff() {
       || { opening: text, closing: 'Sleep Airline 祝你好眠。' };
     const useOpenAIVoice = !!(state.sound && parts.opening && (speech || state.openaiReady) && window.BroadcastAudio?.prepareTakeoffSpeech);
     const prepared = useOpenAIVoice
-      ? await BroadcastAudio.prepareTakeoffSpeech(parts.opening, null).catch(() => null)
+      ? await BroadcastAudio.prepareTakeoffSpeech(parts.opening, null, 'formal_captain', 0.9).catch(() => null)
       : null;
     markSpeechReady(true);
     const decoded = prepared ? BroadcastAudio.decodePreparedSpeech(prepared).catch(() => prepared) : null;
     const closingPrep = useOpenAIVoice
-      ? BroadcastAudio.prepareTakeoffSpeech(parts.closing).catch(() => null)
+      ? BroadcastAudio.prepareTakeoffSpeech(parts.closing, null, 'formal_captain', 0.9).catch(() => null)
       : Promise.resolve(null);
     await leadIn;
     if (decoded) await decoded;

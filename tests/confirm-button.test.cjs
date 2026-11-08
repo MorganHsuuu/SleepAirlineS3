@@ -51,6 +51,26 @@ test('triple-tap takeoff consumes the takeoff reed so it cannot fire twice', () 
   assert.deepEqual(calls.at(-1), ['land']);
 });
 
+test('heading overlay waits for the knob then the confirm button', () => {
+  const setStart = source.indexOf('function setDirection(');
+  const setEnd = source.indexOf('\nfunction render(', setStart);
+  const setFn = source.slice(setStart, setEnd);
+  assert.match(setFn, /headingMoved = true/);
+  assert.doesNotMatch(setFn, /showCompass/);
+
+  const pointStart = source.indexOf('const pointToIndex = (event) => {');
+  const pointEnd = source.indexOf('wrap?.addEventListener(\'touchstart\'', pointStart);
+  const pointFn = source.slice(pointStart, pointEnd);
+  assert.match(pointFn, /headingMoved = true/);
+  assert.doesNotMatch(pointFn, /showCompass/);
+
+  const confirmStart = source.indexOf('function confirmAction(');
+  const confirmEnd = source.indexOf('\nfunction applyWindowOnly(', confirmStart);
+  const confirmFn = source.slice(confirmStart, confirmEnd);
+  assert.match(confirmFn, /請先轉動旋鈕，再按確認航向/);
+  assert.match(confirmFn, /showCompass/);
+});
+
 test('mood confirm appears only after the sleep dial is open', () => {
   const f = fixture();
   f.state.sleepDial = true;

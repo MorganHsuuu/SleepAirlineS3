@@ -16,6 +16,81 @@ export interface LocalContext {
   localTimeLabel: string | null;
 }
 
+type FarewellSpot = { zh: string; en: string };
+
+/** 起飛告別用的真實街區／地標；沒列到的城市不要發明區名。 */
+const FAREWELL_BY_CITY: Record<string, FarewellSpot> = {
+  taipei: { zh: '信義區', en: 'Xinyi District' },
+  'taipei city': { zh: '信義區', en: 'Xinyi District' },
+  台北: { zh: '信義區', en: 'Xinyi District' },
+  臺北: { zh: '信義區', en: 'Xinyi District' },
+  keelung: { zh: '廟口夜市', en: 'Miaokou Night Market' },
+  基隆: { zh: '廟口夜市', en: 'Miaokou Night Market' },
+  tainan: { zh: '國華街', en: 'Guohua Street' },
+  台南: { zh: '國華街', en: 'Guohua Street' },
+  臺南: { zh: '國華街', en: 'Guohua Street' },
+  taichung: { zh: '一中街', en: 'Yizhong Street' },
+  台中: { zh: '一中街', en: 'Yizhong Street' },
+  臺中: { zh: '一中街', en: 'Yizhong Street' },
+  kaohsiung: { zh: '駁二', en: 'Pier-2' },
+  高雄: { zh: '駁二', en: 'Pier-2' },
+  tokyo: { zh: '澀谷', en: 'Shibuya' },
+  東京: { zh: '澀谷', en: 'Shibuya' },
+  osaka: { zh: '道頓堀', en: 'Dotonbori' },
+  大阪: { zh: '道頓堀', en: 'Dotonbori' },
+  kyoto: { zh: '祇園', en: 'Gion' },
+  京都: { zh: '祇園', en: 'Gion' },
+  seoul: { zh: '明洞', en: 'Myeongdong' },
+  首爾: { zh: '明洞', en: 'Myeongdong' },
+  bangkok: { zh: '暹羅', en: 'Siam' },
+  曼谷: { zh: '暹羅', en: 'Siam' },
+  singapore: { zh: '牛車水', en: 'Chinatown' },
+  新加坡: { zh: '牛車水', en: 'Chinatown' },
+  'hong kong': { zh: '尖沙咀', en: 'Tsim Sha Tsui' },
+  香港: { zh: '尖沙咀', en: 'Tsim Sha Tsui' },
+  jakarta: { zh: '哥打老城', en: 'Kota Tua' },
+  雅加達: { zh: '哥打老城', en: 'Kota Tua' },
+  denpasar: { zh: '庫塔', en: 'Kuta' },
+  bali: { zh: '烏布', en: 'Ubud' },
+  峇里: { zh: '烏布', en: 'Ubud' },
+  hanoi: { zh: '還劍湖', en: 'Hoan Kiem Lake' },
+  河內: { zh: '還劍湖', en: 'Hoan Kiem Lake' },
+  'ho chi minh': { zh: '第一郡', en: 'District 1' },
+  saigon: { zh: '第一郡', en: 'District 1' },
+  'kuala lumpur': { zh: '武吉免登', en: 'Bukit Bintang' },
+  manila: { zh: '馬卡蒂', en: 'Makati' },
+  shanghai: { zh: '外灘', en: 'the Bund' },
+  上海: { zh: '外灘', en: 'the Bund' },
+  beijing: { zh: '南鑼鼓巷', en: 'Nanluoguxiang' },
+  北京: { zh: '南鑼鼓巷', en: 'Nanluoguxiang' },
+  paris: { zh: '塞納河邊', en: 'the Seine' },
+  巴黎: { zh: '塞納河邊', en: 'the Seine' },
+  london: { zh: '泰晤士河畔', en: 'the Thames' },
+  倫敦: { zh: '泰晤士河畔', en: 'the Thames' },
+  rome: { zh: '特拉斯提弗列', en: 'Trastevere' },
+  羅馬: { zh: '特拉斯提弗列', en: 'Trastevere' },
+  barcelona: { zh: '蘭布拉大道', en: 'Las Ramblas' },
+  berlin: { zh: '普倫茨勞貝格', en: 'Prenzlauer Berg' },
+  amsterdam: { zh: '九條街', en: 'the Nine Streets' },
+  'new york': { zh: '布魯克林', en: 'Brooklyn' },
+  紐約: { zh: '布魯克林', en: 'Brooklyn' },
+  'los angeles': { zh: '聖塔莫尼卡', en: 'Santa Monica' },
+  'san francisco': { zh: '漁人碼頭', en: 'Fisherman’s Wharf' },
+  vancouver: { zh: '格蘭佛島', en: 'Granville Island' },
+  toronto: { zh: '肯辛頓市集', en: 'Kensington Market' },
+  sydney: { zh: '邦迪海灘', en: 'Bondi Beach' },
+  雪梨: { zh: '邦迪海灘', en: 'Bondi Beach' },
+  melbourne: { zh: '菲茨羅伊', en: 'Fitzroy' },
+  cairo: { zh: '汗哈利利市集', en: 'Khan el-Khalili' },
+  開羅: { zh: '汗哈利利市集', en: 'Khan el-Khalili' },
+  mexico: { zh: '科約阿坎', en: 'Coyoacán' },
+  'mexico city': { zh: '科約阿坎', en: 'Coyoacán' },
+  lima: { zh: '米拉弗洛雷斯', en: 'Miraflores' },
+  mumbai: { zh: '柯拉巴', en: 'Colaba' },
+  delhi: { zh: '昌迪喬克', en: 'Chandni Chowk' },
+  'new delhi': { zh: '康諾特廣場', en: 'Connaught Place' },
+};
+
 const DEFAULT_CULTURE =
   '走出艙門，帶著好奇心向當地人微笑問好——旅行最美的風景，往往是人與人的相遇。';
 
@@ -448,6 +523,35 @@ function cityNameZh(city?: string | null): string {
     if (hasLatin && zh) return zh;
   }
   return '';
+}
+
+function cityLookupKey(city?: string | null): string {
+  const raw = (city || '').split(/[,，]/)[0].trim();
+  if (!raw) return '';
+  return foldLatin(raw).replace(/\s+city$/, '').replace(/^the\s+/, '');
+}
+
+/** 起飛廣播用的真實告別地點；沒把握的城市回 null，禁止發明區名。 */
+export function farewellSpotFor(city?: string | null, locale: 'zh' | 'en' = 'zh'): string | null {
+  const raw = (city || '').split(/[,，]/)[0].trim();
+  if (!raw) return null;
+  const folded = cityLookupKey(raw);
+  const hit = FAREWELL_BY_CITY[folded] || FAREWELL_BY_CITY[raw] || FAREWELL_BY_CITY[cityNameZh(raw)];
+  if (!hit) return null;
+  return locale === 'en' ? hit.en : hit.zh;
+}
+
+export function spokenFarewellLine(
+  city?: string | null,
+  locale: 'zh' | 'en' = 'zh'
+): string {
+  const spot = farewellSpotFor(city, locale);
+  if (!spot) return '';
+  const spokenCity = locale === 'en'
+    ? (city || '').split(/[,，]/)[0].trim() || 'here'
+    : (cityNameZh(city) || spokenPlaceZh(city) || '這裡');
+  if (locale === 'en') return `We've wandered ${spot}; now we leave ${spokenCity}. `;
+  return `我們逛完${spot}，現在要離開${spokenCity}了。`;
 }
 
 /** 中文廣播用地名：有譯名用譯名，否則用中文國名，避免念出 Jolo／Tarawa。 */
