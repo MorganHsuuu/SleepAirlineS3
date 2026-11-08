@@ -4,6 +4,8 @@ let currentAudio = null;
 let flightSfxAudio = null;
 let landingAudio = null;
 let landingVolume = 0.22;
+/** 整體再大聲約 10%（HTML Audio 仍上限 1） */
+const MASTER_VOLUME = 1.1;
 
 const CAPTAIN_SFX = {
   url: 'media/captain.mp3',
@@ -54,7 +56,7 @@ function tone(freq, startSec, durSec, volume = 0.12) {
   osc.type = 'sine';
   osc.frequency.value = freq;
   const t0 = ctx.currentTime + startSec;
-  gain.gain.setValueAtTime(volume, t0);
+  gain.gain.setValueAtTime(mixGain(volume), t0);
   gain.gain.exponentialRampToValueAtTime(0.001, t0 + durSec);
   osc.connect(gain);
   gain.connect(ctx.destination);
@@ -97,6 +99,14 @@ function stopPlayback({ keepSpeech = false } = {}) {
 
 function clampVolume(v) {
   return Math.min(1, Math.max(0, v));
+}
+
+function mixVolume(v) {
+  return clampVolume(Number(v) * MASTER_VOLUME);
+}
+
+function mixGain(v) {
+  return Math.max(0, Number(v) * MASTER_VOLUME);
 }
 
 function fadeAudioVolume(audio, from, to, ms) {
@@ -253,7 +263,7 @@ async function playWebAudioBuffer(buffer, {
   const bufDur = Number.isFinite(playBuffer.duration) && playBuffer.duration > 0 ? playBuffer.duration : 0;
   const clipSec = maxSeconds > 0 && bufDur > 0 ? Math.min(maxSeconds, bufDur) : (maxSeconds > 0 ? maxSeconds : 0);
   const gain = ctx.createGain();
-  const targetVol = Math.max(volume, 0.0001);
+  const targetVol = Math.max(mixGain(volume), 0.0001);
   gain.gain.value = fadeInMs > 0 ? 0.0001 : targetVol;
   source.connect(gain);
   gain.connect(ctx.destination);
@@ -392,7 +402,7 @@ function playOnGestureElement(audio, src, {
     }
     audio.loop = false;
     try { audio.currentTime = 0; } catch { /* 尚未可 seek */ }
-    audio.volume = clampVolume(volume);
+    audio.volume = mixVolume(volume);
     const arm = () => {
       if (audio.paused) { finish(false); return; }
       if (seconds > 0) {
@@ -441,7 +451,7 @@ async function playTimedClip(url, { seconds = 0, volume = 1, loop = false, fadeI
 
   return new Promise((resolve) => {
     const audio = new Audio(url);
-    audio.volume = fadeInMs > 0 ? 0 : volume;
+    audio.volume = fadeInMs > 0 ? 0 : mixVolume(volume);
     audio.loop = false;
     markInlineAudio(audio);
     currentAudio = audio;
@@ -467,7 +477,7 @@ async function playTimedClip(url, { seconds = 0, volume = 1, loop = false, fadeI
     audio.onerror = () => finish(false);
     playAudioElement(audio).then(async (ok) => {
       if (!ok) { finish(false); return; }
-      if (fadeInMs > 0) await fadeAudioVolume(audio, 0, volume, fadeInMs);
+      if (fadeInMs > 0) await fadeAudioVolume(audio, 0, mixVolume(volume), fadeInMs);
     });
   });
 }
@@ -524,7 +534,7 @@ async function fadeOutCeremonyTag(tag, ms = 450) {
 
 async function fadeLandingBedVolume(target, ms = CEREMONY_CROSSFADE_MS) {
   if (!landingAudio) return;
-  const want = clampVolume(target);
+  const want = mixVolume(target);
   // 壓低時保持播放；只有真正要靜音才 pause
   if (want > 0.001 && landingAudio.paused) {
     landingPausedForCaptain = false;
@@ -633,7 +643,7 @@ async function playFlightSfx(url, { loop = true, volume = 0.65, fadeInMs = 700, 
   audio.onerror = () => { if (flightSfxAudio === audio) flightSfxAudio = null; };
   try {
     await Promise.race([audio.play(), delay(1200)]);
-    await fadeAudioVolume(audio, 0, volume, fadeInMs);
+    await fadeAudioVolume(audio, 0, mixVolume(volume), fadeInMs);
     if (loop) return true;
     const tail = Math.max(0, Number(fadeOutMs) || 0);
     await new Promise((resolve) => {
@@ -718,22 +728,43 @@ function startWakeupBed(url, volume = 0.14, fadeInMs = 0) {
     audio.volume = 0;
     return true;
   }
-  if (fadeInMs > 0) void fadeAudioVolume(audio, audio.volume, volume, fadeInMs);
-  else audio.volume = volume;
+  if (fadeInMs > 0) void fadeAudioVolume(audio, audio.volume, mixVolume(volume), fadeInMs);
+  else audio.volume = mixVolume(volume);
   return true;
 }
 
 function wakeupIsPlaying() {
   return wakeupBedOpen && !!landingAudio;
 }
+function landingMusicTarget(url) {
+  const name = String(url || '').split('?')[0].split('/').pop();
+  const current = String(landingAudio?.dataset?.src || landingAudio?.src || '');
+  return name && current.includes(name);
+}
+
 async function playLandingMusic(url, opts = {}) {
   if (!url) return false;
+  landingVolume = typeof opts.volume === 'number' ? opts.volume : 0.22;
+  wakeupBedOpen = false;
+  if (landingAudio && landingMusicTarget(url) && !landingAudio.error) {
+    landingAudio.loop = opts.loop !== false;
+    if (landingAudio.paused) {
+      await unlockMedia();
+      await playAudioElement(landingAudio);
+    }
+    if (landingAudio.volume < mixVolume(landingVolume) * 0.8) {
+      await fadeAudioVolume(landingAudio, landingAudio.volume, mixVolume(landingVolume), opts.fadeInMs ?? 800);
+    } else {
+      landingAudio.volume = mixVolume(landingVolume);
+    }
+    return true;
+  }
   await stopLandingMusic({ fade: false });
   await unlockMedia();
-  landingVolume = typeof opts.volume === 'number' ? opts.volume : 0.22;
   const audio = new Audio(url);
   audio.loop = opts.loop !== false;
   audio.volume = 0;
+  audio.dataset.src = url;
   audio.playsInline = true;
   audio.preload = 'auto';
   landingAudio = audio;
@@ -744,7 +775,7 @@ async function playLandingMusic(url, opts = {}) {
     return false;
   }
   // 維持 keepalive，避免 iOS 在長 API 等待後無法播 TTS
-  await fadeAudioVolume(audio, 0, landingVolume, opts.fadeInMs ?? 1600);
+  await fadeAudioVolume(audio, 0, mixVolume(landingVolume), opts.fadeInMs ?? 1600);
   return true;
 }
 
@@ -784,7 +815,7 @@ async function resumeLandingMusicAfterApproach({ fadeMs = CEREMONY_RESTORE_MS } 
       landingAudio.volume = 0;
       await Promise.race([landingAudio.play(), delay(900)]);
     }
-    const target = softWakeupVolume(WAKEUP_DUCK_RATIO.afterLanding);
+    const target = mixVolume(softWakeupVolume(WAKEUP_DUCK_RATIO.afterLanding));
     await fadeAudioVolume(landingAudio, landingAudio.volume, target, fadeMs);
     return true;
   } catch {
@@ -825,7 +856,12 @@ async function duckCeremonyBed() {
         await Promise.race([landingAudio.play(), delay(900)]);
       } catch { /* noop */ }
     }
-    const target = softWakeupVolume(WAKEUP_DUCK_RATIO.approach);
+    let target;
+    if (wakeupBedOpen) {
+      target = softWakeupVolume(WAKEUP_DUCK_RATIO.approach);
+    } else {
+      target = clampVolume(Math.max(0.16, landingVolume * 0.55));
+    }
     jobs.push(fadeLandingBedVolume(target, 600));
   }
   if (flightSfxAudio) {
@@ -868,9 +904,10 @@ async function restoreCeremonyBed({ ms = CEREMONY_RESTORE_MS } = {}) {
         await Promise.race([landingAudio.play(), delay(900)]);
       } catch { /* noop */ }
     }
-    // 廣播後只回小聲底床，勿拉回全音量
-    const soft = softWakeupVolume(WAKEUP_DUCK_RATIO.afterLanding);
-    jobs.push(fadeAudioVolume(landingAudio, landingAudio.volume, soft, ms));
+    const soft = wakeupBedOpen
+      ? softWakeupVolume(WAKEUP_DUCK_RATIO.afterLanding)
+      : landingVolume;
+    jobs.push(fadeAudioVolume(landingAudio, landingAudio.volume, mixVolume(soft), ms));
   }
   if (flightSfxAudio && savedFlightSfxVolume != null) {
     jobs.push(fadeAudioVolume(flightSfxAudio, flightSfxAudio.volume, savedFlightSfxVolume, 900));
@@ -1411,7 +1448,7 @@ async function playPreparedSpeech(prepared, { immediate = false, preferWebAudio 
   await unlockMedia();
   const { audio, url } = prepared;
   markInlineAudio(audio);
-  audio.volume = 1;
+  audio.volume = mixVolume(1);
   currentAudio = audio;
   if (!immediate) await delay(420);
   const ok = await playAudioElement(audio);
@@ -1608,7 +1645,7 @@ function playCompassTick({ major = false } = {}) {
     tickFilter.type = 'bandpass';
     tickFilter.frequency.setValueAtTime(major ? 900 : 780, t0);
     tickFilter.Q.value = 1.4;
-    const peak = major ? 0.075 : 0.052;
+    const peak = mixGain(major ? 0.075 : 0.052);
     tickGain.gain.setValueAtTime(0.0001, t0);
     tickGain.gain.exponentialRampToValueAtTime(peak, t0 + 0.004);
     tickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -1623,7 +1660,7 @@ function playCompassTick({ major = false } = {}) {
     const edgeGain = audioCtx.createGain();
     edge.type = 'sine';
     edge.frequency.setValueAtTime(major ? 1180 : 980, t0);
-    edgeGain.gain.setValueAtTime(major ? 0.017 : 0.012, t0);
+    edgeGain.gain.setValueAtTime(mixGain(major ? 0.017 : 0.012), t0);
     edgeGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.012);
     edge.connect(edgeGain);
     edgeGain.connect(audioCtx.destination);

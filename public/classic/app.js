@@ -818,6 +818,9 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   panel.classList.add('is-on', 'beat-blur');
   requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
+  if (state.sound) {
+    void window.BroadcastAudio?.playLandingMusic?.('/media/landing.mp3', { volume: 0.32, fadeInMs: 1800, loop: true });
+  }
   return delay(8000).then(() => {
     panel.classList.remove('beat-blur');
     glass.classList.remove('sky-soft');
@@ -1007,9 +1010,6 @@ async function doLand() {
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
   window.BroadcastAudio?.primeFromUserGesture?.();
-  const warmedBed = document.getElementById('ceremony-bed');
-  const wakeupUrl = warmedBed?.dataset?.src || '';
-  if (state.sound && warmedBed) warmedBed.volume = 0;
   void (async () => {
     if (!state.sound) return;
     await delay(1000);
@@ -1017,9 +1017,6 @@ async function doLand() {
     await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.9, handoff: true }).catch(() => false);
     if (state.stage !== 'landing' && state.stage !== 'landed') return;
     await window.BroadcastAudio?.playApproachClip?.().catch(() => false);
-    if (state.stage !== 'landing' && state.stage !== 'landed') return;
-    const url = wakeupUrl || `media/${nextWakeup()}`;
-    window.BroadcastAudio?.startWakeupBed?.(url, 0.16, 800);
   })();
   primeLandingVideos();
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');

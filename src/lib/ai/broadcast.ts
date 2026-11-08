@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
-import type { SocialCue } from '../../types';
 import type { LocalContext } from '../flight/local-context';
 import { arrivalHello, timeAdjustedGreeting } from './morning-content';
 import { placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
@@ -68,7 +67,6 @@ interface BroadcastInput {
   flightProgress: number;
   estimatedDistanceKm: number | null;
   routeDirection: string;
-  socialCue: SocialCue;
   style: BroadcastStyle;
   /** 抵達地或出發地的當地文化／天氣（降落必帶，起飛可帶出發地） */
   localContext?: LocalContext | null;
@@ -183,17 +181,6 @@ function spokenCultureBit(culture?: string | null): string {
   return `${first}。`;
 }
 
-function buildSocialBlock(cue: SocialCue, locale: UiLocale): string {
-  if (locale === 'en') {
-    const lines = [`type: ${cue.cueType}`, `system cue: ${cue.cueText}`];
-    if (cue.relatedPassenger) lines.push(`related passenger: ${cue.relatedPassenger}`);
-    return lines.join('\n');
-  }
-  const lines = [`類型：${cue.cueType}`, `系統提示：${cue.cueText}`];
-  if (cue.relatedPassenger) lines.push(`相關乘客：${cue.relatedPassenger}`);
-  return lines.join('\n');
-}
-
 function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLocale): string {
   if (locale === 'en') {
     const lines = [
@@ -243,19 +230,12 @@ Identity (critical):
 - Never speak as the passenger
 - Address them as “passengers” or “${pax}”; never call yourself by the passenger name
 - Use the given name directly; do not add Mr/Ms/Mrs
-- Squad lines are about FRIENDS only — never say the addressee has already taken off
-${isTakeoff
-    ? '- Takeoff: if squad social is solo / first of night, OMIT the squad sentence entirely. Never say alone, only you, the sky to yourself, or similar. Only real teammate facts (someone already departed / landed) may become one sentence'
-    : '- If squad social is solo / first of night: one line that they get the sky to themselves; do not restate their own takeoff'}
+- Never mention teammates, friends, squad, radar, or anyone else flying tonight — each passenger flies alone
 
 Geography (critical):
 - Use the broadcast place labels; do not recite hard romanization
 - At takeoff the destination is unknown: only departure + heading; “wake to find where we are” at most once
 - Takeoff PA must not mention flight duration, ETA, km, or minutes/hours for this flight
-- Places in [squad social] belong to teammates, not this flight’s route; attach them to teammate names
-- Teammates only in past/progress: already departed, already flying, already landed at Y; never “about to land”
-- If [squad social] shows anyone still flying, do not claim everyone has landed
-- Do not turn teammate airspace into a landing countdown
 - Geography must stay consistent with this flight’s heading
 
 ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
@@ -267,10 +247,10 @@ ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 ` : ''}
 Writing:
 - English, ${isTakeoff ? '80–110' : '90–130'} words, hard cap ${isTakeoff ? '130' : '160'}
-- ${isTakeoff ? 'Takeoff: 4–6 sentences — ① welcome + captain + departure + heading, with a different night image each time ② one gentle sleep invitation, not a clipped command: if they are willing, close the eyes, ease the shoulders, and breathe naturally — this is a bedtime knock, never a meditation, breath-count, or step list; never only “Close your eyes.” ③ at most one squad beat ④ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
+- ${isTakeoff ? 'Takeoff: 4–5 sentences — ① welcome + captain + departure + heading, with a different night image each time ② one gentle sleep invitation, not a clipped command: if they are willing, close the eyes, ease the shoulders, and breathe naturally — this is a bedtime knock, never a meditation, breath-count, or step list; never only “Close your eyes.” ③ the LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”' : 'One idea per sentence'}
 - Cut stock phrases like “thank you for flying with us”${isTakeoff ? ', except the required closing sentence' : ''}
 - Never output a blunt slogan; write as a captain PA with imagery
-- Social info: one rewritten sentence max; never paste [squad social] verbatim
+- Do not mention teammates, squad, friends, or other passengers
 - Do not invent places, times, or names
 - If [review calibration] is present: it is a generation prompt, not optional flavor. Today’s comments outrank other writing habits and must be followed in full; match high-score specificity; do not repeat problems named in comments / low scores; never copy the sample PA text
 - Output PA text only — no titles, quotes, or notes`;
@@ -286,19 +266,12 @@ ${STYLE_DESCRIPTIONS.zh[style]}
 - 禁止冒充乘客、禁止用第一人稱代替乘客說話
 - 用「各位乘客」或「${pax}」稱呼對方；不要稱自己為乘客姓名
 - 稱呼乘客時直接使用名字，禁止附加「先生」「女士」「小姐」或「先生／女士」
-- 社交句只講隊友，禁止說正在聽廣播的乘客「已經起飛」
-${isTakeoff
-    ? '- 起飛廣播：若【同組社交】是獨自（solo）／今晚第一班（first_of_night），整句社交完全省略；禁止出現「獨享」「獨自」「只有你」「夜空交給你」「天空交給你」等說法。只有真實隊友動態（已起飛、已降落）才可寫一句'
-    : '- 若【同組社交】是獨自／今晚第一班：改說獨自享受這片天空，不要複誦本班乘客姓名＋已起飛'}
+- 禁止提隊友、朋友、同組、雷達或其他旅客；今晚每個人都是自己飛
 
 地理（非常重要）：
 - 使用【廣播用地名】；中文廣播禁止「當地航站」「目前航站」「本班自」；沒有中文城名時改說中文國名
 - 起飛時本班目的地未知：只講出發地與航向；「醒來才知道目的地」類意思最多自然帶過一次
 - 起飛廣播禁止提本班：飛行時長、預計抵達、公里數、ETA、約 X 分鐘／小時
-- 【同組社交】的地名都是隊友的，不是本班航線；必須掛在隊友名字後面
-- 隊友只能寫已發生：已起飛、已飛 X、已降落在 Y；禁止隊友「即將／X 分鐘內／快」降落、下降、抵達
-- 若【同組社交】顯示有人仍在飛或只有部分人降落，禁止改寫成「隊友們都已成功降落」
-- 禁止把隊友的空域或距離換算成降落倒數
 - 所有地理描述須與本班航向一致，不得自相矛盾
 
 ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
@@ -313,11 +286,11 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 寫作：
 - 繁體中文口語，${isTakeoff ? '80–120' : '110–160'} 字，最多不超過 ${isTakeoff ? '140' : '190'} 字。像機長對乘客講話，短句、自然，不要翻譯腔、不要英文夾中文
 - 禁止：彷彿、編織美夢、鋪展畫面、點亮希望、內心的喧囂、隨風而去、為您、夢幻的畫面、如綿羊、低語、保管目的地、航向向東、當地航站、本班自
-- ${isTakeoff ? '起飛廣播 4–6 句：①「歡迎搭乘 Sleep Airline，這裡是機長。」緊接著「我們從{廣播用地名}出發，{航向口語}」。航向口語用「往東飛」這種，禁止「航向向東」 ②夜色只講一樣看得見的東西（跑道燈、雲、路燈），一句就好，不要抒情比喻 ③睡眠引導是柔軟的睡前敲門磚，用「您願意的話」邀請：閉眼、肩膀放鬆、自然呼吸，寫成一句完整話。禁止只丟「先把眼睛閉上。」或「肩膀放一下。」禁止冥想步驟、數呼吸、讓疲憊抒情 ④同組社交最多一句 ⑤最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
+- ${isTakeoff ? '起飛廣播 4–5 句：①「歡迎搭乘 Sleep Airline，這裡是機長。」緊接著「我們從{廣播用地名}出發，{航向口語}」。航向口語用「往東飛」這種，禁止「航向向東」 ②夜色只講一樣看得見的東西（跑道燈、雲、路燈），一句就好，不要抒情比喻 ③睡眠引導是柔軟的睡前敲門磚，用「您願意的話」邀請：閉眼、肩膀放鬆、自然呼吸，寫成一句完整話。禁止只丟「先把眼睛閉上。」或「肩膀放一下。」禁止冥想步驟、數呼吸、讓疲憊抒情 ④最後一句必須原句說出「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫' : '一句一重點'}
 - 刪掉「有任何需求」「祝您旅途愉快」「期待美好瞬間」等套話；起飛結尾固定句「Sleep Airline 感謝您的搭乘」除外
 - 禁止輸出「這是一個甦醒航班，睡著飛行，醒來抵達」這種直白標語；要改成有畫面的機長廣播
-- 社交資訊改寫後嵌入一句即可，禁止照搬【同組社交】原文
-- 不得編造未提供的地名、時間、人名；相關乘客只能用系統提供的名字
+- 禁止寫隊友、同組、朋友或其他旅客的動態
+- 不得編造未提供的地名、時間、人名
 - 若 user 提供【審查校正】，那是生成指令不是可選風格：今日評語權重最高、必須整段遵守；靠近高分範例的具體程度；評語與低分指出的空話、套句、重複風景句不要再寫。不要複製校正區的廣播原文
 - 直接輸出廣播正文，不加標題、引號或說明`;
 }
@@ -341,13 +314,6 @@ export async function generateCaptainBroadcast(input: BroadcastInput): Promise<s
 
   const systemPrompt = buildSystemPrompt(locale, input.style, isTakeoff, pax, hasLocal);
 
-  const noTeammateFacts = input.socialCue.cueType === 'solo' || input.socialCue.cueType === 'first_of_night';
-  const socialLine = noTeammateFacts
-    ? (locale === 'en'
-      ? '(No teammate facts tonight — OMIT the squad sentence entirely. Do not mention being alone, only you, or having the sky to yourself.)'
-      : '（今晚沒有隊友動態：整句社交完全省略，不要寫「獨享」「獨自」「只有你」「夜空交給你」）')
-    : buildSocialBlock(input.socialCue, locale);
-
   const takeoffUser = locale === 'en'
     ? `[TAKEOFF PA]
 passenger: ${pax}
@@ -356,16 +322,12 @@ broadcast place: ${departureLabel}
 heading: ${direction}
 ${input.localContext ? `\n[local context · departure]\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
-[squad social]
-${socialLine}
 
 Write a fluent 4–5 sentence PA. Sentence one must begin with “Welcome aboard Sleep Airline, this is your captain”.
 Vary the night image; do not reuse “the night will keep our destination”.
 Include one gentle sleep invitation: if they are willing, close the eyes, ease the shoulders, and breathe naturally. Do not use only “Close your eyes.”
 The LAST sentence must be exactly: “We are about to take off. Sleep Airline thanks you for flying with us. Please rest well, and sleep well.”
-${noTeammateFacts
-      ? 'No squad sentence at all this time.'
-      : 'Squad: one past/progress sentence only about the teammate — no teammate landing countdown.'}`
+Do not mention teammates, squad, friends, or other passengers.`
     : `【起飛廣播】
 乘客：${pax}
 出發地原始資料：${input.departureLocation}
@@ -373,16 +335,12 @@ ${noTeammateFacts
 航線方向：${direction}
 ${input.localContext ? `\n【當地資訊 · 出發地】\n${buildLocalBlock(input.localContext, 'takeoff', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n` : ''}
-【同組社交】
-${socialLine}
 
 請寫一段人會講出口的口語廣播，不要翻譯腔。第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」開頭（完整八字「歡迎搭乘」，不可省略「歡迎」）。
 緊接著必須說「我們從${departureLabel.split(',')[0].trim()}出發，${direction}」。禁止「當地航站」「本班自」「航向向東」。
 夜色只講一樣看得見的東西。睡眠引導用「您願意的話」寫成一句完整邀請：閉眼、肩膀放鬆、自然呼吸。禁止只寫「先把眼睛閉上。」或「肩膀放一下。」
 最後一句必須原句說「我們即將起飛。Sleep Airline 感謝您的搭乘，請好好休息，祝你有個好眠。」不可省略、不可改寫。
-${noTeammateFacts
-      ? '這次不寫任何同組社交句。'
-      : '同組社交：用一句過去式／進行式帶過隊友動態，禁止隊友降落倒數。'}`;
+不要提隊友、同組、朋友或其他旅客。`;
 
   const duration = formatDuration(input.flightDurationMinutes, locale);
   const landingUser = locale === 'en'
@@ -397,12 +355,10 @@ distance: ${input.estimatedDistanceKm ? `${Math.round(input.estimatedDistanceKm)
 heading: ${direction}
 ${input.localContext ? `\n[local context · arrival]\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
-[squad social]
-${buildSocialBlock(input.socialCue, locale)}
 
 Announce waking up at arrival, how long you flew, and from/to. Sentence one = local-language hello (not good morning); sentence two must begin with “Welcome aboard Sleep Airline, this is your captain”.
-Right after naming the city, locate it in one sentence (continent or ocean + country + capital/island if true). Weave one culture/weather beat; one social beat; fluent paragraph, no bullets.
-If [squad social] is not solo: within the first two sentences after the greeting, say what happened with which teammate/squad.`
+Right after naming the city, locate it in one sentence (continent or ocean + country + capital/island if true). Weave one culture/weather beat; fluent paragraph, no bullets.
+Do not mention teammates, squad, friends, or other passengers.`
     : `【降落廣播】
 乘客：${pax}
 出發地原始資料：${input.departureLocation}
@@ -414,14 +370,11 @@ If [squad social] is not solo: within the first two sentences after the greeting
 航線方向：${direction}
 ${input.localContext ? `\n【當地資訊 · 抵達地】\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n` : ''}
-【同組社交】
-${buildSocialBlock(input.socialCue, locale)}
 
 請宣布：醒來抵達、飛了多久、從哪到哪、當地時間；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
 說出抵達城市後立刻用一句話定位這個地方（洲或海洋、國家、首都或島國），讓沒聽過這地名的人也知道在哪；
-必須融入這個地方特有的文化、環境、市集或表演（改寫），禁止「自然地貌與天光」「山、水或開闊地貌」這類套句；用一句話點出社交情境，合併成一段流暢廣播，勿列點、勿照搬。
-若【同組社交】不是 solo：必須在開場問候後的前兩句內明確說出「你與哪位隊友或小隊發生了什麼關係」
-（例如共享夜空、接力、靠近、同向、分頭飛、先後降落），不要只把社交資訊放在結尾。`;
+必須融入這個地方特有的文化、環境、市集或表演（改寫），禁止「自然地貌與天光」「山、水或開闊地貌」這類套句；合併成一段流暢廣播，勿列點。
+不要提隊友、同組、朋友或其他旅客。`;
 
   const completion = await client.chat.completions.create({
     model,
@@ -434,7 +387,7 @@ ${buildSocialBlock(input.socialCue, locale)}
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? (locale === 'en' ? 'Broadcast failed. Please try again.' : '廣播生成失敗，請重試。');
-  const spoken = ensureWelcomeAboardPhrase(isTakeoff ? stripSoloSkyLines(raw) : raw, locale);
+  const spoken = ensureWelcomeAboardPhrase(stripSquadTalk(raw), locale);
   return isTakeoff
     ? ensureTakeoffClosing(
         ensureDepartureSpoken(polishTakeoffChinese(spoken, departureLabel, heading, locale), departureLabel, heading, locale),
@@ -444,6 +397,7 @@ ${buildSocialBlock(input.socialCue, locale)}
 }
 
 const SOLO_SKY_PATTERN = /獨享|獨自|只有你|(?:夜空|天空)[^。！？]{0,4}交給你|\balone\b|only you|(?:sky|night) to yourself/i;
+const SQUAD_TALK_PATTERN = /隊友|同組|小隊|雷達上|相關乘客|teammate|squad|fellow passenger|group radar/i;
 
 /** 起飛不講「獨享夜空」：模型仍寫出時整句移除 */
 function polishTakeoffChinese(
@@ -511,10 +465,10 @@ function ensureTakeoffClosing(text: string, locale: UiLocale): string {
   return core ? `${core}。${TAKEOFF_CLOSING_ZH}` : TAKEOFF_CLOSING_ZH;
 }
 
-function stripSoloSkyLines(text: string): string {
+function stripSquadTalk(text: string): string {
   const sentences = text.match(/[^。！？.!?]+[。！？.!?]*\s*/g);
   if (!sentences) return text;
-  const kept = sentences.filter((s) => !SOLO_SKY_PATTERN.test(s));
+  const kept = sentences.filter((s) => !SOLO_SKY_PATTERN.test(s) && !SQUAD_TALK_PATTERN.test(s));
   return kept.length ? kept.join('').trim() : text;
 }
 
@@ -555,7 +509,7 @@ export function fallbackCaptainBroadcast(
   arrivalLocation: string | null,
   routeDirection: string,
   durationMinutes: number | null,
-  socialCueText: string,
+  _socialCueText: string,
   localContext?: LocalContext | null,
   localeInput?: UiLocale | string
 ): string {
@@ -567,15 +521,12 @@ export function fallbackCaptainBroadcast(
   if (locale === 'en') {
     if (phase === 'takeoff') {
       const wx = spokenWeatherBit(localContext, 'en');
-      const social = socialCueText?.trim() && !/alone|only you|to yourself|to themselves|獨享|獨自|只有你/i.test(socialCueText)
-        ? ` ${socialCueText.replace(/[.!?\s]+$/g, '')}.`
-        : '';
       const sleepCue = [
         'If you are willing, close your eyes, ease your shoulders, and breathe naturally. ',
         'If you like, let the eyes close, drop the shoulders, and let the breath come on its own. ',
         'Whenever you are ready, close your eyes, soften the shoulders, and breathe naturally. ',
       ][(departureLabel.length + direction.length) % 3];
-      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${social} ${TAKEOFF_CLOSING_EN}`;
+      return `Welcome aboard Sleep Airline, this is your captain. We are departing ${departureLabel}, heading ${direction}. ${wx}${sleepCue}${TAKEOFF_CLOSING_EN}`;
     }
     const dur = formatDuration(durationMinutes, locale);
     const greet = localContext?.morningGreeting
@@ -593,19 +544,16 @@ export function fallbackCaptainBroadcast(
       'en'
     );
     const whereBit = where ? `${where} ` : '';
-    return `${greet}Welcome aboard Sleep Airline, this is your captain. We have arrived safely in ${arrivalLabel}. ${whereBit}${timeBit}${wxBit}${pax} flew from ${departureLabel} for ${dur || 'a stretch'}. ${cultureBit}${socialCueText}`;
+    return `${greet}Welcome aboard Sleep Airline, this is your captain. We have arrived safely in ${arrivalLabel}. ${whereBit}${timeBit}${wxBit}${pax} flew from ${departureLabel} for ${dur || 'a stretch'}. ${cultureBit}`;
   }
   if (phase === 'takeoff') {
     const wx = spokenWeatherBit(localContext);
-    const social = socialCueText?.trim() && !/獨享|獨自|只有你|天空先交給你|夜空交給你/.test(socialCueText)
-      ? ` ${socialCueText.replace(/[。！？\s]+$/g, '')}。`
-      : '';
     const sleepCue = [
       '您願意的話，可以先把眼睛閉上，肩膀放鬆，自然而然地呼吸。',
       '您願意的話，把眼睛閉上，讓肩膀鬆開，呼吸自然就好。',
       '您願意的話，可以緩緩閉上眼睛，肩膀放鬆，跟著自然的呼吸。',
     ][(departureLabel.length + direction.length) % 3];
-    return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。窗外跑道燈一排排亮著。${wx}${sleepCue}${social}${TAKEOFF_CLOSING_ZH}`;
+    return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。窗外跑道燈一排排亮著。${wx}${sleepCue}${TAKEOFF_CLOSING_ZH}`;
   }
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
   const hello = arrivalHello(localContext?.localTimeLabel);

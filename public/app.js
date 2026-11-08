@@ -411,13 +411,15 @@ function syncConfirmButton() {
   if (state.sleepDial) {
     button.hidden = false;
     button.disabled = !state.sleepMoved;
-    button.textContent = state.sleepMoved ? '確認心情' : '先轉動旋鈕';
+    const label = $('confirm-label') || button;
+    label.textContent = state.sleepMoved ? '確認心情' : '先轉動旋鈕';
     return;
   }
   if (readyOrLanded && !state.busy) {
     button.hidden = false;
     button.disabled = false;
-    button.textContent = state.headingConfirmed ? '航向已確認' : '確認航向';
+    const label = $('confirm-label') || button;
+    label.textContent = state.headingConfirmed ? '航向已確認' : '確認航向';
     return;
   }
   button.hidden = true;
@@ -969,6 +971,9 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   panel.classList.add('is-on', 'beat-blur');
   requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
+  if (state.sound) {
+    void window.BroadcastAudio?.playLandingMusic?.('media/landing.mp3', { volume: 0.32, fadeInMs: 1800, loop: true });
+  }
   return delay(8000).then(() => {
     panel.classList.remove('beat-blur');
     glass.classList.remove('sky-soft');
@@ -1161,9 +1166,6 @@ async function doLand() {
   state.stage = 'landing'; render(); setShade('open');
   setInflightStandby(true);
   window.BroadcastAudio?.primeFromUserGesture?.();
-  const warmedBed = document.getElementById('ceremony-bed');
-  const wakeupUrl = warmedBed?.dataset?.src || '';
-  if (state.sound && warmedBed) warmedBed.volume = 0;
   void (async () => {
     if (!state.sound) return;
     await delay(1000);
@@ -1171,9 +1173,6 @@ async function doLand() {
     await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.9, handoff: true }).catch(() => false);
     if (state.stage !== 'landing' && state.stage !== 'landed') return;
     await window.BroadcastAudio?.playApproachClip?.().catch(() => false);
-    if (state.stage !== 'landing' && state.stage !== 'landed') return;
-    const url = wakeupUrl || `media/${nextWakeup()}`;
-    window.BroadcastAudio?.startWakeupBed?.(url, 0.16, 800);
   })();
   primeLandingVideos();
   setCeremony('ROUTE CONNECTING', '正在離開雲層，升上高空…');
@@ -1614,6 +1613,39 @@ function bindDial() {
   });
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
+function fireScreenFallback() {
+  if (state.busy || state.sleepDial) return;
+  window.BroadcastAudio?.primeFromUserGesture?.();
+  window.BroadcastAudio?.armWakeupCarrier?.();
+  if (state.stage === 'landed') {
+    restart();
+    void doTakeoff();
+    return;
+  }
+  if (state.stage === 'ready') {
+    void doTakeoff();
+    return;
+  }
+  if (state.stage === 'takeoff' || state.stage === 'cruise') void doLand();
+}
+
+function bindScreenFallback() {
+  const glass = $('window-glass');
+  if (!glass) return;
+  let taps = 0;
+  let timer = 0;
+  glass.addEventListener('pointerdown', () => {
+    taps += 1;
+    window.clearTimeout(timer);
+    if (taps >= 3) {
+      taps = 0;
+      fireScreenFallback();
+      return;
+    }
+    timer = window.setTimeout(() => { taps = 0; }, 900);
+  });
+}
+
 function startDeviceControls() {
   let syncedPassenger = null;
   let nextRecoveryAt = 0;
@@ -1701,6 +1733,7 @@ async function init() {
   });
   bindDial();
   bindShadeGesture();
+  bindScreenFallback();
   const syncPageActivity = () => document.body.classList.toggle('page-hidden', document.hidden);
   document.addEventListener('visibilitychange', syncPageActivity);
   syncPageActivity();

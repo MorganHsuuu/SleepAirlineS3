@@ -48,8 +48,6 @@ import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech } from './src/lib/ai/speech';
-import { generateSocialTakeaway, fallbackSocialTakeaway } from './src/lib/ai/social-takeaway';
-import type { SocialTakeawayInput } from './src/lib/ai/social-takeaway';
 import { getLandscapeByFlightId } from './src/lib/notion/landscape-images';
 import { backfillSceneryForFlights, generateSceneryForLanding } from './src/lib/notion/scenery-backfill';
 import { runInBackground } from './src/lib/run-in-background';
@@ -96,14 +94,6 @@ async function generateBroadcastWithBudget(
     return await withTimeout(generateCaptainBroadcast(input), 5_000, fallback);
   } catch {
     return fallback();
-  }
-}
-
-async function generateTakeawayWithBudget(input: SocialTakeawayInput): Promise<string> {
-  try {
-    return await withTimeout(generateSocialTakeaway(input), 8_000, () => fallbackSocialTakeaway(input));
-  } catch {
-    return fallbackSocialTakeaway(input);
   }
 }
 
@@ -514,15 +504,6 @@ app.post('/api/flight/takeoff', async (req, res) => {
       }).catch(() => null),
     ]);
 
-    // 社交短句與完整廣播並行生成：只依賴 socialCue，不互相等待
-    const takeawayPromise = generateTakeawayWithBudget({
-      phase: 'takeoff',
-      passengerName: passenger.name,
-      socialCue,
-      routeDirection: flight.routeDirection,
-      departureLocation: flight.departureLocation,
-    });
-
     const calibration = await loadReviewCalibration();
     const takeoffBroadcast = await generateBroadcastWithBudget(
       {
@@ -535,7 +516,6 @@ app.post('/api/flight/takeoff', async (req, res) => {
         flightProgress: 0,
         estimatedDistanceKm: null,
         routeDirection: flight.routeDirection,
-        socialCue,
         style: broadcastStyle as BroadcastStyle,
         localContext: depLocal,
         locale: locale === 'en' ? 'en' : 'zh',
@@ -548,13 +528,13 @@ app.post('/api/flight/takeoff', async (req, res) => {
         null,
         flight.routeDirection,
         null,
-        socialCue.cueText,
+        '',
         depLocal,
         locale === 'en' ? 'en' : 'zh'
       )
     );
 
-    const [_, speechAudioBase64, socialTakeaway] = await Promise.all([
+    const [_, speechAudioBase64] = await Promise.all([
       updateFlight(flight.notionId, {
         takeoffBroadcastStyle: broadcastStyle as BroadcastStyle,
         takeoffBroadcast,
@@ -563,7 +543,6 @@ app.post('/api/flight/takeoff', async (req, res) => {
         relatedPassenger: socialCue.relatedPassenger ?? '',
       }),
       generateSpeechWithBudget(takeoffBroadcast, broadcastStyle as BroadcastStyle),
-      takeawayPromise,
     ]);
 
     res.json({
@@ -576,7 +555,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         relatedPassenger: socialCue.relatedPassenger,
       },
       speechAudioBase64,
-      socialTakeaway,
+      socialTakeaway: '',
     });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
@@ -665,18 +644,6 @@ app.post('/api/flight/land', async (req, res) => {
       groupFlights
     );
 
-    // 社交短句與完整廣播並行生成：只依賴 socialCue，不互相等待
-    const takeawayPromise = generateTakeawayWithBudget({
-      phase: 'landing',
-      passengerName: passenger.name,
-      socialCue,
-      routeDirection: activeFlight.routeDirection,
-      departureLocation: activeFlight.departureLocation,
-      arrivalLocation: arrival.displayName,
-      flightDurationMinutes: durationMinutes,
-      estimatedDistanceKm: Math.round(distanceKm),
-    });
-
     const useMorningVoice = locale !== 'en';
 
     const broadcastFallback = () => fallbackCaptainBroadcast(
@@ -686,7 +653,7 @@ app.post('/api/flight/land', async (req, res) => {
       arrival.displayName,
       activeFlight.routeDirection,
       durationMinutes,
-      socialCue.cueText,
+      '',
       arrLocal,
       locale === 'en' ? 'en' : 'zh'
     );
@@ -704,7 +671,6 @@ app.post('/api/flight/land', async (req, res) => {
             flightProgress: 100,
             estimatedDistanceKm: distanceKm,
             routeDirection: activeFlight.routeDirection,
-            socialCue,
             style: broadcastStyle as BroadcastStyle,
             localContext: arrLocal,
             locale: 'en',
@@ -713,7 +679,7 @@ app.post('/api/flight/land', async (req, res) => {
           broadcastFallback
         );
 
-    const [_, speechAudioBase64, socialTakeaway] = await Promise.all([
+    const [_, speechAudioBase64] = await Promise.all([
       updateFlight(activeFlight.notionId, {
         status: 'landed',
         landingTime,
@@ -729,7 +695,6 @@ app.post('/api/flight/land', async (req, res) => {
         relatedPassenger: socialCue.relatedPassenger ?? '',
       }),
       useMorningVoice ? Promise.resolve(null) : generateSpeechWithBudget(captainBroadcast, broadcastStyle as BroadcastStyle),
-      takeawayPromise,
     ]);
 
     removeLandingRemindersForFlight(activeFlight.passengerId, activeFlight.flightId)
@@ -774,7 +739,7 @@ app.post('/api/flight/land', async (req, res) => {
       },
       landingScenery: null,
       speechAudioBase64,
-      socialTakeaway,
+      socialTakeaway: '',
     });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
@@ -1428,7 +1393,6 @@ app.post('/api/review/generate', async (req, res) => {
           flightProgress: 0,
           estimatedDistanceKm: null,
           routeDirection,
-          socialCue: SOLO_SOCIAL_CUE,
           style: 'formal_captain',
           localContext: depLocal,
           locale: 'zh',
@@ -1436,7 +1400,7 @@ app.post('/api/review/generate', async (req, res) => {
         },
         () => fallbackCaptainBroadcast(
           'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
-          SOLO_SOCIAL_CUE.cueText, depLocal, 'zh'
+          '', depLocal, 'zh'
         )
       );
       sample = await updateReviewSample(sample.sampleId, { takeoffBroadcast, phase: 'takeoff' });
@@ -1480,7 +1444,6 @@ app.post('/api/review/generate', async (req, res) => {
           flightProgress: 0,
           estimatedDistanceKm: null,
           routeDirection,
-          socialCue: SOLO_SOCIAL_CUE,
           style: 'formal_captain',
           localContext: depLocal,
           locale: 'zh',
@@ -1488,7 +1451,7 @@ app.post('/api/review/generate', async (req, res) => {
         },
         () => fallbackCaptainBroadcast(
           'takeoff', '旅客', route.departureLocation, null, routeDirection, null,
-          SOLO_SOCIAL_CUE.cueText, depLocal, 'zh'
+          '', depLocal, 'zh'
         )
       ),
       generateMorningArrival({
