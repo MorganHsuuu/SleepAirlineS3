@@ -32,6 +32,7 @@ const checks = [
   ['landing music stays through weather fade-out', /fadeOutLandingMusic/.test(doLand)],
   ['landing PA restores the bed after speech', /restoreBed:\s*true/.test(doLand) && /restoreBed/.test(playBroadcast)],
   ['arrival PA plays captain.mp3 first then AI voice', /skipCaptainIntro:\s*false/.test(doLand)],
+  ['descent IIFE does not play captain.mp3 a second time', !/playCaptainIntro/.test(doLand.slice(0, doLand.indexOf('landingCueGen += 1')))],
   ['arrival PA cancels descent chime before AI voice', /landingCueGen \+= 1/.test(doLand)],
   ['muteCeremonyBedForSpeech fades the bed quieter', /fadeLandingBedVolume/.test(muteCeremonyBedForSpeech)],
   ['muteCeremonyBedForSpeech does not pause landing music', !/\.pause\(\)/.test(muteCeremonyBedForSpeech)],

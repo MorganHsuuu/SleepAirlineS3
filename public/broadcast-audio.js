@@ -18,8 +18,9 @@ const TAKEOFF_SFX_URL = 'media/takeoff.mp3';
 /** 儀式音景切換：wakeup ↔ captain ↔ TTS */
 const CEREMONY_CROSSFADE_MS = 900;
 const CEREMONY_RESTORE_MS = 1400;
-/** 機長講話時降落音樂保留的音量比例（漸弱，不暫停） */
-const SPEECH_DUCK_RATIO = 0.18;
+/** 機長講話時降落音樂保留的音量比例（漸弱，不暫停；必須遠低於語音） */
+const SPEECH_DUCK_RATIO = 0.05;
+const SPEECH_DUCK_CAP = 0.016;
 /** wakeup 在機長／著陸時壓低但不切斷（相對 landingVolume） */
 const WAKEUP_DUCK_RATIO = {
   captain: 0.12,
@@ -883,7 +884,10 @@ async function muteCeremonyBedForSpeech() {
   const jobs = [];
   if (landingAudio) {
     landingPausedForCaptain = false;
-    const target = clampVolume(Math.max(0.045, landingVolume * SPEECH_DUCK_RATIO));
+    const ducked = clampVolume(Math.min(SPEECH_DUCK_CAP, Math.max(0.01, landingVolume * SPEECH_DUCK_RATIO)));
+    // captain 交叉淡出後床音已接近 0；不要再拉回來蓋過 TTS
+    const current = Number(landingAudio.volume) || 0;
+    const target = current > 0 ? Math.min(current, ducked) : 0;
     jobs.push(fadeLandingBedVolume(target, ms));
   }
   if (flightSfxAudio) {

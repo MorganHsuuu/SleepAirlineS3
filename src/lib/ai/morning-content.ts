@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
 import { withTimeout } from '../with-timeout';
 import { findReliableDestinationSubject } from './destination-subjects';
-import { countryLabelZh, cultureNoteForIso, placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
+import { countryLabelZh, cultureNoteForIso, landingOpeningForIso, placeOrientationLine, spokenPlaceZh } from '../flight/local-context';
 
 export interface MorningContent {
   destination: { country: string; city: string };
@@ -750,9 +750,16 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function alignArrivalVoice(voiceText: string, localGreeting: string, hello: string): string {
+function alignArrivalVoice(
+  voiceText: string,
+  localGreeting: string,
+  hello: string,
+  localOpening: string
+): string {
+  const opening = (localOpening || `${localGreeting}。`).trim();
   let text = voiceText.trim();
   const leading = MORNING_LOCAL_GREETINGS.concat([
+    opening,
     localGreeting,
     'Halló',
     'Hello',
@@ -767,17 +774,28 @@ function alignArrivalVoice(voiceText: string, localGreeting: string, hello: stri
     '你好',
   ]).filter(Boolean);
   const unique = [...new Set(leading)].sort((a, b) => b.length - a.length);
-  for (const item of unique) {
-    text = text.replace(new RegExp(`^${escapeRegExp(item)}[。！!]?\\s*`, 'i'), '');
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of unique) {
+      const next = text.replace(new RegExp(`^${escapeRegExp(item)}[。．.！!]?\\s*`, 'i'), '');
+      if (next !== text) {
+        text = next;
+        changed = true;
+        break;
+      }
+    }
   }
   text = text.replace(/^(早安|午安|傍晚好|晚安)[，,。！!\s]*/, '');
+  const glue = /[。．.！!]$/.test(opening) ? '' : (/[\u4e00-\u9fff\u3040-\u30ff]/.test(opening) ? '。' : '. ');
+  const head = `${opening}${glue}`;
   if (!text.startsWith('Sleep Airline') && !text.startsWith(hello)) {
-    return `${localGreeting}。${hello}，${text}`;
+    return `${head}${hello}，${text}`;
   }
   if (text.startsWith('Sleep Airline')) {
-    return `${localGreeting}。${hello}，${text}`;
+    return `${head}${hello}，${text}`;
   }
-  return `${localGreeting}。${text}`;
+  return `${head}${text}`;
 }
 
 const VOICE_BOILERPLATE =
@@ -792,6 +810,7 @@ function fallbackMorning(
   const place = spokenCity({ ...input, city, country });
   const subject = resolveSceneSubject(input, theme);
   const greeting = timeAdjustedGreeting(input.localGreeting || '你好', input.localTimeLabel);
+  const opening = landingOpeningForIso(input.countryIso, greeting);
   const hello = arrivalHello(input.localTimeLabel);
   const weatherLine = spokenWeatherLine(input);
   const where = placeOrientationLine(place, country, input.countryIso)
@@ -838,11 +857,11 @@ function fallbackMorning(
   const journeyArrive = journeyLine ? `${journeyLine}，這才到了${place}。` : arriveSoft;
   const packed = [
     '',
-    `${greeting}。${hello}，${wake}${arrive}${lookYou}${weatherLine}${whereLine}${journeyAfter}${returnLine}${aside}`,
-    `${greeting}。${hello}，${wake}${journeyArrive}${whereLine}${lookScene}${returnLine}${aside}${weatherLine}`,
-    `${greeting}。${hello}，${wake}${arrive}${weatherLine}${lookNature}${whereLine}${journeyAfter}${returnLine}${aside}`,
-    `${greeting}。${hello}，${wake}${arrive}${aside}${lookYou}${whereLine}${journeyAfter}${returnLine}${weatherLine}`,
-    `${greeting}。${hello}，${wake}${journeyArrive}${weatherLine.replace(/。$/, '，')}${lookScene}${whereLine}${returnLine}${aside}`,
+    `${opening} ${hello}，${wake}${arrive}${lookYou}${weatherLine}${whereLine}${journeyAfter}${returnLine}${aside}`,
+    `${opening} ${hello}，${wake}${journeyArrive}${whereLine}${lookScene}${returnLine}${aside}${weatherLine}`,
+    `${opening} ${hello}，${wake}${arrive}${weatherLine}${lookNature}${whereLine}${journeyAfter}${returnLine}${aside}`,
+    `${opening} ${hello}，${wake}${arrive}${aside}${lookYou}${whereLine}${journeyAfter}${returnLine}${weatherLine}`,
+    `${opening} ${hello}，${wake}${journeyArrive}${weatherLine.replace(/。$/, '，')}${lookScene}${whereLine}${returnLine}${aside}`,
   ] as const;
   const voiceText = packed[shape].replace(/，。/g, '。').replace(/。。+/g, '。');
   const subjectSafety = subject.isGeneric
@@ -943,11 +962,12 @@ export function parseMorningResponse(
     input.localTimeLabel
   );
   const hello = arrivalHello(input.localTimeLabel);
+  const localOpening = landingOpeningForIso(input.countryIso, localGreeting);
   let voiceText = clean(data.voiceText);
   if (!voiceText) return null;
-  voiceText = alignArrivalVoice(voiceText, localGreeting, hello);
+  voiceText = alignArrivalVoice(voiceText, localGreeting, hello, localOpening);
   const zh = chineseCount(voiceText);
-  if (zh < 24 || zh > 220 || !city || !voiceMentionsPlace(voiceText, input) || UNSAFE_VOICE.test(voiceText)) return null;
+  if (zh < 24 || zh > 250 || !city || !voiceMentionsPlace(voiceText, input) || UNSAFE_VOICE.test(voiceText)) return null;
   if (!voiceMatchesWeather(voiceText, input.weatherSummary)) return null;
   const localFeature = clean(data.localFeature);
   const themeMeta = ARRIVAL_SCENE_THEMES.find((item) => item.id === expectedThemeId) ?? ARRIVAL_SCENE_THEMES[0];
@@ -1020,7 +1040,7 @@ voiceText 必須是人會講出口的繁體中文口語，約 90–150 個中文
 3. 先到再天氣：先到了哪 → 再講現在幾點幾度 → 眼前看見什麼 → 地圖位置 → 旅程 → 趣事
 4. 先講人：到了哪 → 先講當地人趣事 → 再看眼前 → 地圖位置 → 旅程 → 天氣
 5. 揉在一起：兩到三句把抵達、眼前風景、天氣、旅程、趣事交錯，不要一句一個欄位
-開頭：當地語言「你好」（localGreeting），不要用早安／Good morning。接著中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
+開頭：必須先用當地語言講一兩句完整的話（user.localOpening；不是單字你好）。例如日文「こんにちは。ゆっくり休めましたか、目的地に到着しました。」不要翻譯這一兩句。接著才接中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
 不可省略：地圖定位一句、眼前看得見的細節一句、當地人趣事一句。沒有 cultureNote 也要依國家常識改寫一句人會做的小事，不要只剩天氣和地名。
 禁止每次都用：「已抵達今天的目的地——」「窗外是」「歡迎抵達，今天的旅程從這裡開始」「晚上常有 X」「X 是深夜社交場」「X 是國民習慣」。
 禁止說「這張照片」「眼前這張照片」；要說降落到哪、眼前看見什麼，才有帶入感。
@@ -1073,6 +1093,7 @@ async function requestMorning(
           voiceShape,
           voiceShapeHint: VOICE_SHAPE_HINTS[voiceShape],
           localGreeting: greeting || undefined,
+          localOpening: landingOpeningForIso(input.countryIso, greeting),
           chineseTimeGreeting: arrivalHello(input.localTimeLabel),
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
           localTimeLabel: (input.localTimeLabel || '').trim() || undefined,

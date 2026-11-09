@@ -224,6 +224,39 @@ function morningGreetingForIso(iso: string): string {
   return 'Hello';
 }
 
+function arrivalWishForHello(hello: string, iso = ''): string {
+  if (/こんにちは|こんばんは/.test(hello)) return 'ゆっくり休めましたか、目的地に到着しました。';
+  if (/안녕/.test(hello)) return '잘 주무셨나요, 목적지에 도착했습니다.';
+  if (/你好|您好/.test(hello)) return '希望你睡得安穩，我們到了。';
+  if (/^Bonjour|^Bonsoir/i.test(hello)) return 'Bienvenue à destination, j’espère que vous avez bien dormi.';
+  if (/^Hallo$/i.test(hello)) return 'Willkommen am Ziel, ich hoffe, Sie haben gut geschlafen.';
+  if (/^Hola$/i.test(hello)) return 'Bienvenidos, hemos llegado. Espero que hayan dormido bien.';
+  if (/^Ciao$/i.test(hello)) return 'Benvenuti a destinazione, spero abbiate dormito bene.';
+  if (/^Olá$/i.test(hello)) return 'Bem-vindos, chegamos ao destino. Espero que tenham dormido bem.';
+  if (/^Halló$/i.test(hello)) return 'Velkomin á áfangastað, vonandi svafstu vel.';
+  if (/^Hej$/i.test(hello)) return 'Välkommen, vi har kommit fram. Hoppas du sov gott.';
+  if (/^Hei$/i.test(hello) && iso.toUpperCase() === 'NO') return 'Velkommen, vi har kommet frem. Håper du har sovet godt.';
+  if (/^Hei$/i.test(hello)) return 'Tervetuloa, olemme perillä. Toivottavasti nukuit hyvin.';
+  if (/Xin chào/i.test(hello)) return 'Hy vọng bạn đã ngủ ngon, chúng ta đã đến nơi.';
+  if (/สวัสดี/.test(hello)) return 'หลับสบายไหม เราถึงที่หมายแล้ว';
+  if (/^Halo$/i.test(hello)) return 'Selamat datang, kita sudah tiba. Semoga tidur Anda nyenyak.';
+  if (/^Merhaba$/i.test(hello)) return 'Hoş geldiniz, vardık. Umarım iyi uyudunuz.';
+  if (/Здравствуйте/.test(hello)) return 'Добро пожаловать, мы прилетели. Надеюсь, вы хорошо выспались.';
+  if (/Jambo/i.test(hello)) return 'Karibu, tumefika. Natumai umelala vizuri.';
+  if (/Namaste/i.test(hello)) return 'स्वागत है, हम पहुँच गए हैं।';
+  if (/مرحبا|أهلا/.test(hello)) return 'أهلاً بكم، وصلنا إلى الوجهة.';
+  return 'Welcome, we have arrived. I hope you slept well.';
+}
+
+/** 降落廣播開頭：當地語言一兩句（問候＋到了／睡得好），不要只丟單字你好。 */
+export function landingOpeningForIso(iso?: string | null, greeting?: string | null): string {
+  const code = String(iso || '').toUpperCase();
+  const hello = (greeting || morningGreetingForIso(code || 'US')).replace(/[。．.！!]+$/g, '');
+  const wish = arrivalWishForHello(hello, code);
+  const cjk = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(hello);
+  return `${hello}${cjk ? '。' : '. '}${wish}`;
+}
+
 /** 洲或海洋：剛醒來的人聽得懂的地圖位置，不用東北亞／西歐這種細分區 */
 const MACRO_REGION_BY_ISO: Record<string, string> = {
   JP: '亞洲', KR: '亞洲', CN: '亞洲', TW: '亞洲', HK: '亞洲', MN: '亞洲',

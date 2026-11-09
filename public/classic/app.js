@@ -820,7 +820,7 @@ function playGlassRoute({ minutes, distanceKm, from, to }) {
   requestAnimationFrame(() => glass.classList.add('sky-soft'));
   setScene('clouds');
   if (state.sound) {
-    void window.BroadcastAudio?.playLandingMusic?.(`/media/${nextWakeup()}`, { volume: 0.32, fadeInMs: 1800, loop: true });
+    void window.BroadcastAudio?.playLandingMusic?.(`/media/${nextWakeup()}`, { volume: 0.18, fadeInMs: 1800, loop: true });
   }
   return delay(8000).then(() => {
     panel.classList.remove('beat-blur');
@@ -898,6 +898,28 @@ function helloForPlace(place) {
   const key = raw.replaceAll('台灣', '臺灣').toLowerCase();
   const iso = countryIsoMap?.[key] || '';
   return HELLO_BY_ISO[iso] || 'Hello';
+}
+function landingOpeningForPlace(place) {
+  const hello = helloForPlace(place);
+  const wish = /こんにちは|こんばんは/.test(hello) ? 'ゆっくり休めましたか、目的地に到着しました。'
+    : /안녕/.test(hello) ? '잘 주무셨나요, 목적지에 도착했습니다.'
+    : /你好|您好/.test(hello) ? '希望你睡得安穩，我們到了。'
+    : /^Hola$/i.test(hello) ? 'Bienvenidos, hemos llegado. Espero que hayan dormido bien.'
+    : /^Bonjour|^Bonsoir/i.test(hello) ? 'Bienvenue à destination, j’espère que vous avez bien dormi.'
+    : /^Hallo$/i.test(hello) ? 'Willkommen am Ziel, ich hoffe, Sie haben gut geschlafen.'
+    : /^Ciao$/i.test(hello) ? 'Benvenuti a destinazione, spero abbiate dormito bene.'
+    : /^Olá$/i.test(hello) ? 'Bem-vindos, chegamos ao destino. Espero que tenham dormido bem.'
+    : /^Halló$/i.test(hello) ? 'Velkomin á áfangastað, vonandi svafstu vel.'
+    : /Xin chào/i.test(hello) ? 'Hy vọng bạn đã ngủ ngon, chúng ta đã đến nơi.'
+    : /สวัสดี/.test(hello) ? 'หลับสบายไหม เราถึงที่หมายแล้ว'
+    : /^Halo$/i.test(hello) ? 'Selamat datang, kita sudah tiba.'
+    : /^Merhaba$/i.test(hello) ? 'Hoş geldiniz, vardık. Umarım iyi uyudunuz.'
+    : /Здравствуйте/.test(hello) ? 'Добро пожаловать, мы прилетели.'
+    : /Jambo/i.test(hello) ? 'Karibu, tumefika. Natumai umelala vizuri.'
+    : /مرحبا|أهلا/.test(hello) ? 'أهلاً بكم، وصلنا إلى الوجهة.'
+    : 'Welcome, we have arrived. I hope you slept well.';
+  const cjk = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(hello);
+  return `${hello}${cjk ? '。' : '. '}${wish}`;
 }
 function showWeatherCard(place, weather, { kicker } = {}) {
   hideGlassPanel('glass-compass');
@@ -1016,8 +1038,6 @@ async function doLand() {
     if (!state.sound) return;
     await delay(1000);
     if (cueGen !== landingCueGen || state.stage !== 'landing') return;
-    await window.BroadcastAudio?.playCaptainIntro?.({ fadeInMs: 0, volume: 0.5, handoff: true }).catch(() => false);
-    if (cueGen !== landingCueGen || state.stage !== 'landing') return;
     await window.BroadcastAudio?.playApproachClip?.().catch(() => false);
   })();
   primeLandingVideos();
@@ -1082,7 +1102,7 @@ async function doLand() {
     if (!state.destination) state.destination = destinationFor(state.direction);
     paintDestCopy(state.destination);
     weatherJob ||= loadWeather(state.destination);
-    const landingLine = () => `早安。Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
+    const landingLine = () => `${landingOpeningForPlace(state.destination)} Sleep Airline 已抵達${state.destination.name}。窗外的風景正慢慢亮起來。歡迎抵達${state.destination.name}。`;
     const fallbackVoiceP = state.sound && window.BroadcastAudio?.prepareTakeoffSpeech
       ? BroadcastAudio.prepareTakeoffSpeech(landingLine())
         .then((prepared) => (prepared ? BroadcastAudio.decodePreparedSpeech(prepared) : null))
@@ -1121,7 +1141,7 @@ async function doLand() {
     }).catch(() => {});
     const readyUrl = await Promise.all([
       Promise.race([sceneryJob.catch(() => null), delay(3500).then(() => null)]),
-      delay(4500),
+      delay(9000),
     ]).then(([url]) => url);
     if (readyUrl) state.sceneryUrl = readyUrl;
 
@@ -1152,10 +1172,10 @@ async function doLand() {
     glass.classList.remove('arrival-flash');
     void glass.offsetWidth;
     glass.classList.add('arrival-flash');
-    await delay(180);
+    await delay(280);
     setScene('arrival', { holdLanding: true });
     $('landing-cloud-scene')?.classList.add('is-fading');
-    await delay(1300);
+    await delay(1800);
     $('landing-cloud-scene')?.classList.remove('is-on', 'is-fading');
     glass.classList.remove('arrival-flash');
     resetLandingCloudScene();

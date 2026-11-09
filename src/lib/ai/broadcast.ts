@@ -3,7 +3,7 @@ import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { LocalContext } from '../flight/local-context';
 import { arrivalHello, timeAdjustedGreeting } from './morning-content';
-import { farewellSpotFor, placeOrientationLine, spokenFarewellLine, spokenPlaceZh } from '../flight/local-context';
+import { farewellSpotFor, landingOpeningForIso, placeOrientationLine, spokenFarewellLine, spokenPlaceZh } from '../flight/local-context';
 import { fallbackSleepInvitation, type SleepNote } from '../flight/sleep-guidance';
 
 export type UiLocale = 'zh' | 'en';
@@ -192,7 +192,7 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
       `local culture / social note: ${ctx.culture}`,
     ];
     if (phase === 'landing' && ctx.morningGreeting) {
-      lines.push(`local-language hello, not good morning (must be first sentence): ${ctx.morningGreeting}`);
+      lines.push(`local-language opening, 1–2 full sentences not just hello: ${landingOpeningForIso(ctx.countryIso, ctx.morningGreeting)}`);
     }
     if (ctx.weatherSummary) lines.push(`local weather: ${ctx.weatherSummary}`);
     if (ctx.localTimeLabel) lines.push(`time of day: ${ctx.localTimeLabel}`);
@@ -217,7 +217,7 @@ function buildLocalBlock(ctx: LocalContext, phase: BroadcastPhase, locale: UiLoc
     `當地文化／社交特色：${ctx.culture}`,
   ];
   if (phase === 'landing' && ctx.morningGreeting) {
-    lines.push(`當地語言「你好」（廣播第一句必須使用，不要用早安）：${ctx.morningGreeting}`);
+    lines.push(`當地語言開頭一兩句（完整句子，不要只丟你好）：${landingOpeningForIso(ctx.countryIso, ctx.morningGreeting)}`);
   }
   if (ctx.weatherSummary) lines.push(`當地天氣：${ctx.weatherSummary}`);
   if (ctx.localTimeLabel) lines.push(`時段：${ctx.localTimeLabel}`);
@@ -244,7 +244,7 @@ ${STYLE_DESCRIPTIONS.en[style]}
 
 Identity (critical):
 - You are the captain speaking to the passenger; the passenger name is the addressee, never your name
-- The first sentence must naturally include “Welcome aboard Sleep Airline” and “this is your captain” (do not drop “Welcome”)${isTakeoff ? '' : '; if a local-language hello is provided, that is sentence one, and “Welcome aboard Sleep Airline, this is your captain” must open sentence two'}
+- The first sentence must naturally include “Welcome aboard Sleep Airline” and “this is your captain” (do not drop “Welcome”)${isTakeoff ? '' : '; if a local-language opening is provided, those 1–2 local sentences come first, and “Welcome aboard Sleep Airline, this is your captain” must open the next English sentence'}
 - Never say “I am Captain {passenger name}”
 - Never speak as the passenger
 - Address them as “passengers” or “${pax}”; never call yourself by the passenger name
@@ -261,7 +261,7 @@ ${hasLocal ? `Local context (${isTakeoff ? 'departure' : 'arrival'}):
 - Culture/weather in [local context] are for rewriting only — never copy lists
 - Landing: after naming the city, one locating sentence so nobody is left with a mystery place-name — continent or ocean + country + one obvious identity (capital / island / overseas territory). Example: Tokyo → “This is Asia, the capital of Japan.” Pacific islands → “This is the South Pacific, in New Caledonia.” Iceland → “This is the North Atlantic, the capital of Iceland.” Do not use subregions like Northeast Asia or Western Europe. No encyclopedia dump.
 - Landing: weave one natural culture tip and a light weather beat
-- Landing: sentence one must be the local-language hello (not “good morning”); continue in English afterward without translating the greeting. Do not mix a daytime local greeting with “good night”.
+- Landing: the first 1–2 sentences must be in the local language (use the provided local-language opening, not just “hello”); continue in English afterward without translating them. Do not mix a daytime local greeting with “good night”.
 - Takeoff: at most one departure weather beat
 ` : ''}
 Writing:
@@ -281,7 +281,7 @@ ${STYLE_DESCRIPTIONS.zh[style]}
 
 身分（非常重要）：
 - 你是機長，在對「乘客」說話；乘客姓名只是對象，不是你的名字
-- 第一句必須自然包含「歡迎搭乘 Sleep Airline」與「這裡是機長」（「歡迎」二字不可省略，禁止只寫「搭乘 Sleep Airline」）${isTakeoff ? '' : '；若有當地語言「你好」，該問候為第一句，「歡迎搭乘 Sleep Airline，這裡是機長」必須完整出現在第二句開頭'}
+- 第一句必須自然包含「歡迎搭乘 Sleep Airline」與「這裡是機長」（「歡迎」二字不可省略，禁止只寫「搭乘 Sleep Airline」）${isTakeoff ? '' : '；若有當地語言開頭一兩句，那一兩句必須放最前面，「歡迎搭乘 Sleep Airline，這裡是機長」必須完整出現在之後的中文第一句開頭'}
 - 禁止寫「我是機長〇〇」若〇〇是乘客姓名
 - 禁止冒充乘客、禁止用第一人稱代替乘客說話
 - 用「各位乘客」或「${pax}」稱呼對方；不要稱自己為乘客姓名
@@ -298,9 +298,8 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 【當地資訊】中的文化、天氣僅供改寫融入，禁止整段照搬或列點
 - 降落廣播：說出城市名之後，必須用一句話幫旅客把這個地方放到地圖上——洲或海洋＋國家＋一個幾乎不會錯的身份（首都／島國／海外領地／某國城市）。例如東京：「這裡是亞洲，日本的首都」；太平洋小島：「這裡是南太平洋，屬於新喀里多尼亞」；冰島：「這裡是北大西洋，冰島的首都」。禁止東北亞、西歐這種細分區，禁止人口數字、冷門歷史、百科條列。
 - 降落廣播：必須用兩句自然帶出這個地方特有的文化、環境、市集、表演或生活場景，並點一下當地天氣與當地時間；禁止「自然地貌與天光」「山、水或開闊地貌」這類任何城市都能套的風景句。可提這班飛了多久、從哪裡來；若是再次降落同一座城市，輕輕提一句。像機長看著窗外講故事，不要像氣象報告或百科。
-- 降落廣播：第一句必須以【當地語言你好】開頭（使用 morningGreeting，如 Halló、こんにちは、Hola），
-  不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
-- 降落廣播：當地語言問候之後，緊接繁體中文繼續廣播，不要翻譯或解釋那句問候
+- 降落廣播：開頭必須先用當地語言講一兩句完整的話（使用【當地語言開頭一兩句】，如「こんにちは。ゆっくり休めましたか、目的地に到着しました。」），不要只丟單字你好，也不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
+- 降落廣播：當地語言這一兩句之後，緊接繁體中文繼續廣播，不要翻譯或解釋那兩句
 - 起飛廣播：用【告別場景】寫一句剛逛完當地、正要離開的故事（例：我們逛完信義區，要離開台北了）；沒有指定街區就用當地文化裡的真實生活場景，禁止編造區名。天氣最多一句帶過，勿喧賓奪主、勿暗示目的地
 ` : ''}
 寫作：
@@ -381,7 +380,7 @@ heading: ${direction}
 ${input.localContext ? `\n[local context · arrival]\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n[review calibration]\n${input.reviewCalibration}\n` : ''}
 
-Announce waking up at arrival, how long you flew, and from/to. Sentence one = local-language hello (not good morning); sentence two must begin with “Welcome aboard Sleep Airline, this is your captain”.
+Announce waking up at arrival, how long you flew, and from/to. First 1–2 sentences = the provided local-language opening (not a single hello); the next sentence must begin with “Welcome aboard Sleep Airline, this is your captain”.
 Right after naming the city, locate it in one sentence (continent or ocean + country + capital/island if true). Weave one culture/weather beat; fluent paragraph, no bullets.
 Do not mention teammates, squad, friends, or other passengers.`
     : `【降落廣播】
@@ -396,7 +395,7 @@ Do not mention teammates, squad, friends, or other passengers.`
 ${input.localContext ? `\n【當地資訊 · 抵達地】\n${buildLocalBlock(input.localContext, 'landing', locale)}\n` : ''}
 ${input.reviewCalibration ? `\n【審查校正】\n${input.reviewCalibration}\n` : ''}
 
-請宣布：醒來抵達、飛了多久、從哪到哪、當地時間；第一句以當地語言「你好」開頭（不要用早安），第二句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
+請宣布：醒來抵達、飛了多久、從哪到哪、當地時間；開頭必須先用當地語言講一兩句完整的話（用【當地語言開頭一兩句】，不要只丟你好），之後的中文第一句必須以「歡迎搭乘 Sleep Airline，這裡是機長」完整開頭（「歡迎」不可省略、禁止只寫「搭乘 Sleep Airline」），
 說出抵達城市後立刻用一句話定位這個地方（洲或海洋、國家、首都或島國），讓沒聽過這地名的人也知道在哪；
 必須融入這個地方特有的文化、環境、市集或表演（改寫），禁止「自然地貌與天光」「山、水或開闊地貌」這類套句；合併成一段流暢廣播，勿列點。
 不要提隊友、同組、朋友或其他旅客。`;
@@ -553,7 +552,7 @@ export function fallbackCaptainBroadcast(
     }
     const dur = formatDuration(durationMinutes, locale);
     const greet = localContext?.morningGreeting
-      ? `${timeAdjustedGreeting(localContext.morningGreeting, localContext.localTimeLabel)}! `
+      ? `${landingOpeningForIso(localContext.countryIso, timeAdjustedGreeting(localContext.morningGreeting, localContext.localTimeLabel))} `
       : '';
     const timeBit = localContext?.localTimeLabel ? `${localContext.localTimeLabel}, ` : 'Local morning, ';
     const wxBit = localContext?.weatherSummary ? `outside it’s ${localContext.weatherSummary}. ` : '';
@@ -576,6 +575,7 @@ export function fallbackCaptainBroadcast(
     return `歡迎搭乘 Sleep Airline，這裡是機長。我們從${departureLabel}出發，${direction}。${farewell}窗外跑道燈一排排亮著。${wx}${sleepCue}${TAKEOFF_CLOSING_ZH}`;
   }
   const greet = timeAdjustedGreeting(localContext?.morningGreeting || '你好', localContext?.localTimeLabel);
+  const opening = landingOpeningForIso(localContext?.countryIso, greet);
   const hello = arrivalHello(localContext?.localTimeLabel);
   const timeBit = spokenWeatherBit(localContext);
   const dur = formatDuration(durationMinutes, locale);
@@ -592,5 +592,5 @@ export function fallbackCaptainBroadcast(
     localContext?.countryIso
   );
   const whereBit = where ? `${where}。` : '';
-  return `${greet}。${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}${journeyBit ? `${journeyBit}。` : ''}${cultureBit}歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
+  return `${opening} ${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}${journeyBit ? `${journeyBit}。` : ''}${cultureBit}歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }

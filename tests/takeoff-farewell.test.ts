@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { farewellSpotFor, spokenFarewellLine } from '../src/lib/flight/local-context';
+import { farewellSpotFor, landingOpeningForIso, spokenFarewellLine } from '../src/lib/flight/local-context';
 import { fallbackCaptainBroadcast } from '../src/lib/ai/broadcast';
 import { TAKEOFF_SPEECH_SPEED } from '../src/lib/ai/speech';
 
@@ -42,4 +42,36 @@ test('takeoff fallback tells a leaving story then invites sleep', () => {
 
 test('takeoff speech is slightly slower than landing', () => {
   assert.equal(TAKEOFF_SPEECH_SPEED, 0.9);
+});
+
+test('landing opening is one or two local-language sentences', () => {
+  assert.match(landingOpeningForIso('JP'), /こんにちは。/);
+  assert.match(landingOpeningForIso('JP'), /目的地に到着しました/);
+  assert.match(landingOpeningForIso('IS'), /Halló/);
+  assert.match(landingOpeningForIso('IS'), /Velkomin/);
+  assert.doesNotMatch(landingOpeningForIso('JP'), /^こんにちは$/);
+});
+
+test('landing fallback starts in the local language then continues in Chinese', () => {
+  const text = fallbackCaptainBroadcast(
+    'landing',
+    '小宇',
+    'Taipei, Taiwan',
+    'Reykjavík, Iceland',
+    'northbound',
+    95,
+    '',
+    {
+      countryIso: 'IS',
+      countryName: 'Iceland',
+      cityName: 'Reykjavík',
+      culture: '冰島人見面常先談天氣與溫泉。',
+      morningGreeting: 'Halló',
+      weatherSummary: '氣溫 4°C，多雲',
+      localTimeLabel: '當地清晨',
+    }
+  );
+  assert.match(text, /^Halló\. /);
+  assert.match(text, /Velkomin/);
+  assert.match(text, /歡迎搭乘 Sleep Airline|已抵達/);
 });

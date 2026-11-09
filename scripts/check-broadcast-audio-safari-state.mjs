@@ -101,7 +101,7 @@ window.window = window;
 
 vm.createContext(context);
 const source = await readFile(new URL('../public/broadcast-audio.js', import.meta.url), 'utf8');
-assert.match(source, /const SPEECH_DUCK_RATIO = 0\.18;/);
+assert.match(source, /const SPEECH_DUCK_RATIO = 0\.05;/);
 assert.match(
   source,
   /muteCeremonyBedForSpeech\(\)[\s\S]*landingVolume \* SPEECH_DUCK_RATIO/,
@@ -185,9 +185,9 @@ assert.ok(
 );
 const landing = app.slice(app.indexOf('async function doLand()'), app.indexOf('async function submitSleepReport('));
 assert.ok(
-  landing.indexOf('await delay(1000)') < landing.indexOf('playCaptainIntro?.(')
-    && landing.indexOf('playCaptainIntro?.(') < landing.indexOf('playApproachClip?.('),
-  'descent must wait one second, play captain chime, then play approach voice',
+  landing.indexOf('await delay(1000)') < landing.indexOf('playApproachClip?.(')
+    && !/playCaptainIntro/.test(landing.slice(0, landing.indexOf('landingCueGen += 1'))),
+  'descent plays the approach clip once; captain.mp3 waits for the arrival PA',
 );
 assert.match(
   landing,
@@ -221,7 +221,7 @@ assert.match(
 );
 assert.match(
   landing,
-  /delay\(4500\)/,
+  /delay\(9000\)/,
   'descent through clouds must hold long enough to feel like flying down',
 );
 assert.doesNotMatch(
