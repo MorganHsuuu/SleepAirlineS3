@@ -74,6 +74,8 @@ const requiredRules = [
   ['時間看板資訊有最小字級', /\.glass-copy \.glass-meta\{font-size:clamp\(11px,3\.5cqi,18px\)/],
   ['航線端點文字有最小字級', /\.glass-board \.glass-pin\{[^}]*font-size:clamp\(11px,3\.5cqi,18px\)/],
   ['窗內指南針文字群保留底部安全區', /\.glass-compass>\.glass-kicker\{margin-top:6cqh\}/],
+  ['滿版窗戶隱藏游標，避免巡航變暗後左上角白點', /body\.window-only,body\.window-only \*\{cursor:none!important\}/],
+  ['隱藏未啟用的地球儀與影片合成層', /#globe-canvas:not\(\.active\),\.scene-video:not\(\.active\)\{visibility:hidden\}/],
 ];
 
 for (const [message, pattern] of requiredRules) {
