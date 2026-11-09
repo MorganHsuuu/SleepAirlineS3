@@ -67,6 +67,26 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.kiosk.state["setupCode"], original_code)
         self.assertEqual(self.kiosk.status, "ready")
         self.assertIn("Wi-Fi", self.kiosk.message)
+        self.assertFalse(self.kiosk.busy)
+        with patch.object(kiosk_module, "Thread"):
+            self.assertTrue(self.kiosk.provision("Home Wi-Fi", "corrected-password", "grant", original_code))
+            self.assertFalse(self.kiosk.provision("Home Wi-Fi", "duplicate", "grant", original_code))
+
+    def test_wifi_timeout_restores_hotspot_and_allows_retry(self):
+        self.kiosk.start_hotspot()
+        original_code = self.kiosk.state["setupCode"]
+        self.kiosk.args.dry_run = False
+
+        def nmcli(command, **_kwargs):
+            if "connect" in command:
+                raise subprocess.TimeoutExpired(command, 75)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with patch.object(kiosk_module.subprocess, "run", side_effect=nmcli), patch.object(kiosk_module.time, "sleep"):
+            self.kiosk._provision_worker("Home Wi-Fi", "wrong-password", "grant")
+        self.assertFalse(self.kiosk.busy)
+        self.assertEqual(self.kiosk.status, "ready")
+        self.assertEqual(self.kiosk.state["setupCode"], original_code)
 
     def test_empty_cloud_display_name_does_not_erase_saved_passenger_name(self):
         self.kiosk.state["passengerId"] = "PAX-TEST0001"
@@ -79,3 +99,4 @@ class PairingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

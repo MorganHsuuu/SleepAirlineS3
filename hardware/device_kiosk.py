@@ -294,15 +294,37 @@ document.querySelectorAll('.progress-rule i').forEach((item,index)=>item.classLi
 <p class="fine-print">密碼只會傳給眼前的裝置，不會送到 Vercel。送出後暫時 Wi-Fi 會關閉；請讓手機切回原本 Wi-Fi 或行動網路。</p>'''
         script = """const p=new URLSearchParams(location.hash.slice(1));history.replaceState(null,'',location.pathname);
 const form=document.getElementById('form'),result=document.getElementById('result');
-form.addEventListener('submit',async e=>{e.preventDefault();form.querySelector('button').disabled=true;
-try{const response=await fetch('/api/provision',{method:'POST',headers:{'Content-Type':'application/json'},
+const button=form.querySelector('button'),returnApp=document.getElementById('return-app');
+const setupRevision=__SETUP_REVISION__;
+let waiting=false,polling=false;
+function retry(message){waiting=false;button.disabled=false;button.textContent='重新送出網路資料 →';returnApp.hidden=true;result.textContent=message;}
+async function request(url,options={}){
+const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+try{return await fetch(url,{...options,signal:controller.signal,cache:'no-store'});}finally{clearTimeout(timer);}}
+async function checkStatus(){
+if(!waiting||polling)return;polling=true;
+try{const response=await request('/api/status');if(!response.ok)return;
+const status=await response.json();
+if(status.paired){waiting=false;result.textContent='裝置已完成連線與綁定。請讓手機恢復上網，再返回 APP。';returnApp.hidden=false;}
+else if(status.setupRevision!==setupRevision||status.setupCodeChanged){
+waiting=false;button.disabled=true;returnApp.hidden=false;result.textContent='配對碼已更新或過期。請讓手機恢復上網，回到 APP 重新掃描裝置上的 QR Code。';}
+else if(!status.busy&&status.status==='ready'){
+retry((status.message||'裝置尚未連線。')+' 請修改 Wi-Fi 名稱或密碼，再按重新送出。');}
+else{result.textContent=status.message||'裝置正在連線，請稍候。';}
+}catch{result.textContent='裝置正在切換網路。若連線失敗，請將手機連回裝置暫時 Wi-Fi，這一頁會恢復讓你修改再送出。';}
+finally{polling=false;}}
+setInterval(()=>{void checkStatus();},2000);
+form.addEventListener('submit',async e=>{e.preventDefault();if(button.disabled)return;
+button.disabled=true;button.textContent='裝置連線中…';returnApp.hidden=true;
+result.textContent='正在將網路資料送給裝置…';
+try{const response=await request('/api/provision',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({ssid:document.getElementById('ssid').value,password:document.getElementById('password').value,
 grant:p.get('grant'),setupCode:p.get('code')})});
-if(!response.ok)throw new Error((await response.json()).error||'無法開始配網');
-result.textContent='網路資料已送給裝置。裝置暫時 Wi-Fi 即將關閉；請讓手機恢復上網，再按下方按鈕返回 APP。';
-document.getElementById('return-app').hidden=false;
-document.getElementById('return-app').scrollIntoView({block:'center'});
-}catch(err){result.textContent=err instanceof TypeError?'未收到裝置回覆。請先查看裝置螢幕是否正在連線，不要立即重複送出。':err.message;form.querySelector('button').disabled=false;}});"""
+if(!response.ok){const data=await response.json();retry(data.error||'無法開始配網，請修改後再送出。');return;}
+waiting=true;returnApp.hidden=false;
+result.textContent='網路資料已送出，裝置暫時 Wi-Fi 即將關閉。成功後可恢復上網並返回 APP；若失敗，連回裝置 Wi-Fi 即可在這一頁修改再送出。';
+}catch{waiting=true;returnApp.hidden=false;result.textContent='尚未確認裝置是否收到資料。請保持這一頁；連回裝置暫時 Wi-Fi 後會自動確認並恢復操作。';}});"""
+        script = script.replace("__SETUP_REVISION__", json.dumps(self.state.get("setupRevision", 0)))
         return html_page("設定 Wi-Fi", content, script, "phone-setup")
 
     def offline_page(self):
@@ -389,8 +411,9 @@ document.getElementById('reason').textContent=s.message||'';}}catch{{}}}},4000);
                 self.reconfiguring = False
                 self.status = "paired"
                 self.message = "綁定完成，正在開啟飛機窗。"
-        except (RuntimeError, OSError, urllib.error.URLError, ValueError, KeyError) as error:
-            print(f"配對未完成：{type(error).__name__}: {error}", file=sys.stderr)
+        except (RuntimeError, OSError, urllib.error.URLError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
+            detail = "Wi-Fi 設定指令逾時" if isinstance(error, subprocess.TimeoutExpired) else str(error)
+            print(f"配對未完成：{type(error).__name__}: {detail}", file=sys.stderr)
             if isinstance(error, urllib.error.HTTPError) and error.code in (400, 401, 403, 409):
                 self.state["setupExpires"] = 0
                 self.message = "配對授權已失效或綁定衝突。請重新掃描裝置配對碼。"
@@ -464,7 +487,7 @@ def handler_for(kiosk):
             elif self.path == "/api/status":
                 self.reply(200, json.dumps({
                     "paired": bool(kiosk.state.get("passengerId")) and not kiosk.reconfiguring,
-                    "status": kiosk.status, "message": kiosk.message, "online": kiosk.online,
+                    "status": kiosk.status, "message": kiosk.message, "online": kiosk.online, "busy": kiosk.busy,
                     "bridgeExitCode": kiosk.bridge.poll() if kiosk.bridge else None,
                     "setupRevision": kiosk.state.get("setupRevision", 0),
                     "setupCodeChanged": time.time() >= kiosk.state.get("setupExpires", 0)
@@ -573,3 +596,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
