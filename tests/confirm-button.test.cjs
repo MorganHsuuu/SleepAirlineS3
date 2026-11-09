@@ -32,11 +32,13 @@ test('triple-tap takeoff consumes the takeoff reed so it cannot fire twice', () 
   const srcEnd = source.indexOf('\nfunction bindScreenFallback(', srcStart);
   const calls = [];
   const ctx = {
-    state: { busy: false, sleepDial: false, stage: 'ready' },
+    state: { busy: false, sleepDial: false, headingMoved: true, stage: 'ready' },
     window: {
       BroadcastAudio: { primeFromUserGesture() {}, armWakeupCarrier() {} },
       FlightDeviceControls: { consumeEndpoint: (endpoint) => calls.push(['consume', endpoint]) },
     },
+    showToast(message) { calls.push(['toast', message]); },
+    confirmAction() { calls.push(['confirm']); },
     restart() { calls.push(['restart']); },
     doTakeoff() { calls.push(['takeoff']); },
     doLand() { calls.push(['land']); },
@@ -49,6 +51,32 @@ test('triple-tap takeoff consumes the takeoff reed so it cannot fire twice', () 
   ctx.fireScreenFallback();
   assert.deepEqual(calls.at(-2), ['consume', 'land']);
   assert.deepEqual(calls.at(-1), ['land']);
+});
+
+test('triple-tap waits for heading then takeoff, and for mood then confirm', () => {
+  const srcStart = source.indexOf('function fireScreenFallback(');
+  const srcEnd = source.indexOf('\nfunction bindScreenFallback(', srcStart);
+  const calls = [];
+  const ctx = {
+    state: { busy: false, sleepDial: false, headingMoved: false, stage: 'ready' },
+    window: {
+      BroadcastAudio: { primeFromUserGesture() {}, armWakeupCarrier() {} },
+      FlightDeviceControls: { consumeEndpoint: (endpoint) => calls.push(['consume', endpoint]) },
+    },
+    showToast(message) { calls.push(['toast', message]); },
+    confirmAction() { calls.push(['confirm']); },
+    restart() { calls.push(['restart']); },
+    doTakeoff() { calls.push(['takeoff']); },
+    doLand() { calls.push(['land']); },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(source.slice(srcStart, srcEnd), ctx);
+  ctx.fireScreenFallback();
+  assert.deepEqual(calls, [['toast', '請先轉動旋鈕，再點三下起飛']]);
+  ctx.state.sleepDial = true;
+  ctx.fireScreenFallback();
+  assert.deepEqual(calls.at(-1), ['confirm']);
+  assert.equal(calls.some((call) => call[0] === 'takeoff'), false);
 });
 
 test('heading overlay waits for the knob then the confirm button', () => {

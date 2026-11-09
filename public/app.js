@@ -449,7 +449,7 @@ function syncConfirmButton() {
 function confirmAction() {
   if (state.sleepDial) {
     if (!state.sleepMoved) {
-      showToast('請先轉動旋鈕，再按確認心情');
+      showToast('請先轉動旋鈕，再點三下確認心情');
       return;
     }
     $('direction-dial')._sleepFinish?.();
@@ -1458,6 +1458,8 @@ async function doLand() {
     $('window-caption').textContent = '';
     state.stage = 'landed'; render(); hideCeremony();
     const moodAfter = await offerSleepDial();
+    state.headingMoved = false;
+    state.headingConfirmed = false;
     syncConfirmButton();
     if (moodAfter != null && state.researchFlight && state.profile && state.lastFlight?.flightId) {
       void api('POST', '/api/flight/sleep-report', {
@@ -1604,12 +1606,12 @@ function offerSleepDial() {
     $('direction-dial')._sleepDeviceOrigin = null;
     paintSleep(SLEEP_FACE_IDLE);
     const hint = document.querySelector('.sleep-hint');
-    if (hint) hint.textContent = '轉動旋鈕，再按確認';
+    if (hint) hint.textContent = '轉動旋鈕，再點三下確認';
     syncConfirmButton();
     function finish() {
       if (!state.sleepDial) return;
       if (!state.sleepMoved) {
-        showToast('請先轉動旋鈕，再按確認心情');
+        showToast('請先轉動旋鈕，再點三下確認心情');
         return;
       }
       clearTimeout(askTimer);
@@ -1719,17 +1721,21 @@ function bindDial() {
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
 function fireScreenFallback() {
-  if (state.busy || state.sleepDial) return;
+  if (state.busy) return;
   window.BroadcastAudio?.primeFromUserGesture?.();
   window.BroadcastAudio?.armWakeupCarrier?.();
-  if (state.stage === 'landed') {
-    window.FlightDeviceControls?.consumeEndpoint?.('takeoff');
-    restart();
-    void doTakeoff();
+  if (state.sleepDial) {
+    confirmAction();
     return;
   }
-  if (state.stage === 'ready') {
+  if (state.stage === 'landed' || state.stage === 'ready') {
+    if (!state.headingMoved) {
+      showToast('請先轉動旋鈕，再點三下起飛');
+      return;
+    }
+    state.headingConfirmed = true;
     window.FlightDeviceControls?.consumeEndpoint?.('takeoff');
+    if (state.stage === 'landed') restart();
     void doTakeoff();
     return;
   }
@@ -1744,7 +1750,8 @@ function bindScreenFallback() {
   if (!glass) return;
   let taps = 0;
   let timer = 0;
-  glass.addEventListener('pointerdown', () => {
+  glass.addEventListener('pointerdown', (event) => {
+    if (event.target?.closest?.('#btn-confirm')) return;
     taps += 1;
     window.clearTimeout(timer);
     if (taps >= 3) {
@@ -1818,6 +1825,7 @@ async function init() {
   $('login-form').addEventListener('submit', doLogin);
   $('btn-takeoff').addEventListener('click', doTakeoff);
   $('btn-land').addEventListener('click', doLand);
+  $('btn-confirm')?.addEventListener('pointerdown', (event) => event.stopPropagation());
   $('btn-confirm')?.addEventListener('click', confirmAction);
   $('btn-restart').addEventListener('click', restart);
   $('btn-sleep-report').addEventListener('click', () => $('sleep-report-dialog').showModal());
