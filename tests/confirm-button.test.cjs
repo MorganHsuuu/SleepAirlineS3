@@ -83,24 +83,18 @@ test('triple-tap waits for heading then takeoff, and for mood then confirm', () 
   assert.equal(calls.some((call) => call[0] === 'takeoff'), false);
 });
 
-test('heading overlay waits for the knob then the confirm button', () => {
+test('heading overlay appears as soon as the knob changes direction', () => {
   const setStart = source.indexOf('function setDirection(');
   const setEnd = source.indexOf('\nfunction render(', setStart);
   const setFn = source.slice(setStart, setEnd);
   assert.match(setFn, /headingMoved = true/);
-  assert.doesNotMatch(setFn, /showCompass/);
+  assert.match(setFn, /showCompass/);
 
   const pointStart = source.indexOf('const pointToIndex = (event) => {');
   const pointEnd = source.indexOf('wrap?.addEventListener(\'touchstart\'', pointStart);
   const pointFn = source.slice(pointStart, pointEnd);
   assert.match(pointFn, /headingMoved = true/);
-  assert.doesNotMatch(pointFn, /showCompass/);
-
-  const confirmStart = source.indexOf('function confirmAction(');
-  const confirmEnd = source.indexOf('\nfunction applyWindowOnly(', confirmStart);
-  const confirmFn = source.slice(confirmStart, confirmEnd);
-  assert.match(confirmFn, /請先轉動旋鈕，再按確認航向/);
-  assert.match(confirmFn, /showCompass/);
+  assert.match(pointFn, /showCompass/);
 });
 
 test('mood confirm appears only after the sleep dial is open', () => {

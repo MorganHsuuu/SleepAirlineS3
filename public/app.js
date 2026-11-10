@@ -387,6 +387,7 @@ function setDirection(index) {
   state.headingConfirmed = false;
   state.headingMoved = true;
   window.BroadcastAudio?.playCompassTick?.();
+  showCompass();
   syncConfirmButton();
 }
 function render() {
@@ -1683,6 +1684,7 @@ function bindDial() {
       state.headingConfirmed = false;
       state.headingMoved = true;
       window.BroadcastAudio?.playCompassTick?.();
+      showCompass();
     }
   };
   wrap?.addEventListener('touchstart', (event) => {
