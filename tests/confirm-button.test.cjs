@@ -77,6 +77,10 @@ test('triple-tap waits for heading then takeoff, and for mood then confirm', () 
   ctx.fireScreenFallback();
   assert.deepEqual(calls.at(-1), ['confirm']);
   assert.equal(calls.some((call) => call[0] === 'takeoff'), false);
+  ctx.state.busy = true;
+  ctx.fireScreenFallback();
+  assert.equal(calls.filter((call) => call[0] === 'confirm').length, 2);
+  assert.equal(calls.some((call) => call[0] === 'takeoff'), false);
 });
 
 test('heading overlay waits for the knob then the confirm button', () => {

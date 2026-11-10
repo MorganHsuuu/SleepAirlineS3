@@ -115,7 +115,13 @@ assert.doesNotMatch(
 assert.match(
   source,
   /const speechOpts = \{ volume: 1, tag: 'speech'/,
-  'Web Audio speech gain must stay below clipping level',
+  'prepared speech still passes unit volume; playWebAudioBuffer applies SPEECH_GAIN',
+);
+assert.match(source, /const SPEECH_GAIN = 2\.6;/);
+assert.match(
+  source,
+  /tag === 'speech' \? mixGain\(Number\(volume\) \* SPEECH_GAIN, SPEECH_GAIN_CAP\)/,
+  'OpenAI TTS must be boosted above unit gain so it can match captain.mp3 / wakeup',
 );
 vm.runInContext(source, context, { filename: 'public/broadcast-audio.js' });
 

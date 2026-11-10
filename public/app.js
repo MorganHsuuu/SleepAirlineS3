@@ -1721,13 +1721,13 @@ function bindDial() {
   $('tk-direction').addEventListener('change', () => setDirection(directions.findIndex((d) => d.key === $('tk-direction').value)));
 }
 function fireScreenFallback() {
-  if (state.busy) return;
   window.BroadcastAudio?.primeFromUserGesture?.();
   window.BroadcastAudio?.armWakeupCarrier?.();
   if (state.sleepDial) {
     confirmAction();
     return;
   }
+  if (state.busy) return;
   if (state.stage === 'landed' || state.stage === 'ready') {
     if (!state.headingMoved) {
       showToast('請先轉動旋鈕，再點三下起飛');

@@ -6,6 +6,9 @@ let landingAudio = null;
 let landingVolume = 0.22;
 /** 整體再大聲約 10%（HTML Audio 仍上限 1） */
 const MASTER_VOLUME = 1.1;
+/** OpenAI TTS 比 captain.mp3／wakeup 小聲；Web Audio gain 可超過 1 把語音補齊 */
+const SPEECH_GAIN = 2.6;
+const SPEECH_GAIN_CAP = 4;
 
 const CAPTAIN_SFX = {
   url: 'media/captain.mp3',
@@ -107,8 +110,8 @@ function mixVolume(v) {
   return clampVolume(Number(v) * MASTER_VOLUME);
 }
 
-function mixGain(v) {
-  return Math.min(1, Math.max(0, Number(v) * MASTER_VOLUME));
+function mixGain(v, cap = 1) {
+  return Math.min(cap, Math.max(0, Number(v) * MASTER_VOLUME));
 }
 
 function fadeAudioVolume(audio, from, to, ms) {
@@ -265,7 +268,10 @@ async function playWebAudioBuffer(buffer, {
   const bufDur = Number.isFinite(playBuffer.duration) && playBuffer.duration > 0 ? playBuffer.duration : 0;
   const clipSec = maxSeconds > 0 && bufDur > 0 ? Math.min(maxSeconds, bufDur) : (maxSeconds > 0 ? maxSeconds : 0);
   const gain = ctx.createGain();
-  const targetVol = Math.max(mixGain(volume), 0.0001);
+  const targetVol = Math.max(
+    tag === 'speech' ? mixGain(Number(volume) * SPEECH_GAIN, SPEECH_GAIN_CAP) : mixGain(volume),
+    0.0001,
+  );
   gain.gain.value = fadeInMs > 0 ? 0.0001 : targetVol;
   source.connect(gain);
   gain.connect(ctx.destination);

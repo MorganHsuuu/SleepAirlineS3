@@ -279,10 +279,11 @@ try {
       { city: 'Exampleville', country: 'Exampleland' },
       0.55
     );
-    assert.match(result.localFeature, /街頭飲食攤/);
-    assert.match(result.voiceText, /街頭飲食攤/);
-    assert.match(result.imagePrompt, /street-food stall/i);
-    assert.match(result.imagePrompt, /few meters back|stall or market street/i);
+    assert.match(result.localFeature, /在地小餐館|店面/);
+    assert.match(result.voiceText, /在地小餐館|店面/);
+    assert.match(result.imagePrompt, /eatery|storefront|restaurant/i);
+    assert.match(result.imagePrompt, /few meters back/i);
+    assert.doesNotMatch(result.imagePrompt, /street-food stall|street vendor/i);
     assert.match(result.imagePrompt, /Never a close-up of plated food/i);
     assert.doesNotMatch(result.imagePrompt, /plated food foreground/i);
     assert.doesNotMatch(result.voiceText, /自然地貌與天光|山、水或開闊地貌|餐桌/);
