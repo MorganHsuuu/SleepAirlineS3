@@ -152,6 +152,9 @@
         kioskDetected = true;
         kioskMisses = 0;
         bridgeExitCode = status.bridgeExitCode;
+        if (status.setupRequired) {
+          root.location.replace('http://127.0.0.1:8766/device');
+        }
       } catch {
         kioskDetected = false;
         kioskMisses += 1;
