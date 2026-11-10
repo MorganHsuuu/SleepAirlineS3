@@ -72,7 +72,8 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl restart "$BRIDGE_UNIT"
-sudo systemctl enable --now "$PAIRING_UNIT"
+sudo systemctl enable "$PAIRING_UNIT"
+sudo systemctl restart "$PAIRING_UNIT"
 
 echo "已保留 S3 全螢幕與感測器服務，並加入本機配對服務。"
 echo "首次開機顯示 QR；已配對且連網時直接進入飛機窗。"

@@ -133,3 +133,8 @@ sudo reboot
 ## 配對頁避開上方實體窗簾
 
 裝置 QR 配對頁整組內容（品牌、標題、QR、步驟與裝置資訊）向下增加 14% 螢幕高度的留白，底部保留 12% 空間，避免上方被窗簾遮住。只調整裝置配對頁，不更動手機 Wi-Fi 設定頁或飛機窗。此頁由 Pi 的 device_kiosk.py 產生，更新後需重啟 sleep-airline-pairing.service 並重新整理畫面，單獨部署 Vercel 不會更新此頁。
+
+
+## 多組 Wi-Fi 與教室設定
+
+請見 [WIFI_SETUP.md](WIFI_SETUP.md)：支援一般 Wi-Fi／暫時熱點切換、家中多組網路預存、教室網路最後備援，以及保留旅客綁定的斷網恢復。
