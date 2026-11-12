@@ -46,6 +46,7 @@ import {
 } from './src/lib/review/accounts';
 import { listRecentLiveFlights } from './src/lib/review/live-flights';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
+import { listTrackingFlights, normalizeGroupId, TRACKING_TZ } from './src/lib/flight/tracking';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech, TAKEOFF_SPEECH_SPEED } from './src/lib/ai/speech';
@@ -984,6 +985,16 @@ app.get('/api/board', async (req, res) => {
   }
 });
 
+app.get('/api/tracking', async (req, res) => {
+  try {
+    const groupId = normalizeGroupId(String(req.query.groupId || '0001'));
+    const flights = await listTrackingFlights(groupId);
+    res.json({ groupId, timezone: TRACKING_TZ, flights });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
+  }
+});
+
 // ── GET /api/scenery ──────────────────────────────────────────────────────────
 // 唯讀：依 flightId 取降落風景（供小隊看板查看隊友的降落風景圖）
 
@@ -1176,6 +1187,10 @@ function parseReviewDirection(value: unknown): RouteDirection {
 
 app.get('/review', (_req, res) => {
   res.sendFile(join(process.cwd(), 'public', 'review.html'));
+});
+
+app.get('/tracking', (_req, res) => {
+  res.sendFile(join(process.cwd(), 'public', 'tracking.html'));
 });
 
 function reviewClient(req: express.Request, sample: Parameters<typeof toReviewClient>[0]) {

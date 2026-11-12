@@ -8,6 +8,8 @@
   "rewrites": [
     { "source": "/review", "destination": "/review.html" },
     { "source": "/review/", "destination": "/review.html" },
+    { "source": "/tracking", "destination": "/tracking.html" },
+    { "source": "/tracking/", "destination": "/tracking.html" },
     { "source": "/api/(.*)", "destination": "/api" }
   ],
   "crons": [

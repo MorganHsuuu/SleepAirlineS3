@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4efe4">
+  <title>甦醒航班｜使用軌跡</title>
+  <link rel="icon" type="image/svg+xml" href="/brand-logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,720&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tracking.css?v=7">
+</head>
+<body>
+  <div class="sheet">
+    <header class="mast">
+      <div class="mast-title">
+        <span class="rule" aria-hidden="true"></span>
+        <div>
+          <h1>Reported Usage Patterns <span>From 11/09 · 14 Days</span></h1>
+          <p class="lede">Sleep Airline S3 · Terminal <strong id="group-label">0001</strong> · 時間軸從左到右前進，線的長度就是睡眠時長</p>
+        </div>
+      </div>
+      <div class="mast-tools">
+        <label class="group-field">
+          <span>航站</span>
+          <input id="group-input" inputmode="numeric" maxlength="4" value="0001" aria-label="Terminal 航站">
+        </label>
+        <label class="group-field extras">
+          <input id="extras-toggle" type="checkbox">
+          <span>同航站其他人</span>
+        </label>
+        <button type="button" class="ghost" id="refresh-btn">重新整理</button>
+        <a class="ghost" href="/">回主體驗</a>
+      </div>
+    </header>
+
+    <p class="status-line" id="status-line">讀取航班紀錄中…</p>
+
+    <ul class="legend" aria-label="圖例">
+      <li><span class="glyph moon" aria-hidden="true"></span>夜間休息</li>
+      <li><span class="glyph sun" aria-hidden="true"></span>日間使用</li>
+      <li><span class="glyph zz" aria-hidden="true">Zz</span>小憩／午睡</li>
+      <li><span class="open-pill">OPEN</span>飛行中</li>
+      <li><span class="note-pip">N</span>Immigration Note</li>
+    </ul>
+
+    <p class="scroll-hint">左右滑動或拖曳時間軸 · 點睡眠線看航點與 Immigration Note</p>
+    <section class="chart" id="chart" aria-label="十四天睡眠時間軸"></section>
+
+    <dialog id="flight-detail" class="detail-dialog">
+      <div class="detail-top">
+        <div>
+          <p class="detail-kicker">Flight dossier</p>
+          <h2 id="detail-heading">航班詳情</h2>
+          <p id="detail-sub"></p>
+        </div>
+        <button type="button" class="ghost" id="detail-close" aria-label="關閉">關閉</button>
+      </div>
+      <div id="detail-body"></div>
+    </dialog>
+
+    <section class="ledger" aria-label="時長摘要">
+      <h2>時長與狀態</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>乘客</th>
+              <th>航班</th>
+              <th>合計時長</th>
+              <th>最近起飛</th>
+              <th>最近降落</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr><td colspan="6">讀取中</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="/tracking.js?v=10"></script>
+</body>
+</html>
