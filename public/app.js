@@ -375,15 +375,22 @@ function dialCanTurn() {
   if (state.sleepDial) return true;
   return state.stage === 'ready' || state.stage === 'landed';
 }
-function setDirection(index) {
+function setDirection(index, options) {
   if (!dialCanTurn() || state.sleepDial) return;
   const next = clampDirection(index);
+  const fromUser = options?.fromUser !== false;
   if (next === state.direction) {
     paintNeedles(directions[next].angle, true);
     return;
   }
   spinTo(next);
   applyDirection(next);
+  if (!fromUser) {
+    state.headingMoved = false;
+    state.headingConfirmed = false;
+    syncConfirmButton();
+    return;
+  }
   state.headingConfirmed = false;
   state.headingMoved = true;
   window.BroadcastAudio?.playCompassTick?.();
@@ -1732,7 +1739,8 @@ function fireScreenFallback() {
   if (state.busy) return;
   if (state.stage === 'landed' || state.stage === 'ready') {
     if (!state.headingMoved) {
-      showToast('請先轉動旋鈕，再點三下起飛');
+      showCompass();
+      showToast('請先轉動旋鈕選航向，再點三下起飛');
       return;
     }
     state.headingConfirmed = true;
@@ -1769,7 +1777,7 @@ function startDeviceControls() {
   let nextRecoveryAt = 0;
   window.FlightDeviceControls?.start({
     getState: () => state,
-    setDirection: (index) => setDirection(index),
+    setDirection: (index, options) => setDirection(index, options),
     setSleep: (percent) => applySleepFromDevice(percent),
     confirm: () => confirmAction(),
     setPassenger: (passengerId, passengerName) => {

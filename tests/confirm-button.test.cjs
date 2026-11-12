@@ -64,6 +64,7 @@ test('triple-tap waits for heading then takeoff, and for mood then confirm', () 
       FlightDeviceControls: { consumeEndpoint: (endpoint) => calls.push(['consume', endpoint]) },
     },
     showToast(message) { calls.push(['toast', message]); },
+    showCompass() { calls.push(['compass']); },
     confirmAction() { calls.push(['confirm']); },
     restart() { calls.push(['restart']); },
     doTakeoff() { calls.push(['takeoff']); },
@@ -72,7 +73,7 @@ test('triple-tap waits for heading then takeoff, and for mood then confirm', () 
   vm.createContext(ctx);
   vm.runInContext(source.slice(srcStart, srcEnd), ctx);
   ctx.fireScreenFallback();
-  assert.deepEqual(calls, [['toast', '請先轉動旋鈕，再點三下起飛']]);
+  assert.deepEqual(calls, [['compass'], ['toast', '請先轉動旋鈕選航向，再點三下起飛']]);
   ctx.state.sleepDial = true;
   ctx.fireScreenFallback();
   assert.deepEqual(calls.at(-1), ['confirm']);

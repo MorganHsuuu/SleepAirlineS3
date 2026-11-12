@@ -33,6 +33,18 @@ function fixture() {
     } };
 }
 
+test('parked knob heading is primed without counting as a user turn', () => {
+  const f = fixture();
+  f.send({ direction: 6 });
+  assert.deepEqual(f.actions, [['direction', 6]]);
+  f.send({ takeoffCount: 1 });
+  assert.deepEqual(f.actions, [['direction', 6], ['takeoff', 6]]);
+  f.state.stage = 'ready';
+  f.state.busy = false;
+  f.send({ takeoffClosed: false, direction: 6 });
+  f.send({ direction: 7 });
+  assert.deepEqual(f.actions.at(-1), ['direction', 7]);
+});
 test('startup with magnets already present does not create a flight', () => {
   const f = fixture();
   f.send({ takeoffClosed: true, takeoffCount: 8 });

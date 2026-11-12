@@ -48,8 +48,9 @@
     let previous = null;
     let lastEndpoint = null;
     let adcFailed = false;
+    let headingPrimed = false;
     return {
-      reset() { previous = null; },
+      reset() { previous = null; headingPrimed = false; },
       consume(endpoint) {
         if (endpoint === 'takeoff' || endpoint === 'land') lastEndpoint = endpoint;
       },
@@ -60,9 +61,6 @@
           setSleep?.(data.position * 100);
         }
         const canDepart = !state.busy && !state.sleepDial && ['ready', 'landed'].includes(state.stage);
-        if (canDepart && data.direction !== null && data.direction !== state.direction) {
-          setDirection(data.direction);
-        }
         if (data.direction === null && !adcFailed) notify('旋鈕暫時無法讀取，請檢查 ADS1115 接線');
         setError?.('adc', data.direction === null
           ? `ADS1115 讀取失敗：${data.adcError || '無法取得旋鈕讀值'}。請檢查 I2C、供電與接線。`
@@ -73,6 +71,14 @@
         // A magnet left in place must never launch a flight on page load.
         const baseline = !previous || previous.session !== data.session
           || data.takeoffCount < previous.takeoffCount || data.landCount < previous.landCount;
+        if (baseline || !canDepart) headingPrimed = false;
+        if (canDepart && data.direction !== null) {
+          const fromUser = headingPrimed;
+          if (data.direction !== state.direction) {
+            setDirection?.(data.direction, { fromUser });
+          }
+          headingPrimed = true;
+        }
         const takeoffEdge = !baseline && (data.takeoffCount > previous.takeoffCount
           || (data.takeoffClosed && !previous.takeoffClosed));
         const landEdge = !baseline && (data.landCount > previous.landCount
