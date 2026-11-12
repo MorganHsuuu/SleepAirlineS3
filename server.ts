@@ -46,7 +46,7 @@ import {
 } from './src/lib/review/accounts';
 import { listRecentLiveFlights } from './src/lib/review/live-flights';
 import { getFlightByFlightId } from './src/lib/notion/flight-lookup';
-import { listTrackingFlights, normalizeGroupId, TRACKING_TZ } from './src/lib/flight/tracking';
+import { listTrackingFlights, normalizeGroupId, STUDY_DAY_COUNT, STUDY_START_DATE, TRACKING_TZ } from './src/lib/flight/tracking';
 import { CITIES } from './src/data/cities';
 import { openAiApiKey } from './src/lib/ai/openai-env';
 import { generateBroadcastSpeech, TAKEOFF_SPEECH_SPEED } from './src/lib/ai/speech';
@@ -989,7 +989,13 @@ app.get('/api/tracking', async (req, res) => {
   try {
     const groupId = normalizeGroupId(String(req.query.groupId || '0001'));
     const flights = await listTrackingFlights(groupId);
-    res.json({ groupId, timezone: TRACKING_TZ, flights });
+    res.json({
+      groupId,
+      timezone: TRACKING_TZ,
+      startDate: STUDY_START_DATE,
+      dayCount: STUDY_DAY_COUNT,
+      flights,
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : '未知錯誤' });
   }

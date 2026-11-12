@@ -17,8 +17,8 @@ function flight(overrides) {
     passengerName: '陳希愷',
     groupId: '0001',
     status: 'landed',
-    takeoffTime: '2026-11-10T15:10:00.000Z',
-    landingTime: '2026-11-10T16:02:00.000Z',
+    takeoffTime: '2026-11-10T16:10:00.000Z',
+    landingTime: '2026-11-10T17:02:00.000Z',
     sleepOpportunityMinutes: 52,
     flightDurationMinutes: 52,
     relatedPassenger: null,
@@ -57,12 +57,12 @@ test('classifies night, day and nap from takeoff hour and duration', () => {
   }), tz, now), 'blip');
 });
 
-test('builds a 14-day chart from 11/09 for the five terminal 0001 passengers', () => {
+test('builds a 14-day chart from 11/11 with de-identified P1–P5 labels', () => {
   const now = new Date('2026-11-12T04:00:00.000Z');
   const chart = TrackingChart.buildChart([
     flight({
-      takeoffTime: '2026-11-09T15:10:00.000Z',
-      landingTime: '2026-11-09T16:40:00.000Z',
+      takeoffTime: '2026-11-10T16:10:00.000Z',
+      landingTime: '2026-11-10T17:40:00.000Z',
       sleepOpportunityMinutes: 90,
       immigrationNote: 'Landing card filled at dawn.',
     }),
@@ -78,14 +78,11 @@ test('builds a 14-day chart from 11/09 for the five terminal 0001 passengers', (
 
   assert.equal(chart.groupId, '0001');
   assert.equal(chart.days.length, 14);
-  assert.equal(chart.days[0].date, '2026-11-09');
-  assert.equal(chart.days[13].date, '2026-11-22');
+  assert.equal(chart.days[0].date, '2026-11-11');
+  assert.equal(chart.days[13].date, '2026-11-24');
   assert.equal(chart.participants.length, 5);
-  assert.equal(chart.participants[0].name, '方藝璇');
-  assert.equal(chart.participants[1].name, '戴佑珊');
-  assert.equal(chart.participants[2].name, '翎翎');
-  assert.equal(chart.participants[3].name, 'Zephyra');
-  assert.equal(chart.participants[4].name, '陳希愷');
+  assert.equal(chart.participants.map((row) => row.code).join(','), 'P1,P2,P3,P4,P5');
+  assert.equal(chart.participants.map((row) => row.name).join(','), 'P1,P2,P3,P4,P5');
   assert.equal(chart.participants[3].openCount, 1);
   const firstDay = chart.participants[4].days[0];
   assert.equal(firstDay.events[0].departureLocation, 'Taipei, Taiwan');
@@ -98,21 +95,36 @@ test('sleep bars sit on a continuous 14-day timeline from takeoff to landing', (
   const now = new Date('2026-11-12T04:00:00.000Z');
   const chart = TrackingChart.buildChart([
     flight({
-      takeoffTime: '2026-11-09T16:00:00.000Z',
-      landingTime: '2026-11-09T20:00:00.000Z',
+      takeoffTime: '2026-11-10T16:00:00.000Z',
+      landingTime: '2026-11-10T20:00:00.000Z',
       sleepOpportunityMinutes: 240,
     }),
   ], { groupId: '001', now, timezone: 'Asia/Taipei' });
   const bar = chart.participants[4].bars[0];
-  assert.equal(Math.round(bar.startMin), 24 * 60);
-  assert.equal(Math.round(bar.endMin), 24 * 60 + 240);
-  assert.ok(bar.widthPct > bar.leftPct * 0);
+  assert.equal(Math.round(bar.startMin), 0);
+  assert.equal(Math.round(bar.endMin), 240);
+  assert.ok(bar.widthPct > 0);
   assert.equal(chart.totalMin, 14 * 24 * 60);
+  assert.equal(chart.hourPx, 8);
 });
 
-test('formats origin and destination with airport codes', () => {
-  assert.equal(TrackingChart.formatPlace('Taipei, Taiwan', 'TPE', '出發地未記錄'), 'Taipei, Taiwan · TPE');
-  assert.equal(TrackingChart.formatPlace('', '', '降落點未記錄'), '降落點未記錄');
+test('splits origin and destination into city and region for the boarding pass', () => {
+  const full = TrackingChart.splitPlace('Taipei, Taiwan', 'tpe', '出發地未記錄');
+  assert.equal(full.main, 'Taipei');
+  assert.equal(full.sub, 'Taiwan · TPE');
+  const noCode = TrackingChart.splitPlace('臺中市, 臺灣', '', '出發地未記錄');
+  assert.equal(noCode.main, '臺中市');
+  assert.equal(noCode.sub, '臺灣');
+  const missing = TrackingChart.splitPlace('', '', '降落點未記錄');
+  assert.equal(missing.main, '降落點未記錄');
+  assert.equal(missing.sub, '');
+});
+
+test('formats flight duration as compact hours and minutes', () => {
+  assert.equal(TrackingChart.formatDuration(539), '8h 59m');
+  assert.equal(TrackingChart.formatDuration(480), '8h');
+  assert.equal(TrackingChart.formatDuration(52), '52m');
+  assert.equal(TrackingChart.formatDuration(null), '—');
 });
 
 test('labels sparse nights as intermittent and late starts as later shared', () => {
@@ -120,4 +132,12 @@ test('labels sparse nights as intermittent and late starts as later shared', () 
   assert.equal(TrackingChart.inferPattern(['', '', 'night', 'night', 'nap', '', '']).key, 'later_shared');
   assert.equal(TrackingChart.inferPattern(['night', 'night', 'night', 'night', '', '', '']).key, 'later_forgetting');
   assert.equal(TrackingChart.inferPattern(['night', 'night', 'night', 'night', 'night', 'night', 'night']).key, 'regular');
+});
+
+test('clamps timeline hour scale and keeps the pinch anchor in place', () => {
+  assert.equal(TrackingChart.clampHourPx(3), 4);
+  assert.equal(TrackingChart.clampHourPx(40), 28);
+  assert.equal(TrackingChart.clampHourPx(8.24), 8.2);
+  const next = TrackingChart.scrollLeftForAnchor(100, 200, 0, 88, 8, 16);
+  assert.equal(next, ((100 + 200 - 88) / 8) * 16 - 200 + 88);
 });

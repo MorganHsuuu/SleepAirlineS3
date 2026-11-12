@@ -5,15 +5,15 @@ import { getGroupFlights, parseFlight } from '../notion/flights';
 import { getDashboardPropertyTypes } from '../notion/schema-introspect';
 
 export const TRACKING_TZ = 'Asia/Taipei';
-export const STUDY_START_DATE = '2026-11-09';
+export const STUDY_START_DATE = '2026-11-11';
 export const STUDY_DAY_COUNT = 14;
 
 export const TERMINAL_001_ROSTER = [
-  { passengerId: 'PAX-55437891114D2919', name: '方藝璇' },
-  { passengerId: 'PAX-B3BE4881874F9979', name: '戴佑珊' },
-  { passengerId: 'PAX-4B2833F4A0C45412', name: '翎翎' },
-  { passengerId: 'PAX-37D428C61D98D16C', name: 'Zephyra' },
-  { passengerId: 'PAX-F8CCB63A79A2ABF7', name: '陳希愷' },
+  { passengerId: 'PAX-55437891114D2919', name: 'P1' },
+  { passengerId: 'PAX-B3BE4881874F9979', name: 'P2' },
+  { passengerId: 'PAX-4B2833F4A0C45412', name: 'P3' },
+  { passengerId: 'PAX-37D428C61D98D16C', name: 'P4' },
+  { passengerId: 'PAX-F8CCB63A79A2ABF7', name: 'P5' },
 ] as const;
 
 export type TrackingFlight = {
@@ -68,14 +68,14 @@ function toTrackingFlight(flight: Flight, props?: Record<string, unknown>): Trac
   return {
     flightId: flight.flightId,
     passengerId: flight.passengerId,
-    passengerName: flight.passengerName,
+    passengerName: '',
     groupId: flight.groupId,
     status: flight.status,
     takeoffTime: flight.takeoffTime,
     landingTime: flight.landingTime,
     sleepOpportunityMinutes: flight.sleepOpportunityMinutes ?? null,
     flightDurationMinutes: flight.flightDurationMinutes,
-    relatedPassenger: flight.relatedPassenger,
+    relatedPassenger: null,
     departureLocation: flight.departureLocation || '',
     arrivalLocation: flight.arrivalLocation,
     departureAirport: props ? readAllPlainText(props, 'Departure Airport Code') : '',

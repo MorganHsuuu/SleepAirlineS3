@@ -2,20 +2,22 @@
   const TZ = 'Asia/Taipei';
   const DEFAULT_GROUP = '0001';
   const DAY_COUNT = 14;
-  const STUDY_START = '2026-11-09';
-  const HOUR_PX = 18;
+  const STUDY_START = '2026-11-11';
+  const HOUR_PX = 8;
+  const MIN_HOUR_PX = 4;
+  const MAX_HOUR_PX = 28;
   const ROSTER = {
     '0001': [
-      { passengerId: 'PAX-55437891114D2919', name: '方藝璇' },
-      { passengerId: 'PAX-B3BE4881874F9979', name: '戴佑珊' },
-      { passengerId: 'PAX-4B2833F4A0C45412', name: '翎翎' },
-      { passengerId: 'PAX-37D428C61D98D16C', name: 'Zephyra' },
-      { passengerId: 'PAX-F8CCB63A79A2ABF7', name: '陳希愷' },
+      { passengerId: 'PAX-55437891114D2919', name: 'P1' },
+      { passengerId: 'PAX-B3BE4881874F9979', name: 'P2' },
+      { passengerId: 'PAX-4B2833F4A0C45412', name: 'P3' },
+      { passengerId: 'PAX-37D428C61D98D16C', name: 'P4' },
+      { passengerId: 'PAX-F8CCB63A79A2ABF7', name: 'P5' },
     ],
   };
 
-  const MOON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.2 3.2a8.8 8.8 0 1 1-8 14.7 7.3 7.3 0 1 0 8-14.7z"/></svg>';
-  const SUN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6"/></g></svg>';
+  const PLANE_SVG = '<svg class="plane" aria-hidden="true"><use href="#plane"/></svg>';
+  const KIND_LABEL = { night: '夜間休息', day: '日間使用', nap: '小憩／午睡', blip: '短暫測試' };
 
   function normalizeGroupId(value) {
     const legacy = /^group_(\d{2})$/i.exec(value || '');
@@ -76,10 +78,10 @@
   function formatDuration(minutes) {
     if (minutes == null) return '—';
     const n = Math.max(0, Math.round(minutes));
-    if (n < 60) return `${n}分`;
+    if (n < 60) return `${n}m`;
     const h = Math.floor(n / 60);
     const m = n % 60;
-    return m ? `${h}時${m}分` : `${h}時`;
+    return m ? `${h}h ${m}m` : `${h}h`;
   }
 
   function classifyKind(flight, tz, now) {
@@ -193,10 +195,10 @@
       known.add(flight.passengerId);
       extras.push({
         passengerId: flight.passengerId,
-        name: flight.passengerName || flight.passengerId.slice(-6),
+        name: '',
       });
     }
-    extras.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    extras.sort((a, b) => a.passengerId.localeCompare(b.passengerId));
     if (pinned.length && !includeExtras) return pinned;
     return pinned.concat(extras);
   }
@@ -217,7 +219,7 @@
       const mine = flights
         .filter((flight) => flight.passengerId === person.passengerId)
         .sort((a, b) => new Date(a.takeoffTime) - new Date(b.takeoffTime));
-      const name = mine.find((flight) => flight.passengerName)?.passengerName || person.name;
+      const name = person.name || `P${index + 1}`;
       const allEvents = mine
         .map((flight) => eventFromFlight(flight, tz, now, range))
         .filter((event) => event.inWindow);
@@ -278,9 +280,11 @@
       timezone: tz,
       days,
       participants,
-      hourPx: HOUR_PX,
+      hourPx: options?.hourPx || HOUR_PX,
       totalMin: range.totalMin,
       nowMin: nowMin > 0 && nowMin < range.totalMin ? nowMin : null,
+      progress: Math.min(1, Math.max(0, nowMin / range.totalMin)),
+      dayNumber: Math.min(dayCount, Math.max(1, Math.floor(nowMin / 1440) + 1)),
     };
   }
 
@@ -292,39 +296,49 @@
       .replace(/"/g, '&quot;');
   }
 
-  function markHtml(kind) {
-    if (kind === 'night') return `<span class="mark moon">${MOON_SVG}</span>`;
-    if (kind === 'nap') return '<span class="mark zz">Zz</span>';
-    return `<span class="mark sun">${SUN_SVG}</span>`;
+  function clampHourPx(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return HOUR_PX;
+    return Math.min(MAX_HOUR_PX, Math.max(MIN_HOUR_PX, Math.round(n * 10) / 10));
   }
 
-  function hourMarks(days) {
+  function scrollLeftForAnchor(scrollLeft, clientX, rectLeft, whoW, prevPx, nextPx) {
+    const hours = (scrollLeft + (clientX - rectLeft) - whoW) / prevPx;
+    return hours * nextPx - (clientX - rectLeft) + whoW;
+  }
+
+  function hourMarks(days, hourPx) {
+    const hours = hourPx >= 16 ? [3, 6, 9, 12, 15, 18, 21] : hourPx >= 7 ? [6, 12, 18] : [12];
     return days.map((day, index) => {
-      const hours = [6, 12, 18].map((hour) =>
-        `<span class="hour-tick" style="left:${(index * 24 + hour) / (days.length * 24) * 100}%"><em>${String(hour).padStart(2, '0')}</em></span>`
+      const ticks = hours.map((hour) =>
+        `<span class="hour-tick" style="left:${(index * 24 + hour) / (days.length * 24) * 100}%">${String(hour).padStart(2, '0')}</span>`
       ).join('');
       return `<div class="day-band" style="left:${index / days.length * 100}%;width:${100 / days.length}%">
         <b>${escapeHtml(day.key)}</b>
         <small>${escapeHtml(day.short)}</small>
-      </div>${hours}`;
+        <i>${escapeHtml(day.weekday)}</i>
+      </div>${ticks}`;
     }).join('');
   }
 
-  function renderBar(person, event) {
-    const px = ((event.endMin - event.startMin) / 60) * HOUR_PX;
-    const note = event.immigrationNote ? '<span class="note-pip" title="Immigration Note">N</span>' : '';
-    let label = '';
-    if (px >= 168) {
-      label = `<span class="bar-copy">${escapeHtml(event.takeoffTime)} → ${escapeHtml(event.landingTime)} · ${escapeHtml(event.durationLabel)}</span>`;
-    } else if (px >= 92) {
-      label = `<span class="bar-copy">${escapeHtml(event.takeoffTime)}→${escapeHtml(event.landingTime)}</span>`;
-    } else if (px >= 56) {
-      label = `<span class="bar-copy short">${escapeHtml(event.durationLabel)}</span>`;
-    }
-    return `<button type="button" class="sleep-bar ${event.kind}${event.open ? ' open' : ''}${event.immigrationNote ? ' noted' : ''}" data-person="${escapeHtml(person.code)}" data-flight="${escapeHtml(event.flightId)}" style="left:${event.leftPct}%;width:${event.widthPct}%" aria-label="${escapeHtml(person.name)} ${escapeHtml(event.takeoffTime)} 到 ${escapeHtml(event.landingTime)}">
-      <i class="cap start" aria-hidden="true"></i>
-      ${label}${note}
-      <i class="cap end" aria-hidden="true"></i>
+  // Point-to-point leg: takeoff dot, line, landing dot. Timestamps sit above
+  // each dot and the duration above the line; legs too short for two
+  // timestamps keep only the duration.
+  function renderBar(person, event, hourPx) {
+    const px = ((event.endMin - event.startMin) / 60) * hourPx;
+    const note = event.immigrationNote ? '<b class="note-pip" title="Immigration Note">N</b>' : '';
+    const times = px >= 34
+      ? `<span class="leg-time dep">${escapeHtml(event.takeoffTime)}</span><span class="leg-time arr">${escapeHtml(event.landingTime)}</span>`
+      : '';
+    const head = event.open
+      ? `<span class="leg-plane">${PLANE_SVG}</span>`
+      : '<i class="leg-dot arr"></i>';
+    return `<button type="button" class="sleep-bar ${event.kind}${event.open ? ' open' : ''}" data-person="${escapeHtml(person.code)}" data-flight="${escapeHtml(event.flightId)}" style="left:${event.leftPct}%;width:${event.widthPct}%" aria-label="${escapeHtml(person.code)} ${escapeHtml(event.takeoffTime)} 到 ${escapeHtml(event.landingTime)}，${escapeHtml(event.durationLabel)}">
+      <span class="leg-dur">${escapeHtml(event.durationLabel)}${note}</span>
+      ${times}
+      <i class="leg-line"></i>
+      <i class="leg-dot dep"></i>
+      ${head}
     </button>`;
   }
 
@@ -333,24 +347,25 @@
   }
 
   function renderChart(chart) {
-    const trackWidth = chart.days.length * 24 * (chart.hourPx || HOUR_PX);
+    const hourPx = chart.hourPx || HOUR_PX;
+    const trackWidth = chart.days.length * 24 * hourPx;
     const nowLeft = chart.nowMin != null ? `${(chart.nowMin / chart.totalMin) * 100}%` : '';
     const nowLine = nowLeft ? `<span class="now-line" style="left:${nowLeft}"></span>` : '';
     const nowLabel = nowLeft ? `<span class="now-line labeled" style="left:${nowLeft}"><em>現在</em></span>` : '';
     const axis = `<div class="axis">
-      <div class="who-label">Passenger</div>
+      <div class="who-label">Pax</div>
       <div class="track" style="width:${trackWidth}px">
-        ${hourMarks(chart.days)}${nowLabel}
+        ${hourMarks(chart.days, hourPx)}${nowLabel}
       </div>
     </div>`;
 
     const rows = chart.participants.map((person, index) => {
-      const bars = person.bars.map((event) => renderBar(person, event)).join('');
+      const bars = person.bars.map((event) => renderBar(person, event, hourPx)).join('');
       const ticks = person.ticks.map((event) => renderTick(person, event)).join('');
       return `<article class="lane tone-${index % 6}">
         <div class="who">
+          <small>PAX</small>
           <span class="pid">${escapeHtml(person.code)}</span>
-          <strong>${escapeHtml(person.name)}</strong>
           <em>${escapeHtml(person.pattern.zh)}</em>
         </div>
         <div class="track" style="width:${trackWidth}px">
@@ -368,12 +383,12 @@
     }
     return chart.participants.map((person) => {
       const status = person.status === 'in_flight'
-        ? '<span class="status-open">OPEN</span>'
+        ? '<span class="status-pill open">飛行中</span>'
         : person.status === 'landed'
-          ? '<span class="status-landed">已降落</span>'
-          : '尚未起飛';
+          ? '<span class="status-pill landed">已降落</span>'
+          : '<span class="status-pill">尚未起飛</span>';
       return `<tr>
-        <td>${escapeHtml(person.code)} ${escapeHtml(person.name)}</td>
+        <td>${escapeHtml(person.code)}</td>
         <td>${person.totalFlights}</td>
         <td>${escapeHtml(formatDuration(person.totalMinutes))}</td>
         <td>${escapeHtml(person.latestTakeoff)}</td>
@@ -396,37 +411,51 @@
     });
   }
 
-  function formatPlace(location, airport, fallback) {
-    const loc = String(location || '').trim();
+  // "Taipei, Taiwan" + "TPE" → { main: 'Taipei', sub: 'Taiwan · TPE' }
+  function splitPlace(location, airport, fallback) {
+    const parts = String(location || '').split(/[,，]/).map((part) => part.trim()).filter(Boolean);
     const code = String(airport || '').trim().toUpperCase();
-    if (!loc && !code) return fallback;
-    if (loc && code) return `${loc} · ${code}`;
-    return loc || code;
+    if (!parts.length && !code) return { main: fallback, sub: '' };
+    if (!parts.length) return { main: code, sub: '' };
+    return {
+      main: parts[0],
+      sub: [parts.slice(1).join(', '), code].filter(Boolean).join(' · '),
+    };
   }
 
-  function renderDetailFlights(events) {
-    if (!events.length) return '<p class="empty-copy">這段沒有航班。</p>';
-    return events.map((event) => {
-      const from = formatPlace(event.departureLocation, event.departureAirport, '出發地未記錄');
-      const to = event.open
-        ? '飛行中'
-        : formatPlace(event.arrivalLocation, event.arrivalAirport, '降落點未記錄');
-      const note = event.immigrationNote
-        ? `<blockquote class="imm-note"><span>Immigration Note</span><p>${escapeHtml(event.immigrationNote)}</p></blockquote>`
-        : '';
-      const kindLabel = event.kind === 'night' ? '夜間休息' : event.kind === 'nap' || event.kind === 'blip' ? '小憩／測試' : '日間使用';
-      return `<article class="hop ${event.kind}${event.open ? ' open' : ''}">
-        <div class="hop-meta">
-          ${markHtml(event.kind)}
-          <div>
-            <strong>${escapeHtml(event.takeoffTime)} → ${escapeHtml(event.landingTime)}</strong>
-            <small>${escapeHtml(kindLabel)} · ${escapeHtml(event.durationLabel)}${event.open ? ' · OPEN' : ''}</small>
-          </div>
-        </div>
-        <p class="route"><span>${escapeHtml(from)}</span><i aria-hidden="true">→</i><span>${escapeHtml(to)}</span></p>
-        ${note}
-      </article>`;
-    }).join('');
+  function shortDate(dateStr) {
+    return dateStr ? dateStr.slice(5).replace('-', '/') : '—';
+  }
+
+  function renderPass(event) {
+    const from = splitPlace(event.departureLocation, event.departureAirport, '出發地未記錄');
+    const to = event.open
+      ? { main: '飛行中', sub: '尚未降落' }
+      : splitPlace(event.arrivalLocation, event.arrivalAirport, '降落點未記錄');
+    const place = (label, value, side) => `<div class="pass-place${side}">
+        <small>${label}</small>
+        <strong>${escapeHtml(value.main)}</strong>
+        <span>${escapeHtml(value.sub)}</span>
+      </div>`;
+    const field = (label, value, accent) => `<div${accent ? ' class="accent"' : ''}><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+    const note = event.immigrationNote
+      ? `<blockquote class="imm-note"><span>Immigration Note</span><p>${escapeHtml(event.immigrationNote)}</p></blockquote>`
+      : '<p class="pass-empty">這班沒有留下 Immigration Note。</p>';
+    return `<article class="pass ${event.kind}${event.open ? ' open' : ''}">
+      <div class="pass-route">
+        ${place('From', from, '')}
+        <div class="pass-path" aria-hidden="true"><i class="pass-line"></i>${PLANE_SVG}<i class="pass-line"></i></div>
+        ${place('To', to, ' to')}
+      </div>
+      <dl class="pass-fields">
+        ${field('Depart', event.takeoffTime)}
+        ${field('Arrive', event.open ? '—' : event.landingTime)}
+        ${field('Duration', event.durationLabel, true)}
+        ${field('Date', shortDate(event.takeoffDate))}
+      </dl>
+      <div class="pass-tear" aria-hidden="true"></div>
+      ${note}
+    </article>`;
   }
 
   function openDetail(chart, personCode, flightId) {
@@ -439,54 +468,230 @@
     const sub = document.getElementById('detail-sub');
     const body = document.getElementById('detail-body');
     if (!person || !event || !heading || !sub || !body) return;
-    heading.textContent = `${person.code} ${person.name}`;
-    sub.textContent = `${event.takeoffTime} → ${event.landingTime} · ${event.durationLabel}`;
-    body.innerHTML = renderDetailFlights([event]);
+    heading.textContent = person.code;
+    sub.textContent = `${KIND_LABEL[event.kind] || KIND_LABEL.day} · ${shortDate(event.takeoffDate)}${event.open ? ' · 飛行中' : ''}`;
+    body.innerHTML = renderPass(event);
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
   }
 
-  function bindPan(scroller) {
-    let dragging = false;
-    let origin = 0;
-    let startScroll = 0;
+  // Distance from the scroller's left edge to hour 0 of the track: sticky stub + track lead-in margin.
+  function whoWidth(scroller) {
+    const stub = scroller.querySelector('.who')?.getBoundingClientRect().width || 88;
+    const track = scroller.querySelector('.track');
+    const lead = track ? parseFloat(getComputedStyle(track).marginLeft) || 0 : 0;
+    return stub + lead;
+  }
+
+  function applyHourPx(scroller, chart, nextPx, focalClientX, relabel) {
+    if (!scroller || !chart) return chart?.hourPx || HOUR_PX;
+    const prev = chart.hourPx || HOUR_PX;
+    const hourPx = clampHourPx(nextPx);
+    const rect = scroller.getBoundingClientRect();
+    const ww = whoWidth(scroller);
+    const nextScroll = scrollLeftForAnchor(
+      scroller.scrollLeft,
+      focalClientX,
+      rect.left,
+      ww,
+      prev,
+      hourPx
+    );
+    chart.hourPx = hourPx;
+    scroller.style.setProperty('--hour', `${hourPx}px`);
+    const trackWidth = chart.days.length * 24 * hourPx;
+    scroller.querySelectorAll('.track').forEach((el) => {
+      el.style.width = `${trackWidth}px`;
+    });
+    scroller.scrollLeft = nextScroll;
+    if (relabel) {
+      const keep = scroller.scrollLeft;
+      scroller.innerHTML = renderChart(chart);
+      scroller.scrollLeft = keep;
+    }
+    return hourPx;
+  }
+
+  function bindChartGestures(scroller) {
+    let pan = null;
+    let pinch = null;
+    let relabelTimer = 0;
+
+    const touchPoint = (touch) => ({ x: touch.clientX, y: touch.clientY });
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const midX = (a, b) => (a.x + b.x) / 2;
+
+    const scheduleRelabel = () => {
+      window.clearTimeout(relabelTimer);
+      relabelTimer = window.setTimeout(() => {
+        if (!lastChart) return;
+        const keep = scroller.scrollLeft;
+        scroller.innerHTML = renderChart(lastChart);
+        scroller.scrollLeft = keep;
+      }, 90);
+    };
+
+    const zoomAt = (nextPx, clientX, relabel) => {
+      if (!lastChart) return;
+      userHourPx = applyHourPx(scroller, lastChart, nextPx, clientX, relabel);
+    };
+
+    // One finger is left to the browser (CSS touch-action: pan-x pan-y), so the
+    // timeline scrolls sideways and the page still scrolls up and down. Only
+    // two-finger pinches are handled here.
+    scroller.addEventListener('touchstart', (event) => {
+      if (event.touches.length < 2) return;
+      if (event.cancelable) event.preventDefault();
+      const a = touchPoint(event.touches[0]);
+      const b = touchPoint(event.touches[1]);
+      pinch = {
+        startDist: Math.max(1, dist(a, b)),
+        startPx: lastChart?.hourPx || userHourPx,
+      };
+      scroller.classList.add('pinching');
+    }, { passive: false });
+
+    scroller.addEventListener('touchmove', (event) => {
+      if (event.touches.length < 2 || !pinch || !lastChart) return;
+      if (event.cancelable) event.preventDefault();
+      const a = touchPoint(event.touches[0]);
+      const b = touchPoint(event.touches[1]);
+      zoomAt(pinch.startPx * (dist(a, b) / pinch.startDist), midX(a, b), false);
+    }, { passive: false });
+
+    const endTouch = (event) => {
+      if (event.touches.length < 2 && pinch) {
+        pinch = null;
+        scroller.classList.remove('pinching');
+        scheduleRelabel();
+      }
+    };
+    scroller.addEventListener('touchend', endTouch);
+    scroller.addEventListener('touchcancel', endTouch);
+
     scroller.addEventListener('pointerdown', (event) => {
-      if (event.target.closest?.('.sleep-bar, .sleep-tick, a, input, button.ghost')) return;
-      dragging = true;
-      origin = event.clientX;
-      startScroll = scroller.scrollLeft;
+      if (event.pointerType !== 'mouse') return;
+      if (event.target.closest?.('.sleep-bar, .sleep-tick, a, input, button')) return;
+      pan = { x: event.clientX, scroll: scroller.scrollLeft };
       scroller.classList.add('panning');
       scroller.setPointerCapture?.(event.pointerId);
     });
     scroller.addEventListener('pointermove', (event) => {
-      if (!dragging) return;
-      scroller.scrollLeft = startScroll - (event.clientX - origin);
+      if (event.pointerType !== 'mouse' || !pan || pinch) return;
+      scroller.scrollLeft = pan.scroll - (event.clientX - pan.x);
     });
-    const stop = () => {
-      dragging = false;
+    const stopMousePan = () => {
+      if (pinch) return;
+      pan = null;
       scroller.classList.remove('panning');
     };
-    scroller.addEventListener('pointerup', stop);
-    scroller.addEventListener('pointercancel', stop);
+    scroller.addEventListener('pointerup', stopMousePan);
+    scroller.addEventListener('pointercancel', stopMousePan);
+
+    scroller.addEventListener('gesturestart', (event) => {
+      event.preventDefault();
+      pinch = { startDist: 1, startPx: lastChart?.hourPx || userHourPx };
+      scroller.classList.add('pinching');
+    }, { passive: false });
+    scroller.addEventListener('gesturechange', (event) => {
+      event.preventDefault();
+      if (!pinch) return;
+      zoomAt(pinch.startPx * event.scale, event.clientX || scroller.getBoundingClientRect().left + scroller.clientWidth / 2, false);
+    }, { passive: false });
+    scroller.addEventListener('gestureend', (event) => {
+      event.preventDefault();
+      pinch = null;
+      scroller.classList.remove('pinching');
+      scheduleRelabel();
+    }, { passive: false });
+
+    return { zoomAt, scheduleRelabel };
+  }
+
+  function lockPageZoom() {
+    const block = (event) => {
+      if (event.touches && event.touches.length > 1 && !event.target.closest?.('#chart')) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove', block, { passive: false });
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
+      document.addEventListener(name, (event) => event.preventDefault(), { capture: true, passive: false });
+    });
+    let lastTap = 0;
+    document.addEventListener('touchend', (event) => {
+      if (event.target.closest?.('input, textarea, button, a, .sleep-bar')) return;
+      const now = Date.now();
+      if (now - lastTap < 280) event.preventDefault();
+      lastTap = now;
+    }, { passive: false });
+    let wheelRelabel = 0;
+    window.addEventListener('wheel', (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      const scroller = document.getElementById('chart');
+      if (!lastChart || !scroller) return;
+      if (!scroller.contains(event.target) && event.target !== scroller) return;
+      const factor = Math.exp(-event.deltaY * 0.008);
+      userHourPx = applyHourPx(
+        scroller,
+        lastChart,
+        (lastChart.hourPx || userHourPx) * factor,
+        event.clientX,
+        false
+      );
+      window.clearTimeout(wheelRelabel);
+      wheelRelabel = window.setTimeout(() => {
+        const keep = scroller.scrollLeft;
+        scroller.innerHTML = renderChart(lastChart);
+        scroller.scrollLeft = keep;
+      }, 90);
+    }, { passive: false, capture: true });
   }
 
   function scrollToNow(scroller, chart) {
     if (!scroller || !chart) return;
+    const hourPx = chart.hourPx || HOUR_PX;
+    const ww = whoWidth(scroller);
+    const visibleMin = Math.max(6 * 60, ((scroller.clientWidth - ww) / hourPx) * 60);
     const latestBar = chart.participants
       .flatMap((person) => person.bars)
       .sort((a, b) => b.endMin - a.endMin)[0];
-    const targetMin = latestBar
-      ? Math.max(0, latestBar.endMin - 20 * 60)
-      : (chart.nowMin != null ? Math.max(0, chart.nowMin - 8 * 60) : 0);
-    scroller.scrollLeft = (targetMin / 60) * (chart.hourPx || HOUR_PX);
+    const focusMin = chart.nowMin != null
+      ? chart.nowMin
+      : (latestBar ? latestBar.endMin : 0);
+    const targetMin = Math.max(0, focusMin - visibleMin * 0.78);
+    scroller.scrollLeft = (targetMin / 60) * hourPx;
+  }
+
+  // Header route line: a plane sitting at "today" between D1 and the last day.
+  function renderFlightpath(chart) {
+    const first = chart.days[0];
+    const last = chart.days[chart.days.length - 1];
+    const line = document.getElementById('fp-line');
+    if (!first || !last || !line) return;
+    line.style.setProperty('--progress', `${(chart.progress * 100).toFixed(2)}%`);
+    const set = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+    set('fp-start-key', first.key);
+    set('fp-start', first.short);
+    set('fp-end-key', last.key);
+    set('fp-end', last.short);
+    set('fp-day', `DAY ${chart.dayNumber}/${chart.days.length}`);
   }
 
   let lastChart = null;
-  let panBound = false;
+  let userHourPx = HOUR_PX;
+  let chartGestures = null;
+  let hasView = false;
 
   async function refresh() {
     const dialog = document.getElementById('flight-detail');
     if (dialog?.open) return;
+    const scroller = document.getElementById('chart');
+    if (scroller?.classList.contains('pinching')) return;
     const input = document.getElementById('group-input');
     const groupId = normalizeGroupId(input?.value || DEFAULT_GROUP);
     if (input) input.value = groupId;
@@ -494,13 +699,20 @@
     const status = document.getElementById('status-line');
     status.classList.remove('error');
     status.textContent = `讀取航站 ${groupId} 的航班紀錄…`;
+    const keepHours = hasView && scroller && lastChart
+      ? scroller.scrollLeft / (lastChart.hourPx || userHourPx)
+      : null;
     try {
       const chart = await loadChart(groupId);
+      chart.hourPx = userHourPx;
       lastChart = chart;
-      const scroller = document.getElementById('chart');
+      scroller.style.setProperty('--hour', `${chart.hourPx}px`);
       scroller.innerHTML = renderChart(chart);
       document.getElementById('ledger-body').innerHTML = renderLedger(chart);
-      scrollToNow(scroller, chart);
+      renderFlightpath(chart);
+      if (keepHours != null) scroller.scrollLeft = keepHours * chart.hourPx;
+      else scrollToNow(scroller, chart);
+      hasView = true;
       const open = chart.participants.reduce((sum, person) => sum + person.openCount, 0);
       const flights = chart.participants.reduce((sum, person) => sum + person.totalFlights, 0);
       status.textContent = `Terminal ${groupId} · ${chart.days[0]?.short || STUDY_START} 起 ${chart.days.length} 天時間軸 · ${chart.participants.length} 位乘客 · ${flights} 班 · ${open} 班飛行中`;
@@ -516,20 +728,27 @@
     STUDY_START,
     DAY_COUNT,
     HOUR_PX,
+    MIN_HOUR_PX,
+    MAX_HOUR_PX,
+    clampHourPx,
+    scrollLeftForAnchor,
     normalizeGroupId,
     durationMinutes,
     classifyKind,
     inferPattern,
     buildChart,
     formatDuration,
-    formatPlace,
+    splitPlace,
   };
 
   if (typeof document !== 'undefined' && document.getElementById('chart')) {
     const params = new URLSearchParams(window.location.search);
     const input = document.getElementById('group-input');
     if (input) input.value = normalizeGroupId(params.get('groupId') || DEFAULT_GROUP);
-    document.getElementById('refresh-btn')?.addEventListener('click', refresh);
+    document.getElementById('refresh-btn')?.addEventListener('click', () => {
+      hasView = false;
+      refresh();
+    });
     document.getElementById('extras-toggle')?.addEventListener('change', refresh);
     input?.addEventListener('change', refresh);
     input?.addEventListener('keydown', (event) => {
@@ -541,10 +760,23 @@
       if (!button) return;
       openDetail(lastChart, button.getAttribute('data-person'), button.getAttribute('data-flight'));
     });
-    if (scroller && !panBound) {
-      bindPan(scroller);
-      panBound = true;
+    if (scroller && !chartGestures) {
+      chartGestures = bindChartGestures(scroller);
+      lockPageZoom();
     }
+    const bumpZoom = (factor) => {
+      if (!scroller || !lastChart) return;
+      const rect = scroller.getBoundingClientRect();
+      userHourPx = applyHourPx(
+        scroller,
+        lastChart,
+        (lastChart.hourPx || userHourPx) * factor,
+        rect.left + scroller.clientWidth * 0.58,
+        true
+      );
+    };
+    document.getElementById('zoom-in')?.addEventListener('click', () => bumpZoom(1.28));
+    document.getElementById('zoom-out')?.addEventListener('click', () => bumpZoom(1 / 1.28));
     document.getElementById('detail-close')?.addEventListener('click', () => {
       document.getElementById('flight-detail')?.close?.();
     });
