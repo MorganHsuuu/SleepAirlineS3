@@ -26,12 +26,14 @@
 }
 
 * { box-sizing: border-box; }
+/* Do not put overflow or overscroll-behavior on body: that turns body into a scroll
+   container with nothing to scroll, and current Chrome then stops wheel and touch
+   scrolling from reaching the page. Page zoom is locked by the viewport meta and
+   lockPageZoom() in tracking.js instead. */
+html { touch-action: pan-x pan-y; }
 html, body {
   margin: 0;
   min-height: 100%;
-  overflow-x: hidden;
-  touch-action: pan-y;
-  overscroll-behavior: none;
   background:
     radial-gradient(1200px 520px at 12% -10%, #fffaf0 0%, transparent 58%),
     linear-gradient(180deg, #f7f2e8 0%, var(--paper) 38%, #ece6d8 100%);
