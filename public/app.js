@@ -1613,8 +1613,6 @@ function offerSleepDial() {
     $('direction-dial')._sleepLastDevice = null;
     $('direction-dial')._sleepTouchDeviceAnchor = null;
     paintSleep(SLEEP_FACE_IDLE);
-    const hint = document.querySelector('.sleep-hint');
-    if (hint) hint.textContent = '長按左側變低落・右側變開心，點三下確認';
     syncConfirmButton();
     function finish() {
       if (!state.sleepDial) return;
