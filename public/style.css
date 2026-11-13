@@ -327,3 +327,10 @@ body.booting .app-shell{opacity:0;pointer-events:none}
 #flight-notice,.device-error,.toast{top:auto;bottom:22%;left:50%;transform:translateX(-50%);translate:none;width:min(66vw,640px);max-width:66vw;max-height:18vh;overflow:hidden;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#fff;mix-blend-mode:difference;opacity:.24;font:400 clamp(11px,1.2vw,15px)/1.5 system-ui,sans-serif;text-align:center;pointer-events:none}
 #flight-notice p{margin:0;overflow-wrap:anywhere}
 #flight-notice button{display:none}
+
+/* Whole-window holds avoid small touch targets on the physical device. */
+.mood-face{width:min(44cqw,32cqh)}
+.sleep-hint{top:77%;width:86%;white-space:normal;text-align:center;line-height:1.8;font-size:clamp(12px,3cqw,22px)}
+.window-glass.mood-hold-left .mood-face{filter:drop-shadow(-14px 0 18px rgba(190,220,255,.85))}
+.window-glass.mood-hold-right .mood-face{filter:drop-shadow(14px 0 18px rgba(255,225,155,.85))}
+@media(min-aspect-ratio:1/1){.mood-face{top:50%;width:min(44cqw,30cqh)}.sleep-hint{top:75%;font-size:clamp(12px,3cqh,22px)}}

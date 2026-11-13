@@ -73,7 +73,7 @@
           || data.takeoffCount < previous.takeoffCount || data.landCount < previous.landCount;
         if (baseline || !canDepart) headingPrimed = false;
         if (canDepart && data.direction !== null) {
-          const fromUser = headingPrimed;
+          const fromUser = headingPrimed && previous?.direction !== data.direction;
           if (data.direction !== state.direction) {
             setDirection?.(data.direction, { fromUser });
           }

@@ -55,7 +55,7 @@ const state = {
   nextOrigin: null,
   origin: { name: '臺北', code: 'TPE', country: '臺灣', lat: 25.033, lon: 121.5654 },
   destination: null, busy: false, shadeHold: false, sceneryUrl: null, openaiReady: false,
-  sleepDial: false, landedLegReady: false, headingConfirmed: false, headingMoved: false, sleepMoved: false,
+  screenHeadingOpen: false, sleepDial: false, landedLegReady: false, headingConfirmed: false, headingMoved: false, sleepMoved: false,
 };
 let clockTimer = null;
 let toastTimer = null;
@@ -366,7 +366,7 @@ function showCompass() {
   paintLeg();
   clearTimeout(compassTimer);
   compassTimer = setTimeout(() => {
-    if (panel.hidden) return;
+    if (panel.hidden || state.screenHeadingOpen) return;
     panel.classList.add('is-leaving');
     compassTimer = setTimeout(() => hideGlassPanel('glass-compass'), 2900);
   }, 2400);
@@ -444,20 +444,13 @@ function render() {
 function syncConfirmButton() {
   const button = $('btn-confirm');
   if (!button) return;
-  if (state.sleepDial) {
-    button.hidden = false;
-    button.disabled = !state.sleepMoved;
-    const label = $('confirm-label') || button;
-    label.textContent = state.sleepMoved ? '確認心情' : '先轉動旋鈕';
-    return;
-  }
   button.hidden = true;
   button.disabled = true;
 }
 function confirmAction() {
   if (state.sleepDial) {
     if (!state.sleepMoved) {
-      showToast('請先轉動旋鈕，再點三下確認心情');
+      showToast('請先長按左側或右側調整心情，再點三下確認');
       return;
     }
     $('direction-dial')._sleepFinish?.();
@@ -1468,6 +1461,8 @@ async function doLand() {
     const moodAfter = await offerSleepDial();
     state.headingMoved = false;
     state.headingConfirmed = false;
+    state.screenHeadingOpen = false;
+    state.headingTouchActive = false;
     syncConfirmButton();
     if (moodAfter != null && state.researchFlight && state.profile && state.lastFlight?.flightId) {
       void api('POST', '/api/flight/sleep-report', {
@@ -1557,6 +1552,8 @@ function restart({ keepShade = false } = {}) {
   state.researchFlight = false;
   state.destination = null; state.takeoffAt = null; state.sceneryUrl = null; state.landedLegReady = false;
   state.headingConfirmed = false; state.headingMoved = false; state.sleepMoved = false;
+  state.headingTouchActive = false;
+  state.screenHeadingOpen = false;
   $('arrival-image').src = ARRIVAL_FALLBACK;
   $('arrival-image').classList.remove('is-inflight', 'developing');
   setInflightStandby(false);
@@ -1594,6 +1591,7 @@ function offerSleepDial() {
   return new Promise((resolve) => {
     state.sleepDial = true;
     state.sleepMoved = false;
+    state.sleepTouchActive = false;
     const wrap = document.querySelector('.dial-wrap');
     wrap?.classList.add('is-sleep');
     const sleepGlass = $('glass-sleep');
@@ -1612,14 +1610,16 @@ function offerSleepDial() {
     $('direction-dial')._sleepValue = SLEEP_FACE_IDLE;
     $('direction-dial')._sleepStart = SLEEP_FACE_IDLE;
     $('direction-dial')._sleepDeviceOrigin = null;
+    $('direction-dial')._sleepLastDevice = null;
+    $('direction-dial')._sleepTouchDeviceAnchor = null;
     paintSleep(SLEEP_FACE_IDLE);
     const hint = document.querySelector('.sleep-hint');
-    if (hint) hint.textContent = '轉動旋鈕，再點三下確認';
+    if (hint) hint.textContent = '長按左側變低落・右側變開心，點三下確認';
     syncConfirmButton();
     function finish() {
       if (!state.sleepDial) return;
       if (!state.sleepMoved) {
-        showToast('請先轉動旋鈕，再點三下確認心情');
+        showToast('請先長按左側或右側調整心情，再點三下確認');
         return;
       }
       clearTimeout(askTimer);
@@ -1656,8 +1656,16 @@ function applySleepPercent(percent) {
   paintSleep(next);
 }
 function applySleepFromDevice(percent) {
+  if (!state.sleepDial) return;
   const el = $('direction-dial');
   const next = Math.max(0, Math.min(100, Number(percent) || 0));
+  el._sleepLastDevice = next;
+  if (state.sleepTouchActive) {
+    if (el._sleepTouchDeviceAnchor == null) el._sleepTouchDeviceAnchor = next;
+    // Ignore a parked knob and small ADC noise, but allow a real turn to take over.
+    if (Math.abs(next - el._sleepTouchDeviceAnchor) <= 2) return;
+    state.sleepTouchActive = false;
+  }
   if (el._sleepDeviceOrigin == null) {
     el._sleepDeviceOrigin = next;
     el._sleepStart = next;
@@ -1738,11 +1746,13 @@ function fireScreenFallback() {
   }
   if (state.busy) return;
   if (state.stage === 'landed' || state.stage === 'ready') {
-    if (!state.headingMoved) {
+    if (!state.screenHeadingOpen || !state.headingMoved) {
+      state.screenHeadingOpen = true;
       showCompass();
-      showToast('請先轉動旋鈕選航向，再點三下起飛');
+      showToast('請先長按左側或右側選航向，再點三下起飛');
       return;
     }
+    state.screenHeadingOpen = false;
     state.headingConfirmed = true;
     window.FlightDeviceControls?.consumeEndpoint?.('takeoff');
     if (state.stage === 'landed') restart();
@@ -1758,26 +1768,116 @@ function fireScreenFallback() {
 function bindScreenFallback() {
   const glass = $('window-glass');
   if (!glass) return;
+  const HOLD_DELAY = 350;
+  const HOLD_STEP_MS = 50; // 20 points per second, preserving the 0–100 report.
   let taps = 0;
   let timer = 0;
+  let press = null;
+  let holdTimer = 0;
+  let repeatTimer = 0;
+  let blockedUntil = 0;
+  const reset = () => {
+    taps = 0;
+    window.clearTimeout(timer);
+  };
+  const stopHold = () => {
+    window.clearTimeout(holdTimer);
+    window.clearInterval(repeatTimer);
+    glass.classList.remove('mood-hold-left', 'mood-hold-right');
+  };
+  const cancel = () => {
+    if (press?.held) blockedUntil = Date.now() + 500;
+    const id = press?.id;
+    press = null;
+    stopHold();
+    reset();
+    if (id != null) {
+      try { glass.releasePointerCapture(id); } catch { /* capture already released */ }
+    }
+  };
   glass.addEventListener('pointerdown', (event) => {
-    if (event.target?.closest?.('#btn-confirm')) return;
+    if (event.isPrimary === false) { cancel(); return; }
+    if (event.target?.closest?.('#btn-confirm') || (event.button != null && event.button !== 0)) return;
+    stopHold();
+    press = { id: event.pointerId, x: event.clientX, y: event.clientY,
+      at: Date.now(), stage: state.stage, mood: state.sleepDial, held: false,
+      heading: !state.sleepDial && state.screenHeadingOpen && !state.busy && ['ready', 'landed'].includes(state.stage) };
+    if (!press.mood && !press.heading) return;
+    event.preventDefault();
+    try { glass.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
+    const rect = glass.getBoundingClientRect();
+    const step = event.clientX < rect.left + rect.width / 2 ? -1 : 1;
+    holdTimer = window.setTimeout(() => {
+      if (!press || state.sleepDial !== press.mood || state.stage !== press.stage
+        || (press.heading && state.busy)) { cancel(); return; }
+      press.held = true;
+      if (press.mood) {
+        if (!state.sleepTouchActive) {
+          const dial = $('direction-dial');
+          dial._sleepTouchDeviceAnchor = dial._sleepLastDevice ?? null;
+        }
+        state.sleepTouchActive = true;
+      } else state.headingTouchActive = true;
+      reset();
+      if (press.mood) glass.classList.add(step < 0 ? 'mood-hold-left' : 'mood-hold-right');
+      const tick = () => {
+        if (!press || state.sleepDial !== press.mood || state.stage !== press.stage
+          || (press.heading && state.busy)) { cancel(); return; }
+        if (press.mood) applySleepPercent(Number($('direction-dial')._sleepValue) + step);
+        else setDirection(state.direction + step);
+      };
+      tick();
+      if (press) repeatTimer = window.setInterval(tick, press.mood ? HOLD_STEP_MS : 600);
+    }, HOLD_DELAY);
+  });
+  glass.addEventListener('pointermove', (event) => {
+    if (!press || press.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 12) {
+      blockedUntil = Date.now() + 500;
+      cancel();
+    }
+  });
+  glass.addEventListener('pointerup', (event) => {
+    if (!press || event.pointerId !== press.id) return;
+    const start = press;
+    press = null;
+    stopHold();
+    if (start.held || Date.now() - start.at >= ((start.mood || start.heading) ? HOLD_DELAY : 500)) {
+      blockedUntil = Date.now() + 500;
+      reset();
+      return;
+    }
+    if (state.sleepDial !== start.mood || state.stage !== start.stage || Date.now() < blockedUntil
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) {
+      reset();
+      return;
+    }
     taps += 1;
     window.clearTimeout(timer);
     if (taps >= 3) {
-      taps = 0;
+      reset();
+      blockedUntil = Date.now() + 500;
       fireScreenFallback();
       return;
     }
-    timer = window.setTimeout(() => { taps = 0; }, 900);
+    timer = window.setTimeout(reset, 900);
   });
+  glass.addEventListener('pointercancel', cancel);
+  glass.addEventListener('lostpointercapture', () => { if (press) cancel(); });
+  glass.addEventListener('pointerleave', () => { if (press && !press.mood && !press.heading) cancel(); });
+  window.addEventListener('blur', cancel);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
 }
 
 function startDeviceControls() {
   let nextRecoveryAt = 0;
   window.FlightDeviceControls?.start({
     getState: () => state,
-    setDirection: (index, options) => setDirection(index, options),
+    setDirection: (index, options) => {
+      if (state.headingTouchActive && !options?.fromUser) return;
+      state.headingTouchActive = false;
+      setDirection(index, options);
+    },
     setSleep: (percent) => applySleepFromDevice(percent),
     confirm: () => confirmAction(),
     setPassenger: (passengerId, passengerName) => {

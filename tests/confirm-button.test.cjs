@@ -32,7 +32,7 @@ test('triple-tap takeoff consumes the takeoff reed so it cannot fire twice', () 
   const srcEnd = source.indexOf('\nfunction bindScreenFallback(', srcStart);
   const calls = [];
   const ctx = {
-    state: { busy: false, sleepDial: false, headingMoved: true, stage: 'ready' },
+    state: { busy: false, sleepDial: false, headingMoved: true, screenHeadingOpen: true, stage: 'ready' },
     window: {
       BroadcastAudio: { primeFromUserGesture() {}, armWakeupCarrier() {} },
       FlightDeviceControls: { consumeEndpoint: (endpoint) => calls.push(['consume', endpoint]) },
@@ -53,7 +53,7 @@ test('triple-tap takeoff consumes the takeoff reed so it cannot fire twice', () 
   assert.deepEqual(calls.at(-1), ['land']);
 });
 
-test('triple-tap waits for heading then takeoff, and for mood then confirm', () => {
+test('triple-tap confirms mood even while the landing flow is busy', () => {
   const srcStart = source.indexOf('function fireScreenFallback(');
   const srcEnd = source.indexOf('\nfunction bindScreenFallback(', srcStart);
   const calls = [];
@@ -73,7 +73,7 @@ test('triple-tap waits for heading then takeoff, and for mood then confirm', () 
   vm.createContext(ctx);
   vm.runInContext(source.slice(srcStart, srcEnd), ctx);
   ctx.fireScreenFallback();
-  assert.deepEqual(calls, [['compass'], ['toast', '請先轉動旋鈕選航向，再點三下起飛']]);
+  assert.deepEqual(calls, [['compass'], ['toast', '請先長按左側或右側選航向，再點三下起飛']]);
   ctx.state.sleepDial = true;
   ctx.fireScreenFallback();
   assert.deepEqual(calls.at(-1), ['confirm']);
@@ -98,16 +98,28 @@ test('heading overlay appears as soon as the knob changes direction', () => {
   assert.match(pointFn, /showCompass/);
 });
 
-test('mood confirm appears only after the sleep dial is open', () => {
+test('mood uses triple-tap confirmation without a small button', () => {
   const f = fixture();
   f.state.sleepDial = true;
-  f.state.sleepMoved = false;
-  f.ctx.syncConfirmButton();
-  assert.equal(f.button.hidden, false);
-  assert.equal(f.button.disabled, true);
-  assert.equal(f.label.textContent, '先轉動旋鈕');
-  f.state.sleepMoved = true;
-  f.ctx.syncConfirmButton();
-  assert.equal(f.button.disabled, false);
-  assert.equal(f.label.textContent, '確認心情');
+  for (const moved of [false, true]) {
+    f.state.sleepMoved = moved;
+    f.ctx.syncConfirmButton();
+    assert.equal(f.button.hidden, true);
+    assert.equal(f.button.disabled, true);
+  }
+});
+
+test('first screen triple-tap opens direction even if the knob has already moved', () => {
+  const calls = [];
+  const ctx = {
+    state: { stage: 'ready', sleepDial: false, busy: false, headingMoved: true, screenHeadingOpen: false },
+    window: { FlightDeviceControls: { consumeEndpoint() {} } },
+    showCompass() { calls.push('compass'); }, showToast() {},
+    doTakeoff() { calls.push('takeoff'); },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(source.slice(source.indexOf('function fireScreenFallback('), source.indexOf('function bindScreenFallback(')), ctx);
+  ctx.fireScreenFallback(); assert.deepEqual(calls, ['compass']);
+  assert.equal(ctx.state.screenHeadingOpen, true);
+  ctx.fireScreenFallback(); assert.deepEqual(calls, ['compass', 'takeoff']);
 });
