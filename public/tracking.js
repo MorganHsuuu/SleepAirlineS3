@@ -64,9 +64,11 @@
   }
 
   function durationMinutes(flight, now) {
-    const sleep = Number(flight.sleepOpportunityMinutes);
+    // Empty fields mean "not recorded yet" (a flight still in the air), not 0 minutes.
+    const recorded = (value) => (value == null || value === '' ? NaN : Number(value));
+    const sleep = recorded(flight.sleepOpportunityMinutes);
     if (Number.isFinite(sleep) && sleep >= 0) return Math.round(sleep);
-    const logged = Number(flight.flightDurationMinutes);
+    const logged = recorded(flight.flightDurationMinutes);
     if (Number.isFinite(logged) && logged >= 0) return Math.round(logged);
     const start = new Date(flight.takeoffTime).getTime();
     if (!Number.isFinite(start)) return null;
@@ -90,6 +92,10 @@
     const minutes = durationMinutes(flight, now);
     if (minutes != null && minutes < 10) return 'blip';
     const hour = takeoff.hour;
+    // Still in the air: the length is not final yet, so a flight that took off
+    // at night stays a night leg instead of starting out as a nap.
+    const open = flight.status === 'in_flight' && !flight.landingTime;
+    if (open && (hour >= 20 || hour < 7)) return 'night';
     if (minutes != null && minutes <= 90 && hour >= 11 && hour < 18) return 'nap';
     if (minutes != null && minutes <= 45) return 'nap';
     if (hour >= 20 || hour < 7) return 'night';
@@ -324,18 +330,26 @@
   // Point-to-point leg: takeoff dot, line, landing dot. Timestamps sit above
   // each dot and the duration above the line; legs too short for two
   // timestamps keep only the duration.
+  // A flight still in the air (10 minutes or more) always shows its takeoff
+  // stamp; its line keeps growing to "now" in a translucent tone with a plane
+  // at the tip, and turns solid with a landing dot once the passenger wakes.
   function renderBar(person, event, hourPx) {
     const px = ((event.endMin - event.startMin) / 60) * hourPx;
     const note = event.immigrationNote ? '<b class="note-pip" title="Immigration Note">N</b>' : '';
-    const times = px >= 34
-      ? `<span class="leg-time dep">${escapeHtml(event.takeoffTime)}</span><span class="leg-time arr">${escapeHtml(event.landingTime)}</span>`
+    const wide = px >= 34;
+    const dep = wide || event.open
+      ? `<span class="leg-time dep">${escapeHtml(event.takeoffTime)}</span>`
+      : '';
+    const arr = wide
+      ? `<span class="leg-time arr">${escapeHtml(event.landingTime)}</span>`
       : '';
     const head = event.open
       ? `<span class="leg-plane">${PLANE_SVG}</span>`
       : '<i class="leg-dot arr"></i>';
-    return `<button type="button" class="sleep-bar ${event.kind}${event.open ? ' open' : ''}" data-person="${escapeHtml(person.code)}" data-flight="${escapeHtml(event.flightId)}" style="left:${event.leftPct}%;width:${event.widthPct}%" aria-label="${escapeHtml(person.code)} ${escapeHtml(event.takeoffTime)} 到 ${escapeHtml(event.landingTime)}，${escapeHtml(event.durationLabel)}">
+    const state = event.open ? ` open${px < 22 ? ' fresh' : ''}` : '';
+    return `<button type="button" class="sleep-bar ${event.kind}${state}" data-person="${escapeHtml(person.code)}" data-flight="${escapeHtml(event.flightId)}" style="left:${event.leftPct}%;width:${event.widthPct}%" aria-label="${escapeHtml(person.code)} ${escapeHtml(event.takeoffTime)} 到 ${escapeHtml(event.landingTime)}，${escapeHtml(event.durationLabel)}">
       <span class="leg-dur">${escapeHtml(event.durationLabel)}${note}</span>
-      ${times}
+      ${dep}${arr}
       <i class="leg-line"></i>
       <i class="leg-dot dep"></i>
       ${head}

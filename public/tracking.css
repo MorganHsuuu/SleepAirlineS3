@@ -274,10 +274,9 @@ button.ghost { cursor: pointer; font-family: inherit; }
 .key.day { color: var(--day); }
 .key.nap { color: var(--nap); width: 24px; }
 .key.open {
-  color: var(--open);
   background:
     radial-gradient(circle at 5px 50%, currentColor 4.4px, transparent 5px),
-    repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) 8px 50% / calc(100% - 22px) 2.5px no-repeat;
+    linear-gradient(rgba(39, 73, 122, .38), rgba(39, 73, 122, .38)) 8px 50% / calc(100% - 20px) 2.5px no-repeat;
 }
 .key.open .plane {
   position: absolute;
@@ -285,6 +284,7 @@ button.ghost { cursor: pointer; font-family: inherit; }
   top: 50%;
   margin-top: -7px;
   font-size: 14px;
+  opacity: .78;
 }
 .key.blip {
   width: 9px;
@@ -567,7 +567,6 @@ button.ghost { cursor: pointer; font-family: inherit; }
 }
 .sleep-bar.day { --c: var(--day); }
 .sleep-bar.nap { --c: var(--nap); }
-.sleep-bar.open { --c: var(--open); }
 .leg-line {
   position: absolute;
   left: 0;
@@ -623,16 +622,21 @@ button.ghost { cursor: pointer; font-family: inherit; }
 }
 .leg-time.dep { left: 0; }
 .leg-time.arr { left: 100%; }
-.sleep-bar.open .leg-line {
-  background: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 9px);
-}
+/* Still in the air: same colour as the finished leg, but translucent because the
+   landing time is not known yet. The line grows to "now" until the passenger wakes. */
+.sleep-bar.open .leg-line { opacity: .38; }
+.sleep-bar.open .leg-dur,
+.sleep-bar.open .leg-time.arr { opacity: .62; }
 .leg-plane {
   position: absolute;
   right: -10px;
   top: 46.5px;
   font-size: 20px;
+  opacity: .78;
   animation: cruise 2.4s ease-in-out infinite;
 }
+/* Just departed: keep the plane clear of the takeoff dot. */
+.sleep-bar.open.fresh .leg-plane { right: -27px; }
 @keyframes cruise {
   50% { transform: translateX(3px); }
 }

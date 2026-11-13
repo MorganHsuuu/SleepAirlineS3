@@ -57,6 +57,38 @@ test('classifies night, day and nap from takeoff hour and duration', () => {
   }), tz, now), 'blip');
 });
 
+test('a flight still in the air becomes a growing leg after 10 minutes', () => {
+  const inFlight = flight({
+    status: 'in_flight',
+    takeoffTime: '2026-11-12T16:30:00.000Z',
+    landingTime: null,
+    sleepOpportunityMinutes: null,
+    flightDurationMinutes: null,
+  });
+  const p5 = (now) => TrackingChart.buildChart([inFlight], {
+    groupId: '0001',
+    now: new Date(now),
+    timezone: 'Asia/Taipei',
+  }).participants[4];
+
+  const early = p5('2026-11-12T16:35:00.000Z');
+  assert.equal(early.bars.length, 0);
+  assert.equal(early.ticks.length, 1);
+
+  const later = p5('2026-11-12T16:50:00.000Z');
+  assert.equal(later.ticks.length, 0);
+  assert.equal(later.bars.length, 1);
+  assert.equal(later.bars[0].open, true);
+  assert.equal(later.bars[0].kind, 'night');
+  assert.equal(later.bars[0].takeoffTime, '00:30');
+  assert.equal(later.bars[0].durationLabel, '20m');
+
+  const morning = p5('2026-11-13T00:30:00.000Z');
+  assert.equal(morning.bars[0].kind, 'night');
+  assert.equal(morning.bars[0].durationLabel, '8h');
+  assert.equal(morning.bars[0].endMin - morning.bars[0].startMin, 480);
+});
+
 test('builds a 14-day chart from 11/11 with de-identified P1–P5 labels', () => {
   const now = new Date('2026-11-12T04:00:00.000Z');
   const chart = TrackingChart.buildChart([
