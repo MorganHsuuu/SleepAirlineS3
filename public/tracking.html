@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,720&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/tracking.css?v=18">
+  <link rel="stylesheet" href="/tracking.css?v=22">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -80,7 +80,10 @@
           <h2 id="detail-heading">航班詳情</h2>
           <p id="detail-sub"></p>
         </div>
-        <button type="button" class="ghost" id="detail-close" aria-label="關閉">關閉</button>
+        <div class="detail-aside">
+          <button type="button" class="ghost" id="detail-close" aria-label="關閉">關閉</button>
+          <p id="detail-hdg" hidden></p>
+        </div>
       </div>
       <div id="detail-body"></div>
     </dialog>
@@ -93,20 +96,18 @@
             <tr>
               <th>乘客</th>
               <th>航班</th>
-              <th>合計時長</th>
-              <th>最近起飛</th>
               <th>最近降落</th>
               <th>狀態</th>
             </tr>
           </thead>
           <tbody id="ledger-body">
-            <tr><td colspan="6">讀取中</td></tr>
+            <tr><td colspan="4">讀取中</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </div>
 
-  <script src="/tracking.js?v=18"></script>
+  <script src="/tracking.js?v=22"></script>
 </body>
 </html>

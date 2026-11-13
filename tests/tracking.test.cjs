@@ -27,6 +27,9 @@ function flight(overrides) {
     departureAirport: 'TPE',
     arrivalAirport: 'WNP',
     immigrationNote: '',
+    routeDirection: 'eastbound',
+    takeoffBroadcast: '',
+    captainBroadcast: '',
     ...overrides,
   };
 }
@@ -138,6 +141,30 @@ test('sleep bars sit on a continuous 14-day timeline from takeoff to landing', (
   assert.ok(bar.widthPct > 0);
   assert.equal(chart.totalMin, 14 * 24 * 60);
   assert.equal(chart.hourPx, 8);
+});
+
+test('maps heading keys and country names for the boarding pass', () => {
+  assert.equal(TrackingChart.headingLabel('eastbound'), '向東 090°');
+  assert.equal(TrackingChart.headingLabel('northwest'), '西北 315°');
+  assert.equal(TrackingChart.headingLabel('auto'), '—');
+  assert.equal(TrackingChart.countryFlag('Naga, Philippines'), '🇵🇭');
+  assert.equal(TrackingChart.countryFlag('樂蜀, 埃及'), '🇪🇬');
+  assert.equal(TrackingChart.countryFlag(''), '');
+});
+
+test('keeps route heading and captain copy on each boarding-pass event', () => {
+  const chart = TrackingChart.buildChart([flight({
+    takeoffTime: '2026-11-11T16:00:00.000Z',
+    landingTime: '2026-11-11T20:00:00.000Z',
+    sleepOpportunityMinutes: 240,
+    routeDirection: 'westbound',
+    takeoffBroadcast: '準備起飛。',
+    captainBroadcast: '已經降落。',
+  })], { groupId: '0001', now: new Date('2026-11-12T04:00:00.000Z'), timezone: 'Asia/Taipei' });
+  const event = chart.participants[4].bars[0];
+  assert.equal(event.routeDirection, 'westbound');
+  assert.equal(event.takeoffBroadcast, '準備起飛。');
+  assert.equal(event.captainBroadcast, '已經降落。');
 });
 
 test('splits origin and destination into city and region for the boarding pass', () => {

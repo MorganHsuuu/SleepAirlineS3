@@ -18,6 +18,33 @@
 
   const PLANE_SVG = '<svg class="plane" aria-hidden="true"><use href="#plane"/></svg>';
   const KIND_LABEL = { night: '夜間休息', day: '日間使用', nap: '小憩／午睡', blip: '短暫測試' };
+  const HEADINGS = {
+    northbound: { zh: '向北', deg: 0 },
+    northeast: { zh: '東北', deg: 45 },
+    eastbound: { zh: '向東', deg: 90 },
+    southeast: { zh: '東南', deg: 135 },
+    southbound: { zh: '向南', deg: 180 },
+    southwest: { zh: '西南', deg: 225 },
+    westbound: { zh: '向西', deg: 270 },
+    northwest: { zh: '西北', deg: 315 },
+  };
+  const FLAG_ALIASES = [
+    [['日本', 'japan'], 'JP'],
+    [['韓國', '南韓', 'south korea', 'korea'], 'KR'],
+    [['臺灣', '台灣', 'taiwan'], 'TW'],
+    [['中國', 'china'], 'CN'],
+    [['香港', 'hong kong'], 'HK'],
+    [['菲律賓', 'philippines'], 'PH'],
+    [['泰國', 'thailand'], 'TH'],
+    [['新加坡', 'singapore'], 'SG'],
+    [['越南', 'vietnam'], 'VN'],
+    [['馬來西亞', 'malaysia'], 'MY'],
+    [['埃及', 'egypt'], 'EG'],
+    [['阿拉伯聯合酋長國', '阿聯酋', '阿聯', 'uae', 'united arab emirates'], 'AE'],
+    [['美國', 'united states', 'usa'], 'US'],
+    [['英國', 'united kingdom', 'uk'], 'GB'],
+  ];
+  let countryIsoMap = {};
 
   function normalizeGroupId(value) {
     const legacy = /^group_(\d{2})$/i.exec(value || '');
@@ -189,6 +216,9 @@
       departureAirport: flight.departureAirport || '',
       arrivalAirport: flight.arrivalAirport || '',
       immigrationNote: String(flight.immigrationNote || '').trim(),
+      routeDirection: flight.routeDirection || '',
+      takeoffBroadcast: String(flight.takeoffBroadcast || '').trim(),
+      captainBroadcast: String(flight.captainBroadcast || '').trim(),
     };
   }
 
@@ -393,7 +423,7 @@
 
   function renderLedger(chart) {
     if (!chart.participants.length) {
-      return '<tr><td colspan="6">這個航站還沒有航班紀錄。</td></tr>';
+      return '<tr><td colspan="4">這個航站還沒有航班紀錄。</td></tr>';
     }
     return chart.participants.map((person) => {
       const status = person.status === 'in_flight'
@@ -404,8 +434,6 @@
       return `<tr>
         <td>${escapeHtml(person.code)}</td>
         <td>${person.totalFlights}</td>
-        <td>${escapeHtml(formatDuration(person.totalMinutes))}</td>
-        <td>${escapeHtml(person.latestTakeoff)}</td>
         <td>${escapeHtml(person.latestLanding)}</td>
         <td>${status}</td>
       </tr>`;
@@ -423,6 +451,41 @@
       dayCount: payload.dayCount || DAY_COUNT,
       includeExtras: document.getElementById('extras-toggle')?.checked === true,
     });
+  }
+
+  function headingInfo(key) {
+    return HEADINGS[key] || null;
+  }
+
+  function headingLabel(key) {
+    const info = headingInfo(key);
+    if (!info) return '—';
+    return `${info.zh} ${String(info.deg).padStart(3, '0')}°`;
+  }
+
+  function isoFromName(name) {
+    const normalized = String(name || '').trim().replaceAll('台灣', '臺灣').toLowerCase();
+    if (!normalized) return '';
+    if (countryIsoMap[normalized]) return countryIsoMap[normalized];
+    const hit = FLAG_ALIASES.find(([names]) => names.some((part) => normalized.includes(part)));
+    return hit ? hit[1] : '';
+  }
+
+  function countryFlag(location) {
+    const parts = String(location || '').split(/[,，]/).map((part) => part.trim()).filter(Boolean);
+    for (const part of [...parts].reverse()) {
+      const iso = isoFromName(part);
+      if (iso) return [...iso].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join('');
+    }
+    return '';
+  }
+
+  function loadCountryIso() {
+    if (typeof fetch !== 'function') return;
+    fetch('/country-iso.json')
+      .then((res) => res.json())
+      .then((data) => { countryIsoMap = data || {}; })
+      .catch(() => {});
   }
 
   // "Taipei, Taiwan" + "TPE" → { main: 'Taipei', sub: 'Taiwan · TPE' }
@@ -446,29 +509,45 @@
     const to = event.open
       ? { main: '飛行中', sub: '尚未降落' }
       : splitPlace(event.arrivalLocation, event.arrivalAirport, '降落點未記錄');
-    const place = (label, value, side) => `<div class="pass-place${side}">
+    const place = (label, value, side, location) => {
+      const flag = countryFlag(location);
+      return `<div class="pass-place${side}">
         <small>${label}</small>
-        <strong>${escapeHtml(value.main)}</strong>
+        <strong>${flag ? `<span class="pass-flag">${flag}</span>` : ''}${escapeHtml(value.main)}</strong>
         <span>${escapeHtml(value.sub)}</span>
       </div>`;
+    };
     const field = (label, value, accent) => `<div${accent ? ' class="accent"' : ''}><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+    const photo = event.open ? '' : `<figure class="pass-photo">
+        <img alt="降落風景">
+        <figcaption>降落風景</figcaption>
+      </figure>`;
+    const voiceBits = [
+      event.takeoffBroadcast && `<p><span>起飛</span>${escapeHtml(event.takeoffBroadcast)}</p>`,
+      event.captainBroadcast && `<p><span>降落</span>${escapeHtml(event.captainBroadcast)}</p>`,
+    ].filter(Boolean);
+    const voice = voiceBits.length
+      ? `<details class="pass-voice"><summary>機長廣播</summary><div>${voiceBits.join('')}</div></details>`
+      : '';
     const note = event.immigrationNote
       ? `<blockquote class="imm-note"><span>Immigration Note</span><p>${escapeHtml(event.immigrationNote)}</p></blockquote>`
       : '<p class="pass-empty">這班沒有留下 Immigration Note。</p>';
     return `<article class="pass ${event.kind}${event.open ? ' open' : ''}">
+      ${photo}
       <div class="pass-route">
-        ${place('From', from, '')}
+        ${place('From', from, '', event.departureLocation)}
         <div class="pass-path" aria-hidden="true"><i class="pass-line"></i>${PLANE_SVG}<i class="pass-line"></i></div>
-        ${place('To', to, ' to')}
+        ${place('To', to, ' to', event.open ? '' : event.arrivalLocation)}
       </div>
       <dl class="pass-fields">
         ${field('Depart', event.takeoffTime)}
         ${field('Arrive', event.open ? '—' : event.landingTime)}
         ${field('Duration', event.durationLabel, true)}
-        ${field('Date', shortDate(event.takeoffDate))}
+        ${field('Heading', headingLabel(event.routeDirection))}
       </dl>
       <div class="pass-tear" aria-hidden="true"></div>
       ${note}
+      ${voice}
     </article>`;
   }
 
@@ -480,11 +559,40 @@
       .find((row) => row.flightId === flightId);
     const heading = document.getElementById('detail-heading');
     const sub = document.getElementById('detail-sub');
+    const hdg = document.getElementById('detail-hdg');
     const body = document.getElementById('detail-body');
     if (!person || !event || !heading || !sub || !body) return;
     heading.textContent = person.code;
     sub.textContent = `${KIND_LABEL[event.kind] || KIND_LABEL.day} · ${shortDate(event.takeoffDate)}${event.open ? ' · 飛行中' : ''}`;
+    if (hdg) {
+      const info = headingInfo(event.routeDirection);
+      const fromFlag = countryFlag(event.departureLocation);
+      const toFlag = event.open ? '' : countryFlag(event.arrivalLocation);
+      const flags = fromFlag && toFlag ? `${fromFlag} → ${toFlag}` : (fromFlag || toFlag);
+      if (info || flags) {
+        hdg.hidden = false;
+        hdg.innerHTML = `${flags ? `<span class="detail-flags">${flags}</span>` : ''}${info ? `<b>${escapeHtml(info.zh)}</b><i>${String(info.deg).padStart(3, '0')}°</i>` : ''}`;
+      } else {
+        hdg.hidden = true;
+        hdg.replaceChildren();
+      }
+    }
     body.innerHTML = renderPass(event);
+    const photo = body.querySelector('.pass-photo');
+    const img = photo?.querySelector('img');
+    if (photo && img && !event.open) {
+      const reveal = () => {
+        window.requestAnimationFrame(() => photo.classList.add('is-ready'));
+      };
+      img.onload = reveal;
+      img.onerror = () => {
+        photo.classList.add('is-missing');
+        const cap = photo.querySelector('figcaption');
+        if (cap) cap.textContent = '尚無風景';
+      };
+      img.src = `/api/scenery-image?flightId=${encodeURIComponent(event.flightId)}`;
+      if (img.complete && img.naturalWidth) reveal();
+    }
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
   }
@@ -753,9 +861,12 @@
     buildChart,
     formatDuration,
     splitPlace,
+    headingLabel,
+    countryFlag,
   };
 
   if (typeof document !== 'undefined' && document.getElementById('chart')) {
+    loadCountryIso();
     const params = new URLSearchParams(window.location.search);
     const input = document.getElementById('group-input');
     if (input) input.value = normalizeGroupId(params.get('groupId') || DEFAULT_GROUP);

@@ -32,6 +32,9 @@ export type TrackingFlight = {
   departureAirport: string;
   arrivalAirport: string;
   immigrationNote: string;
+  routeDirection: string;
+  takeoffBroadcast: string;
+  captainBroadcast: string;
 };
 
 export function normalizeGroupId(value: string): string {
@@ -81,6 +84,9 @@ function toTrackingFlight(flight: Flight, props?: Record<string, unknown>): Trac
     departureAirport: props ? readAllPlainText(props, 'Departure Airport Code') : '',
     arrivalAirport: props ? readAllPlainText(props, 'Arrival Airport Code') : '',
     immigrationNote: props ? readAllPlainText(props, 'Immigration Note') : '',
+    routeDirection: flight.routeDirection || '',
+    takeoffBroadcast: (props ? readAllPlainText(props, 'Takeoff Broadcast') : '') || flight.takeoffBroadcast || '',
+    captainBroadcast: (props ? readAllPlainText(props, 'Captain Broadcast') : '') || flight.captainBroadcast || '',
   };
 }
 
