@@ -344,7 +344,7 @@ document.querySelectorAll('[data-mode]').forEach(b=>b.disabled=true);
 try{const r=await fetch('/api/setup-mode',{method:'POST',headers:{'Content-Type':'application/json','X-Sleep-Airline-Setup':'1'},body:JSON.stringify({mode:button.dataset.mode})});if(!r.ok)throw Error('目前正在設定，請稍後再試');}
 catch(e){document.getElementById('progress').textContent=e.message;document.querySelectorAll('[data-mode]').forEach(b=>b.disabled=false);}}));
 setInterval(async()=>{try{const s=await(await fetch('/api/status')).json();
-if(s.paired&&s.online)location.replace(__WINDOW__);
+if(s.paired){location.replace(s.online?__WINDOW__:'/offline');return;}
 else if(s.setupRevision!==revision||s.setupCodeChanged)location.reload();
 document.getElementById('progress').textContent=s.message||'等待手機設定';
 }catch{}},2500);""".replace('__WINDOW__', json.dumps(WINDOW_URL))

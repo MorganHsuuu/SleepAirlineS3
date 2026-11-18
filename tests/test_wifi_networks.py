@@ -54,6 +54,19 @@ class WifiTests(unittest.TestCase):
             self.assertEqual(wifi.connect_saved()['uuid'], 'other')
         self.assertEqual(attempted, ['home', 'other'])
 
+    def test_existing_open_profile_is_idempotent_and_secured_profile_can_become_open(self):
+        import uuid
+        connection = str(uuid.uuid5(uuid.NAMESPACE_URL, "sleep-airline:wifi:Home"))
+        for key_mgmt in ("", "wpa-psk"):
+            wifi = WifiNetworks()
+            def run(*args, **kwargs):
+                return key_mgmt if "802-11-wireless-security.key-mgmt" in args and "show" in args else ""
+            with patch.object(wifi, 'profiles', return_value=[{'uuid': connection}]), patch.object(wifi, 'run', side_effect=run) as command:
+                wifi.save([{'ssid': 'Home', 'password': ''}])
+            calls = [call.args for call in command.call_args_list]
+            self.assertFalse(any('add' in call for call in calls))
+            self.assertEqual(any('remove' in call for call in calls), bool(key_mgmt))
+
     def test_timeout_error_does_not_expose_password_in_command(self):
         wifi = WifiNetworks()
         with patch.object(subprocess, 'run', side_effect=subprocess.TimeoutExpired(['nmcli', 'password', 'TOPSECRET'], 12)):
