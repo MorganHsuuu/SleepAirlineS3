@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { openAiApiKey } from './openai-env';
 import type { BroadcastStyle, NarrativeRegion } from '../../types';
 import type { LocalContext } from '../flight/local-context';
-import { arrivalHello, timeAdjustedGreeting } from './morning-content';
+import { arrivalHello, arrivalLifeContext, timeAdjustedGreeting } from './morning-content';
 import { farewellSpotFor, landingOpeningForIso, placeOrientationLine, spokenFarewellLine, spokenPlaceZh } from '../flight/local-context';
 import { fallbackSleepInvitation, type SleepNote } from '../flight/sleep-guidance';
 
@@ -298,7 +298,7 @@ ${hasLocal ? `當地資訊（${isTakeoff ? '出發地' : '抵達地'}）：
 - 【當地資訊】中的文化、天氣僅供改寫融入，禁止整段照搬或列點
 - 降落廣播：說出城市名之後，必須用一句話幫旅客把這個地方放到地圖上——洲或海洋＋國家＋一個幾乎不會錯的身份（首都／島國／海外領地／某國城市）。例如東京：「這裡是亞洲，日本的首都」；太平洋小島：「這裡是南太平洋，屬於新喀里多尼亞」；冰島：「這裡是北大西洋，冰島的首都」。禁止東北亞、西歐這種細分區，禁止人口數字、冷門歷史、百科條列。
 - 降落廣播：必須用兩句自然帶出這個地方特有的文化、環境、市集、表演或生活場景，並點一下當地天氣與當地時間；禁止「自然地貌與天光」「山、水或開闊地貌」這類任何城市都能套的風景句。可提這班飛了多久、從哪裡來；若是再次降落同一座城市，輕輕提一句。像機長看著窗外講故事，不要像氣象報告或百科。
-- 降落廣播：開頭必須先用當地語言講一兩句完整的話（使用【當地語言開頭一兩句】，如「こんにちは。ゆっくり休めましたか、目的地に到着しました。」），不要只丟單字你好，也不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文時段問候（早安／午安／晚安）必須符合【時段】，禁止「當地白天問候 + 中文晚安」
+- 降落廣播：開頭必須先用當地語言講一兩句完整的話（使用【當地語言開頭一兩句】，如「こんにちは。ゆっくり休めましたか、目的地に到着しました。」），不要只丟單字你好，也不要用 Good morning、Góðan daginn、おはようございます 這類綁時段的早安。中文問候用「歡迎抵達」或「你好」，禁止晚安或睡前道別；可依當地時段輕鬆提到居民可能在做什麼，深夜可幽默說多數人可能已經睡了，不把推測說成即時事實
 - 降落廣播：當地語言這一兩句之後，緊接繁體中文繼續廣播，不要翻譯或解釋那兩句
 - 起飛廣播：用【告別場景】寫一句剛逛完當地、正要離開的故事（例：我們逛完信義區，要離開台北了）；沒有指定街區就用當地文化裡的真實生活場景，禁止編造區名。天氣最多一句帶過，勿喧賓奪主、勿暗示目的地
 ` : ''}
@@ -592,5 +592,5 @@ export function fallbackCaptainBroadcast(
     localContext?.countryIso
   );
   const whereBit = where ? `${where}。` : '';
-  return `${opening} ${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}${journeyBit ? `${journeyBit}。` : ''}${cultureBit}歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
+  return `${opening} ${hello}，Sleep Airline 已抵達今天的目的地——${arrivalLabel}。${whereBit}${timeBit}${arrivalLifeContext(localContext?.localTimeLabel)}${journeyBit ? `${journeyBit}。` : ''}${cultureBit}歡迎抵達${arrivalLabel}，今天的旅程從這裡開始。`;
 }

@@ -680,7 +680,26 @@ function voiceMatchesWeather(voiceText: string, weatherSummary?: string | null):
   return false;
 }
 
-export function arrivalHello(localTimeLabel?: string | null): string {
+/** Arrival is a welcome, never a bedtime farewell, even at local midnight. */
+export function arrivalHello(_localTimeLabel?: string | null): string {
+  return '歡迎抵達';
+}
+
+/** A plausible scene, not a claim that we observe residents in real time. */
+export function arrivalLifeContext(localTimeLabel?: string | null): string {
+  const label = (localTimeLabel || '').trim().toLowerCase();
+  if (/午夜|深夜|凌晨|midnight|late night/.test(label)) {
+    return '這個時間，城裡多數人可能已經睡了，我們就輕輕抵達，不按門鈴。';
+  }
+  if (/清晨|黎明|日出|dawn|sunrise/.test(label)) return '這個時間，早起的人可能正準備出門，城市也慢慢醒了。';
+  if (/早上|上午|早晨|morning/.test(label)) return '這個時間，有人可能正吃早餐，也有人已經出門忙碌了。';
+  if (/午後|下午|中午|afternoon|noon/.test(label)) return '這個時間，有人可能正在吃飯，也有人正找個地方歇一下。';
+  if (/黃昏|傍晚|日落|sunset|dusk/.test(label)) return '這個時間，有人可能正準備晚餐，也有人還在回家的路上。';
+  if (/晚上|夜間|夜晚|入夜|night|evening/.test(label)) return '這個時間，有人可能正吃晚餐，也有人已經開始放鬆了。';
+  return '';
+}
+
+function timeGreeting(localTimeLabel?: string | null): string {
   const label = (localTimeLabel || '').trim();
   if (/晚上|夜間|夜晚|入夜|午夜|深夜|凌晨|night|evening|midnight|\bpm\b/.test(label)) return '晚安';
   if (/黃昏|傍晚|日落|sunset|dusk/.test(label)) return '傍晚好';
@@ -718,8 +737,9 @@ const MORNING_LOCAL_GREETINGS = [
 ];
 
 export function timeAdjustedGreeting(localGreeting: string, localTimeLabel?: string | null): string {
-  const hello = arrivalHello(localTimeLabel);
+  const hello = timeGreeting(localTimeLabel);
   const greeting = (localGreeting || '你好').replace(/[。！!]+$/g, '');
+  if (/晚安|good night/i.test(greeting)) return /晚安/.test(greeting) ? '你好' : 'Hello';
   if (hello === '晚安' || hello === '傍晚好') {
     if (/おはよう|こんにちは/.test(greeting)) return 'こんばんは';
     if (/^bonjour$/i.test(greeting)) return 'Bonsoir';
@@ -757,7 +777,7 @@ function alignArrivalVoice(
   localOpening: string
 ): string {
   const opening = (localOpening || `${localGreeting}。`).trim();
-  let text = voiceText.trim();
+  let text = voiceText.trim().replace(/晚安/g, '你好');
   const leading = MORNING_LOCAL_GREETINGS.concat([
     opening,
     localGreeting,
@@ -860,7 +880,7 @@ function fallbackMorning(
     input.localTimeLabel,
     shape
   );
-  const wake = '你願意的話，可以緩緩睜開眼睛，動一動身體。';
+  const wake = `你願意的話，可以緩緩睜開眼睛，動一動身體。${arrivalLifeContext(input.localTimeLabel)}`;
   const arrive = `我們到了${place}。`;
   const arriveSoft = `這站是${place}。`;
   const journeyAfter = journeyLine ? `${journeyLine}才到。` : '';
@@ -975,6 +995,7 @@ export function parseMorningResponse(
   const localOpening = landingOpeningForIso(input.countryIso, localGreeting);
   let voiceText = clean(data.voiceText);
   if (!voiceText) return null;
+  if (/晚安|祝[^。！？]*好夢|繼續睡|睡個好覺|good night/i.test(voiceText)) return null;
   voiceText = alignArrivalVoice(voiceText, localGreeting, hello, localOpening);
   const zh = chineseCount(voiceText);
   if (zh < 24 || zh > 250 || !city || !voiceMentionsPlace(voiceText, input) || UNSAFE_VOICE.test(voiceText)) return null;
@@ -1050,7 +1071,8 @@ voiceText 必須是人會講出口的繁體中文口語，約 90–150 個中文
 3. 先到再天氣：先到了哪 → 再講現在幾點幾度 → 眼前看見什麼 → 地圖位置 → 旅程 → 趣事
 4. 先講人：到了哪 → 先講當地人趣事 → 再看眼前 → 地圖位置 → 旅程 → 天氣
 5. 揉在一起：兩到三句把抵達、眼前風景、天氣、旅程、趣事交錯，不要一句一個欄位
-開頭：必須先用當地語言講一兩句完整的話（user.localOpening；不是單字你好）。例如日文「こんにちは。ゆっくり休めましたか、目的地に到着しました。」不要翻譯這一兩句。接著才接中文時段問候（早安／午安／傍晚好／晚安，必須符合 localTimeLabel）。禁止「當地白天問候 + 中文晚安」。
+開頭：必須先用當地語言講一兩句完整的話（user.localOpening；不是單字你好）。例如日文「こんにちは。ゆっくり休めましたか、目的地に到着しました。」不要翻譯這一兩句。中文問候只用「歡迎抵達」或「你好」，搭配當地語言。降落是醒來抵達，禁止說「晚安」「祝你好夢」或叫旅客繼續睡，不因目的地深夜就改成睡前道別。
+依 localTimeLabel 自然加入當地人此刻可能在做的小事，可參考 localLifeContextHint，不必逐字照抄；無時間資料就不推測。半夜可帶一點輕鬆幽默，例如「這個時間，多數人可能已經睡了，我們就輕輕抵達，不按門鈴」。只幽默描述城市作息，不取笑旅客、不催促起床。使用「可能」「有人」「多數人」，不可說所有人都在睡或假裝觀察到即時人群；文化習慣與現在正在發生的事要分清楚。
 不可省略：地圖定位一句、眼前看得見的細節一句、當地人趣事一句。沒有 cultureNote 也要依國家常識改寫一句人會做的小事，不要只剩天氣和地名。
 禁止每次都用：「已抵達今天的目的地——」「窗外是」「歡迎抵達，今天的旅程從這裡開始」「晚上常有 X」「X 是深夜社交場」「X 是國民習慣」。
 禁止說「這張照片」「眼前這張照片」；要說降落到哪、眼前看見什麼，才有帶入感。
@@ -1104,7 +1126,8 @@ async function requestMorning(
           voiceShapeHint: VOICE_SHAPE_HINTS[voiceShape],
           localGreeting: greeting || undefined,
           localOpening: landingOpeningForIso(input.countryIso, greeting),
-          chineseTimeGreeting: arrivalHello(input.localTimeLabel),
+          chineseArrivalGreeting: arrivalHello(input.localTimeLabel),
+          localLifeContextHint: arrivalLifeContext(input.localTimeLabel) || undefined,
           weatherSummary: (input.weatherSummary || '').trim() || undefined,
           localTimeLabel: (input.localTimeLabel || '').trim() || undefined,
           spokenCity: spokenCity(input),
@@ -1183,7 +1206,7 @@ async function requestMorning(
   return parseMorningResponse(raw, input, theme.id) ?? fallbackMorning(input, theme);
 }
 
-/** 降落語音：繁體中文早晨抵達廣播，並給出同一場景的生圖描述。失敗時用安全模板。 */
+/** 降落語音：繁體中文抵達廣播，並給出同一場景的生圖描述。失敗時用安全模板。 */
 export function generateMorningArrival(
   input: MorningContentInput,
   randomValue: number = Math.random()
