@@ -743,7 +743,7 @@ export function timeAdjustedGreeting(localGreeting: string, localTimeLabel?: str
   if (hello === '晚安' || hello === '傍晚好') {
     if (/おはよう|こんにちは/.test(greeting)) return 'こんばんは';
     if (/^bonjour$/i.test(greeting)) return 'Bonsoir';
-    if (/早安|早上好|早晨/.test(greeting)) return hello;
+    if (/早安|早上好|早晨/.test(greeting)) return '你好';
   }
   if ((hello === '午安' || hello === '傍晚好') && /おはよう/.test(greeting)) return 'こんにちは';
   if (MORNING_LOCAL_GREETINGS.some((item) => item.toLowerCase() === greeting.toLowerCase())) {

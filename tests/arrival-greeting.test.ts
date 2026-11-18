@@ -7,6 +7,7 @@ test('arrivals welcome passengers at every local hour, including midnight', () =
     assert.equal(arrivalHello(time), '歡迎抵達');
   }
   assert.equal(timeAdjustedGreeting('晚安', '當地深夜'), '你好');
+  assert.equal(timeAdjustedGreeting('早安', '當地深夜'), '你好');
   assert.equal(timeAdjustedGreeting('Good night', 'night'), 'Hello');
 });
 test('local activity is qualified, and unknown time has no invented activity', () => {
