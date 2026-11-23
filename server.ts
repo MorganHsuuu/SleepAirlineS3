@@ -18,6 +18,7 @@ import { findArrivalDestination } from './src/lib/flight/direction';
 import { fetchLocalContext, resolveCountryIso } from './src/lib/flight/local-context';
 import { resolveGroupSocialCue } from './src/lib/flight/social';
 import { formatSleepGuidancePrompt, loadPassengerSleepNotes } from './src/lib/flight/sleep-guidance';
+import { loadPreviousArrivalStory } from './src/lib/flight/arrival-story';
 import { generateCaptainBroadcast, fallbackCaptainBroadcast } from './src/lib/ai/broadcast';
 import { generateMorningArrival } from './src/lib/ai/morning-content';
 import { generateLandingScenery } from './src/lib/ai/scenery';
@@ -831,7 +832,13 @@ app.post('/api/arrival-voice', async (req, res) => {
       : null;
 
     const landingCalibration = (await loadReviewCalibration()).landing;
-    const journey = await landingJourneyHints(flight);
+    const [journey, previousStory] = await Promise.all([
+      landingJourneyHints(flight),
+      withTimeout(loadPreviousArrivalStory(flight), 3_000, () => null).catch(() => {
+        console.warn('[arrival story] lookup unavailable; continuing without a story');
+        return null;
+      }),
+    ]);
     const morning = await generateMorningArrival({
       country: known?.country || country,
       city: known?.city || city,
@@ -843,6 +850,7 @@ app.post('/api/arrival-voice', async (req, res) => {
       departureLocation: flight.departureLocation,
       flightDurationMinutes: flight.flightDurationMinutes,
       previousArrival: journey.previousArrival,
+      previousStory: previousStory?.text,
       returnVisit: journey.returnVisit,
       visitCount: journey.visitCount,
       cultureNote: local?.culture,
