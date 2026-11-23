@@ -479,7 +479,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
 
     const groupFlights = await getGroupFlights(passenger.groupId);
     const depPlace = parseDisplayLocation(flight.departureLocation);
-    const [socialCue, depLocal, sleepNotes] = await Promise.all([
+    const [socialCue, depLocal, sleepNotes, previousStory] = await Promise.all([
       resolveSocialCueWithBudget(
         {
           passengerId,
@@ -510,6 +510,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         longitude: flight.departureLongitude,
       }).catch(() => null),
       loadPassengerSleepNotes(passengerId).catch(() => []),
+      withTimeout(loadPreviousArrivalStory(flight), 3_000, () => null).catch(() => null),
     ]);
     const sleepGuidance = formatSleepGuidancePrompt(sleepNotes);
 
@@ -530,6 +531,7 @@ app.post('/api/flight/takeoff', async (req, res) => {
         locale: locale === 'en' ? 'en' : 'zh',
         reviewCalibration: calibration.takeoff || undefined,
         sleepGuidance: sleepGuidance || undefined,
+        previousStory: previousStory?.text,
       },
       () => fallbackCaptainBroadcast(
         'takeoff',
@@ -541,7 +543,8 @@ app.post('/api/flight/takeoff', async (req, res) => {
         '',
         depLocal,
         locale === 'en' ? 'en' : 'zh',
-        sleepNotes
+        sleepNotes,
+        previousStory?.text
       )
     );
 
