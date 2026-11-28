@@ -3,7 +3,8 @@
   "framework": null,
   "buildCommand": "npm run build",
   "redirects": [
-    { "source": "/classic", "destination": "/classic/", "permanent": false }
+    { "source": "/classic", "destination": "/classic/", "permanent": false },
+    { "source": "/extended", "destination": "/extended/", "permanent": false }
   ],
   "rewrites": [
     { "source": "/review", "destination": "/review.html" },

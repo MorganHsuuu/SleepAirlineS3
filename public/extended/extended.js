@@ -1,0 +1,265 @@
+'use strict';
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, content) => {
+  const node=document.createElement(tag);
+  if(cls) node.className=cls;
+  if(content!=null) node.textContent=content;
+  return node;
+};
+const icon = (name) => {
+  const ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  const use=document.createElementNS(ns,'use');
+  svg.setAttribute('class','icon');svg.setAttribute('aria-hidden','true');
+  use.setAttribute('href','#i-'+name);svg.append(use);
+  return svg;
+};
+const date = () => Date.now();
+const id = () => crypto.randomUUID();
+const base = '/api/extended/personal';
+const storage = {
+  read(name) { try { return localStorage.getItem(name); } catch { return null; } },
+  write(name,value) { try { localStorage.setItem(name,value); } catch { /* private window */ } },
+};
+const demoStation = {
+  id:'kathmandu',owner:'you',member:'平行的自己',name:'加德滿都',country:'尼泊爾',
+  timezone:'Asia/Kathmandu',lat:27.7172,lon:85.324,origin:[121.5654,25.033],arrived:date()-45*60_000,
+};
+const demoReply = [
+  '奶茶還剩半杯。門外有人把椅子搬回巷口，椅腳一落地，我才發現雨真的停了。',
+  '出店門才發現鞋底黏了一小張濕紙。我坐回門檻上弄了半天，老闆還替我把杯子留著。',
+  '把杯子送回櫃檯後，我才沿著那條濕巷慢慢走。一輛腳踏車從身邊經過，水滴一路跳。',
+];
+const demoStart = [{
+  id:'demo-scene',kind:'ai',created:date()-21*60_000,labelTime:'16:20',
+  text:'雨停了。我在佛塔旁的小店喝奶茶，店門一開，整條巷子都聞得到濕磚頭的味道。',
+  photo:'/extended/kathmandu.jpg',
+}];
+function demoState() {
+  let saved;
+  try { saved=JSON.parse(storage.read('sa-extended-demo-personal') || '{}'); } catch { saved={}; }
+  const messages=Array.isArray(saved.messages)&&saved.messages.length ? saved.messages : demoStart;
+  return {station:demoStation,note:typeof saved.note==='string'?saved.note:'',messages,canNote:true,ai:true};
+}
+let mode='demo', state=demoState(), busy=false, pending=null, retry=null;
+const globe=window.ExtendedGlobe(() => goToChat());
+function syncTheme(theme) {
+  document.body.dataset.theme=theme;
+  const button=$('theme');
+  button.replaceChildren(icon(theme==='night'?'sun':'moon'));
+  button.setAttribute('aria-label',theme==='night'?'切換日航配色':'切換夜航配色');
+  globe.repaint();
+}
+syncTheme(storage.read('sa-extended-visual')==='night'?'night':'day');
+$('theme').onclick=() => {
+  const theme=document.body.dataset.theme==='night'?'day':'night';
+  storage.write('sa-extended-visual',theme);syncTheme(theme);
+};
+function saveDemo() {
+  storage.write('sa-extended-demo-personal',JSON.stringify({note:state.note,messages:state.messages.slice(-25)}));
+}
+function timeString(at,timezone,includeDay=false) {
+  if(!Number.isFinite(at)) return '';
+  try {
+    return new Intl.DateTimeFormat('zh-TW',{
+      timeZone:timezone||undefined,hour:'2-digit',minute:'2-digit',hourCycle:'h23',
+      ...(includeDay?{month:'numeric',day:'numeric'}:{}),
+    }).format(at);
+  } catch { return ''; }
+}
+function feedback(element,text,ok=false) {
+  $(element).textContent=text;
+  $(element).classList.toggle('ok',ok);
+}
+function goToChat() {
+  const section=$('conversation');
+  if (matchMedia('(max-width:780px)').matches) section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'start'});
+  else $('chat-scroll').focus({preventScroll:true});
+}
+$('station-card').onclick=() => { if(state.station) { globe.focus(state.station);goToChat(); } };
+function photoCard(url) {
+  const wrap=el('div');
+  const btn=el('button','photo-card');
+  btn.type='button';btn.setAttribute('aria-label','放大旅行照片');
+  const photo=el('img');photo.src=url;photo.alt='旅行訊息的照片';photo.decoding='async';
+  photo.addEventListener('error',()=>{wrap.hidden=true;},{once:true});
+  btn.append(photo,icon('expand'));
+  btn.onclick=() => { $('lightbox-image').src=url;$('lightbox').showModal(); };
+  wrap.append(btn,el('span','photo-label','AI 生成照片'));
+  return wrap;
+}
+function renderMessage(message) {
+  const mine=message.kind==='human';
+  const row=el('article','message'+(mine?' mine':''));
+  const avatar=el('span','avatar');
+  avatar.append(icon(mine?'user':'spark'));
+  const pack=el('div','pack'), meta=el('div','metadata',mine?'你':'AI 分身');
+  const stamp=message.labelTime || timeString(message.created,state.station?.timezone);
+  if(stamp) meta.append(el('time','',stamp));
+  const bubble=el('div','bubble');
+  if(message.noteMessage) {
+    const label=el('div','note-label');label.append(icon('note'),'降落筆記');
+    bubble.append(label);
+  }
+  bubble.append(el('p','',message.text));
+  if(message.photo) bubble.append(photoCard(message.photo));
+  pack.append(meta,bubble);row.append(avatar,pack);
+  return row;
+}
+function renderTyping() {
+  const row=el('div','message typing'), avatar=el('span','avatar'), pack=el('div','pack'), bubble=el('div','bubble');
+  row.setAttribute('aria-label','正在產生回覆');
+  avatar.append(icon('spark'));
+  for(let i=0;i<3;i++) bubble.append(el('i'));
+  pack.append(bubble);row.append(avatar,pack);
+  return row;
+}
+function render(scrollToEnd=false) {
+  const {station,messages}=state;
+  const latest=messages.findLast((m)=>m.kind==='ai');
+  const picked=station && {...station,story:latest};
+  globe.set(picked?[picked]:[],picked?.id);
+  $('source').textContent=mode==='live'?'個人旅程 · Notion 航班':'示範旅程';
+  $('account-label').textContent=mode==='live'?'登出':'連接旅程';
+  $('chat-place').textContent=station ? [station.name,station.country].filter(Boolean).join('・') : '等待下一次降落';
+  $('station-card').hidden=!station;
+  $('note-open').disabled=!state.canNote;
+  $('station-name').textContent=station?.name||'';
+  $('station-detail').textContent=station?(mode==='demo'?'示範航點':(timeString(station.arrived,station.timezone,true)+' 抵達')):'';
+  $('chat-date').firstElementChild.textContent=station?(mode==='demo'?'加德滿都・旅行近況':timeString(station.arrived,station.timezone,true)+' 降落'):'';
+  $('ask').disabled=busy||!station||!state.ai;
+  $('message').disabled=!station||!state.ai;
+  $('send').disabled=busy||!station||!state.ai;
+  const photoMessage=messages.findLast((m)=>m.kind==='ai'&&m.sceneAvailable);
+  $('photo').hidden=mode!=='live'||!state.ai||!photoMessage||Boolean(photoMessage.photo);
+  $('photo').disabled=busy;
+  const scroll=$('chat-scroll');
+  const prev=scroll.scrollTop;
+  const rows=messages.map(renderMessage);
+  if(pending) rows.push(renderMessage(pending));
+  if(busy&&pending!==false) rows.push(renderTyping());
+  if(!rows.length) {
+    const msg=station?(state.ai?'你可以寫一則降落筆記，或直接和分身說話。':'目前無法連接 AI，你仍可儲存降落筆記。'):'完成降落後，你可以在這裡和分身聊天、寫下筆記。';
+    rows.push(el('p','empty',msg));
+  }
+  $('messages').replaceChildren(...rows);
+  scroll.scrollTop=scrollToEnd ? scroll.scrollHeight : prev;
+}
+async function request(path, body) {
+  const response=await fetch(base+path,body===undefined?{cache:'no-store'}:{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
+  });
+  if(!response.ok) {
+    const result=await response.json().catch(()=>({}));
+    throw new Error(result.error||'目前無法連線，請稍後再試。');
+  }
+  return response.json();
+}
+async function bootLive() {
+  const next=await request('/state');
+  state=next;mode='live';retry=null;
+  $('login').close();
+  if(state.station) globe.focus(state.station);
+  render(false);
+  if(state.station&&state.ai&&!state.messages.length) await turn('greeting');
+}
+function makeDemoResponse(action) {
+  if(action==='note') return '你剛記下的那一刻，我想陪你再留一下。這邊雨聲剛停，我把冰涼的杯子往桌裡挪了一點，窗外還能聽見水滴。';
+  const index=state.messages.filter((m)=>m.kind==='ai').length-1;
+  return demoReply[index] || '奶茶喝完了，我沿著剛才那條巷子慢慢走，等你下次再來找我。';
+}
+async function turn(action,text='') {
+  if(busy||!state.station||!state.ai) return;
+  const token=retry?.action===action&&retry?.text===text ? retry.key : id();
+  const now=date();
+  pending=action==='chat'?{id:token,kind:'human',text,created:now}:
+    action==='note'?{id:token,kind:'human',text:'我剛寫好這次的降落筆記。',created:now,noteMessage:true}:null;
+  busy=true;feedback('chat-feedback','');render(true);
+  try {
+    if(mode==='live') {
+      const result=await request('/turn',{station:state.station.id,key:token,text,action});
+      state.messages=result.messages;
+    } else {
+      await new Promise((resolve)=>setTimeout(resolve,750));
+      if(pending) state.messages.push(pending);
+      state.messages.push({id:id(),kind:'ai',text:makeDemoResponse(action),created:date()});
+      saveDemo();
+    }
+    retry=null;
+    if(action==='note') feedback('chat-feedback',mode==='live'?'筆記已儲存至 Notion。':'示範筆記已儲存。',true);
+    if(action==='chat'&&$('message').value.trim()===text) $('message').value='';
+  } catch(error) {
+    retry={key:token,action,text};
+    feedback('chat-feedback',action==='note'?'筆記已儲存，這次沒取得分身回覆。':error.message);
+  } finally {
+    pending=null;busy=false;render(true);
+  }
+}
+$('ask').onclick=()=>turn('chat','你在幹嘛？');
+$('composer').onsubmit=(event)=>{
+  event.preventDefault();
+  const text=$('message').value.trim();
+  if(text) void turn('chat',text);
+};
+$('photo').onclick=async ()=>{
+  if(busy||mode!=='live') return;
+  const latest=state.messages.findLast((m)=>m.kind==='ai'&&m.sceneAvailable);
+  if(!latest||latest.photo) return;
+  busy=true;pending=false;feedback('chat-feedback','');render(false);
+  try {
+    const result=await request('/photo',{station:state.station.id,id:latest.id});
+    state.messages=result.messages;
+  } catch(error) { feedback('chat-feedback',error.message); }
+  finally { busy=false;pending=null;render(false); }
+};
+$('note-open').onclick=()=>{
+  if(!state.station||!state.canNote) return;
+  $('note-destination').textContent=[state.station.name,mode==='live'?'儲存到這筆 Notion 航班':'示範筆記儲存在此裝置'].join(' · ');
+  $('note-text').value=state.note;
+  feedback('note-feedback','');
+  $('note').showModal();
+};
+$('note-form').onsubmit=async (event)=>{
+  event.preventDefault();
+  const submit=event.submitter, note=$('note-text').value.trim();
+  if(note===state.note) { $('note').close();return; }
+  if(busy) return;
+  submit.disabled=true;
+  try {
+    const result=mode==='live'
+      ? await request('/note',{note,previous:state.note,station:state.station.id})
+      : {note};
+    state.note=result.note;
+    if(mode==='demo') saveDemo();
+    $('note').close();
+    feedback('chat-feedback',mode==='live'?'筆記已儲存至 Notion。':'示範筆記已儲存。',true);
+    if(note&&state.ai) await turn('note');
+  } catch(error) { feedback('note-feedback',error.message); }
+  finally { submit.disabled=false; }
+};
+$('account').onclick=async ()=>{
+  if(mode==='demo') {
+    feedback('login-feedback','');
+    $('login').showModal();
+    return;
+  }
+  if(busy) return;
+  try {
+    await request('/logout',{});
+    mode='demo';state=demoState();retry=null;pending=null;feedback('chat-feedback','');
+    globe.focus(state.station);render();
+  } catch(error) { feedback('chat-feedback',error.message); }
+};
+$('login-form').onsubmit=async (event)=>{
+  event.preventDefault();
+  const submit=event.submitter;submit.disabled=true;
+  try {
+    await request('/session',Object.fromEntries(new FormData(event.target)));
+    event.target.reset();
+    await bootLive();
+  } catch(error) { feedback('login-feedback',error.message); }
+  finally { submit.disabled=false; }
+};
+document.querySelectorAll('[data-close]').forEach((button)=>button.onclick=()=>$(button.dataset.close).close());
+render();
+void request('/status').then((result)=>{if(result.authenticated) return bootLive();}).catch(()=>{});

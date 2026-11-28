@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e8eef9">
+  <meta name="description" content="降落後，另一個你繼續旅行。">
+  <title>Sleep Airline V3 / Extended</title>
+  <link rel="icon" href="/brand-logo.svg">
+  <link rel="stylesheet" href="/extended/extended.css">
+  <script src="/vendor/d3.min.js" defer></script>
+  <script src="/extended/globe.js" defer></script>
+  <script src="/extended/extended.js" defer></script>
+</head>
+<body data-theme="day">
+  <svg class="symbol-bank" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17 3c2-1 4-1 4 0 0 2-1 4-3 6l-2 2 1 7-2 2-3-6-4 3-1 3-2 1-1-5-4-1 1-2 3-1 4-4-6-3 2-2 7 1z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.8 14A9 9 0 0 1 10 3.3 9 9 0 1 0 20.8 14Z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2c1.4 6 3.2 7.8 9 9-5.8 1.2-7.6 3-9 9-1.3-6-3.2-7.8-9-9 5.8-1.2 7.7-3 9-9Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M12 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6m-12-2h7m-7 4h3m2 5 5.8-5.8 2.3 2.3-5.9 5.8-2.9.6z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-14.8-4A8 8 0 0 1 20 11Zm-14 5-1 4 4-1"/><path d="M8 11h.01m4 0h.01m4 0h.01" stroke-width="2.7"/></symbol>
+    <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m4 17 4-4 3 3 4.5-5 5 5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M6 18 18 6M8 6h10v10"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6m-6-6 6 6M10 20H4v-6m6 6-6-6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  </svg>
+  <header class="topbar">
+    <a class="brand" href="/extended/">
+      <span class="mark"><svg class="icon"><use href="#i-plane"/></svg></span>
+      <span>Sleep Airline<small>V3 / EXTENDED</small></span>
+    </a>
+    <div class="top-actions">
+      <a href="/" class="back" id="back">回 V3 <svg class="icon"><use href="#i-arrow"/></svg></a>
+      <button id="theme" type="button" class="glass circle" aria-label="切換夜航配色"><svg class="icon"><use href="#i-moon"/></svg></button>
+      <button id="account" type="button" class="glass pill"><svg class="icon"><use href="#i-user"/></svg><span id="account-label">連接旅程</span></button>
+    </div>
+  </header>
+  <main class="journey">
+    <section class="map-area" aria-labelledby="headline">
+      <div class="intro">
+        <p class="eyebrow"><span></span> AFTER LANDING</p>
+        <h1 id="headline">降落後，<br>旅程還在繼續<span>。</span></h1>
+        <p id="map-intro">看看另一個你在目的地過得怎麼樣。</p>
+      </div>
+      <div class="world-wrap">
+        <div id="world" class="world">
+          <canvas id="earth" role="img" aria-label="可旋轉的地球，下方也有目的地按鈕"></canvas>
+          <div id="pins" class="pins"></div>
+          <button type="button" id="map-note" class="glass map-note" hidden></button>
+        </div>
+        <div class="map-controls" aria-label="地球控制">
+          <button type="button" class="glass circle" data-globe="in" aria-label="放大"><svg class="icon"><use href="#i-plus"/></svg></button>
+          <button type="button" class="glass circle" data-globe="out" aria-label="縮小"><svg class="icon"><use href="#i-minus"/></svg></button>
+          <button type="button" class="glass circle" data-globe="reset" aria-label="回到起始位置"><svg class="icon"><use href="#i-focus"/></svg></button>
+        </div>
+      </div>
+      <button id="station-card" class="glass station-card" type="button">
+        <span class="station-icon"><svg class="icon"><use href="#i-pin"/></svg></span>
+        <span><strong id="station-name"></strong><small id="station-detail"></small></span>
+        <svg class="icon station-link"><use href="#i-arrow"/></svg>
+      </button>
+    </section>
+    <section id="conversation" class="glass conversation" aria-labelledby="chat-title">
+      <header class="chat-head">
+        <span class="avatar head-avatar"><svg class="icon"><use href="#i-spark"/></svg></span>
+        <span class="chat-head-text"><h2 id="chat-title">平行的自己</h2><p id="chat-place"></p></span>
+        <button type="button" id="note-open" class="glass pill note-action"><svg class="icon"><use href="#i-note"/></svg><span>降落筆記</span></button>
+      </header>
+      <div class="chat-scroll" id="chat-scroll" tabindex="0" aria-label="對話訊息">
+        <div class="chat-date" id="chat-date"><span></span></div>
+        <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      </div>
+      <div class="chat-bottom">
+        <div class="quick-row">
+          <button type="button" id="ask" class="glass pill quick"><svg class="icon"><use href="#i-chat"/></svg> 你在幹嘛？</button>
+          <button type="button" id="photo" class="glass pill quick" hidden><svg class="icon"><use href="#i-photo"/></svg> 生成照片</button>
+          <div class="feedback" id="chat-feedback" role="status"></div>
+        </div>
+        <form id="composer" class="composer">
+          <input id="message" aria-label="寫訊息" placeholder="寫給在另一站的你…" maxlength="400" autocomplete="off">
+          <button type="submit" class="send circle" id="send" aria-label="送出訊息"><svg class="icon"><use href="#i-send"/></svg></button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <footer><span id="source">示範旅程</span><span>對話與照片是 AI 想像的旅程</span></footer>
+  <dialog id="login" class="glass dialog">
+    <form id="login-form">
+      <button type="button" class="circle close" data-close="login" aria-label="關閉"><svg class="icon"><use href="#i-close"/></svg></button>
+      <h2>連接你的旅程</h2>
+      <label>旅客編號<input name="passenger" autocomplete="username" required maxlength="48" placeholder="PAX-…"></label>
+      <label>V3 恢復碼或 Extended 邀請碼<input name="code" type="password" autocomplete="current-password" required maxlength="128"></label>
+      <p class="feedback" id="login-feedback" role="status"></p>
+      <button type="submit" class="primary pill">連接 V3 <svg class="icon"><use href="#i-arrow"/></svg></button>
+    </form>
+  </dialog>
+  <dialog id="note" class="glass dialog">
+    <form id="note-form">
+      <button type="button" class="circle close" data-close="note" aria-label="關閉"><svg class="icon"><use href="#i-close"/></svg></button>
+      <h2><svg class="icon"><use href="#i-note"/></svg> 降落筆記</h2>
+      <p id="note-destination"></p>
+      <label for="note-text">想記下什麼？</label>
+      <textarea id="note-text" maxlength="1200" rows="6" placeholder="今天降落後，有什麼想記住？"></textarea>
+      <p>分身會參考這則筆記，接續你的旅程。</p>
+      <p class="feedback" id="note-feedback" role="status"></p>
+      <button type="submit" class="primary pill"><svg class="icon"><use href="#i-check"/></svg> 儲存筆記</button>
+    </form>
+  </dialog>
+  <dialog id="lightbox" class="lightbox">
+    <button type="button" class="glass circle close" data-close="lightbox" aria-label="關閉照片"><svg class="icon"><use href="#i-close"/></svg></button>
+    <img alt="完整的旅行照片" id="lightbox-image">
+  </dialog>
+</body>
+</html>
