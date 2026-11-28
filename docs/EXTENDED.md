@@ -17,7 +17,7 @@
 - AI：沿用 `OPENAI_API_KEY` 或 `OPENAI_API`。選填 `EXTENDED_OPENAI_MODEL` 與 `EXTENDED_OPENAI_IMAGE_MODEL`。
 - 非配對旅客：選填 `EXTENDED_MEMBERS_JSON`，其中每人有 `passengerId`、`alias` 和 `codeHash`。邀請碼以高熵亂數產生，伺服器只保留 SHA-256 雜湊。旅客編號本身不能登入。
 
-瀏覽器的示範內容保存在裝置內，與正式帳號的內容獨立。多人旅行群的規格仍在 [原始設計](Sleep-Airline-Parallel-Self-Framework.md)，本版網站只顯示個人旅程。
+瀏覽器的示範聊天保存在裝置內，與正式帳號的內容獨立。網站上的示範對話用伺服器即時生成，只送出相關前文和最新訊息。離線展示檔可以回看旅程，試聊請開正式網站。多人旅行群的規格仍在 [原始設計](Sleep-Airline-Parallel-Self-Framework.md)，本版網站只顯示個人旅程。
 
 ## 旅程時間軸
 

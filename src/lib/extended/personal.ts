@@ -10,6 +10,7 @@ import { uploadImageToNotion } from '../notion/notion-file-upload';
 import { findPassenger } from '../pairing/notion-store';
 import { type Message, type Station } from './model';
 import { generateMoment, generatePicture } from './prompts';
+import { demoChat } from './demo-chat';
 
 const router = Router();
 const cookieName = 'sa_extended_personal';
@@ -212,6 +213,7 @@ router.post('/session',async (req,res) => {
     return res.json({ok:true});
   } catch { return res.status(503).json({error:'暫時無法連接旅程，請稍後再試。'}); }
 });
+router.post('/demo-chat',demoChat);
 router.post('/logout',(_req,res) => res.clearCookie(cookieName,{path:'/api/extended/personal'}).json({ok:true}));
 router.use((req,res,next) => {
   const user=verifiedIdentity(req);

@@ -25,11 +25,6 @@ const demoStation = {
   id:'kathmandu',owner:'you',member:'平行的自己',name:'加德滿都',country:'尼泊爾',
   timezone:'Asia/Kathmandu',lat:27.7172,lon:85.324,origin:[121.5654,25.033],arrived:date()-45*60_000,
 };
-const demoReply = [
-  '奶茶還剩半杯。門外有人把椅子搬回巷口，椅腳一落地，我才發現雨真的停了。',
-  '出店門才發現鞋底黏了一小張濕紙。我坐回門檻上弄了半天，老闆還替我把杯子留著。',
-  '把杯子送回櫃檯後，我才沿著那條濕巷慢慢走。一輛腳踏車從身邊經過，水滴一路跳。',
-];
 const demoStart = [{
   id:'demo-scene',kind:'ai',created:date()-21*60_000,labelTime:'16:20',
   text:'雨停了。我在佛塔旁的小店喝奶茶，店門一開，整條巷子都聞得到濕磚頭的味道。',
@@ -38,8 +33,11 @@ const demoStart = [{
 function demoState() {
   let saved;
   try { saved=JSON.parse(storage.read('sa-extended-demo-personal') || '{}'); } catch { saved={}; }
-  const messages=Array.isArray(saved.messages)&&saved.messages.length ? saved.messages : demoStart;
-  return {station:demoStation,note:typeof saved.note==='string'?saved.note:'',messages,canNote:true,ai:true};
+  // Keep messages the visitor wrote, and drop scripted replies saved by older versions.
+  const history=Array.isArray(saved?.messages)
+    ? saved.messages.filter((m)=>m?.kind==='human'||(m?.kind==='ai'&&m.liveDemo===true)) : [];
+  return {station:demoStation,note:typeof saved?.note==='string'?saved.note:'',
+    messages:[...demoStart,...history],canNote:true,ai:location.protocol!=='file:'};
 }
 const demoArchives = [
   {
@@ -199,11 +197,6 @@ async function bootLive() {
   render(false);
   if(state.station&&state.ai&&!state.messages.length) await turn('greeting');
 }
-function makeDemoResponse(action) {
-  if(action==='note') return '你剛記下的那一刻，我想陪你再留一下。這邊雨聲剛停，我把冰涼的杯子往桌裡挪了一點，窗外還能聽見水滴。';
-  const index=state.messages.filter((m)=>m.kind==='ai').length-1;
-  return demoReply[index] || '奶茶喝完了，我沿著剛才那條巷子慢慢走，等你下次再來找我。';
-}
 async function turn(action,text='') {
   if(archive||busy||!state.station||!state.ai) return;
   const token=retry?.action===action&&retry?.text===text ? retry.key : id();
@@ -216,9 +209,11 @@ async function turn(action,text='') {
       const result=await request('/turn',{station:state.station.id,key:token,text,action});
       state.messages=result.messages;
     } else {
-      await new Promise((resolve)=>setTimeout(resolve,750));
+      const history=state.messages.filter((m)=>m.id!=='demo-scene').slice(-8)
+        .map(({kind,text})=>({kind,text}));
+      const result=await request('/demo-chat',{action,text,note:state.note,history});
       if(pending) state.messages.push(pending);
-      state.messages.push({id:id(),kind:'ai',text:makeDemoResponse(action),created:date()});
+      state.messages.push({id:id(),kind:'ai',text:result.text,created:date(),liveDemo:true});
       saveDemo();
     }
     retry=null;
@@ -404,4 +399,10 @@ async function openJourney(item) {
 }
 document.querySelectorAll('[data-close]').forEach((button)=>button.onclick=()=>$(button.dataset.close).close());
 render();renderTimeline();
-void request('/status').then((result)=>{if(result.authenticated) return bootLive();}).catch(()=>{});
+if(location.protocol==='file:') {
+  const link=el('a','glass pill quick','到正式網站試聊');
+  link.href='https://sleep-airline-s3.vercel.app/extended/';
+  $('quick-row').append(link);
+} else {
+  void request('/status').then((result)=>{if(result.authenticated) return bootLive();}).catch(()=>{});
+}

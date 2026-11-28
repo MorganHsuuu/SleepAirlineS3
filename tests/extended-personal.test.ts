@@ -55,7 +55,7 @@ test('personal diary and archived journeys stay scoped to the signed-in traveler
     return {results:blocks,next_cursor:null};
   });
   t.mock.method(notion.pages,'update',async ()=>assert.fail('Do not write new notes into public tracking fields'));
-  const calls: Array<{currentLandingNote:string;previous:Array<{text:string}>}>=[];
+  const calls: Array<{currentLandingNote:string;previous:Array<{text:string}>;replyTo:{text:string}}> = [];
   t.mock.method(OpenAI.prototype,'post',async (_path:string,opts:{body:{messages:Array<{content:string}>}})=>{
     calls.push(JSON.parse(opts.body.messages[1].content));
     return {choices:[{message:{content:JSON.stringify({
@@ -120,4 +120,44 @@ test('personal diary and archived journeys stay scoped to the signed-in traveler
   assert(calls[1].previous.some((m)=>m.text.includes('冰檸檬茶還沒喝完')));
   const state=await next.json() as ResponseState;
   assert.deepEqual(state.messages.map((m)=>m.kind),['human','ai','human','ai']);
+});
+
+test('anonymous demo chat sends the latest message and earlier context to the generator', async (t) => {
+  process.env.OPENAI_API_KEY='mock-demo-openai';
+  const seen: Array<{replyTo:{text:string};previous:Array<{text:string}>}>=[];
+  t.mock.method(OpenAI.prototype,'post',async (_path:string, opts:{body:{messages:Array<{content:string}>}})=>{
+    const input=JSON.parse(opts.body.messages[1].content);
+    seen.push(input);
+    return {choices:[{message:{content:JSON.stringify({
+      text:'有，我在。你剛說想用彩色鉛筆畫海。',
+      scene:{activity:'coffee',location:'佛塔旁的小店',object:'奶茶',action:'看街道',light:'日光'},
+    })}}]};
+  });
+  const app=express();
+  app.use(express.json());app.use('/api/extended/personal',routes);
+  const server=app.listen(0,'127.0.0.1');
+  t.after(()=>server.close());
+  await new Promise<void>((resolve,reject)=>server.once('listening',resolve).once('error',reject));
+  const address=server.address();
+  if(!address||typeof address==='string') throw new Error('test port unavailable');
+  const origin=`http://127.0.0.1:${address.port}`;
+  const response=await fetch(origin+'/api/extended/personal/demo-chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Origin:origin},
+    body:JSON.stringify({
+      action:'chat',text:'你有在理我嗎？',
+      history:[{kind:'human',text:'我今晚想用彩色鉛筆畫海。'}],
+    }),
+  });
+  assert.equal(response.status,200);
+  const reply=await response.json() as {text:string};
+  assert.match(reply.text,/彩色鉛筆畫海/);
+  assert.equal(seen[0].replyTo.text,'你有在理我嗎？');
+  assert(seen[0].previous.some((m)=>m.text==='我今晚想用彩色鉛筆畫海。'));
+  const foreign=await fetch(origin+'/api/extended/personal/demo-chat',{
+    method:'POST',headers:{'Content-Type':'application/json',Origin:'https://other.example'},
+    body:JSON.stringify({action:'chat',text:'測試'}),
+  });
+  assert.equal(foreign.status,403);
+  assert.equal(seen.length,1);
 });
