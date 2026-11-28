@@ -130,7 +130,7 @@ test('anonymous demo chat sends the latest message and earlier context to the ge
     seen.push(input);
     return {choices:[{message:{content:JSON.stringify({
       text:'有，我在。你剛說想用彩色鉛筆畫海。',
-      scene:{activity:'coffee',location:'佛塔旁的小店',object:'奶茶',action:'看街道',light:'日光'},
+      scene:null,
     })}}]};
   });
   const app=express();
