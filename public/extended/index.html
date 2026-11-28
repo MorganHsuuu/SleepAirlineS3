@@ -40,6 +40,7 @@
     </a>
     <div class="top-actions">
       <a href="/" class="back" id="back">回 V3 <svg class="icon"><use href="#i-arrow"/></svg></a>
+      <a href="#journey-timeline" class="glass pill timeline-jump" aria-label="旅程時間軸"><svg class="icon"><use href="#i-clock"/></svg><span>旅程時間軸</span></a>
       <button id="theme" type="button" class="glass circle" aria-label="切換夜航配色"><svg class="icon"><use href="#i-moon"/></svg></button>
       <button id="account" type="button" class="glass pill"><svg class="icon"><use href="#i-user"/></svg><span id="account-label">連接旅程</span></button>
     </div>
@@ -77,10 +78,12 @@
       </header>
       <div class="chat-scroll" id="chat-scroll" tabindex="0" aria-label="對話訊息">
         <div class="chat-date" id="chat-date"><span></span></div>
+        <div id="landing-photo"></div>
         <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
       </div>
       <div class="chat-bottom">
-        <div class="quick-row">
+        <button type="button" id="latest" class="glass pill" hidden><svg class="icon"><use href="#i-arrow"/></svg> 回到最新旅程</button>
+        <div class="quick-row" id="quick-row">
           <button type="button" id="ask" class="glass pill quick"><svg class="icon"><use href="#i-chat"/></svg> 你在幹嘛？</button>
           <button type="button" id="photo" class="glass pill quick" hidden><svg class="icon"><use href="#i-photo"/></svg> 生成照片</button>
           <div class="feedback" id="chat-feedback" role="status"></div>
@@ -92,6 +95,17 @@
       </div>
     </section>
   </main>
+  <section class="timeline" id="journey-timeline" aria-labelledby="timeline-title">
+    <div class="timeline-header">
+      <span class="station-icon"><svg class="icon"><use href="#i-clock"/></svg></span>
+      <div><h2 id="timeline-title">旅程時間軸</h2><p>翻回以前的降落，看看那一天留下的風景。</p></div>
+    </div>
+    <div id="timeline-days"></div>
+    <div class="timeline-footer">
+      <p id="timeline-feedback" class="feedback" role="status"></p>
+      <button type="button" id="older" class="glass pill" hidden><svg class="icon"><use href="#i-plus"/></svg> 載入更早旅程</button>
+    </div>
+  </section>
   <footer><span id="source">示範旅程</span><span>對話與照片是 AI 想像的旅程</span></footer>
   <dialog id="login" class="glass dialog">
     <form id="login-form">
@@ -108,9 +122,9 @@
       <button type="button" class="circle close" data-close="note" aria-label="關閉"><svg class="icon"><use href="#i-close"/></svg></button>
       <h2><svg class="icon"><use href="#i-note"/></svg> 降落筆記</h2>
       <p id="note-destination"></p>
-      <label for="note-text">想記下什麼？</label>
+      <label for="note-text" id="note-label">想記下什麼？</label>
       <textarea id="note-text" maxlength="1200" rows="6" placeholder="今天降落後，有什麼想記住？"></textarea>
-      <p>分身會參考這則筆記，接續你的旅程。</p>
+      <p id="note-help">分身會參考這則筆記，接續你的旅程。</p>
       <p class="feedback" id="note-feedback" role="status"></p>
       <button type="submit" class="primary pill"><svg class="icon"><use href="#i-check"/></svg> 儲存筆記</button>
     </form>

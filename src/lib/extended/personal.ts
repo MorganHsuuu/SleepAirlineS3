@@ -3,7 +3,8 @@ import { Router, type Request } from 'express';
 import { CITIES } from '../../data/cities';
 import { openAiApiKey } from '../ai/openai-env';
 import { loadPreviousArrivalStory } from '../flight/arrival-story';
-import { getNotionClient, isNotionConfigured } from '../notion/client';
+import { getNotionClient, isNotionConfigured, readFirstFileUrl } from '../notion/client';
+import { getArchivedLandingScenery } from '../notion/landscape-images';
 import { parseFlight } from '../notion/flights';
 import { uploadImageToNotion } from '../notion/notion-file-upload';
 import { findPassenger } from '../pairing/notion-store';
@@ -22,6 +23,7 @@ type Identity = { passengerId: string; alias: string };
 type TextPart = { plain_text?: string; text?: { content?: string } };
 type Props = Record<string, { type?: string; rich_text?: TextPart[] }>;
 type Landing = NonNullable<Awaited<ReturnType<typeof getLanding>>>;
+const journeyPageSize = 6;
 type Entry = { key: string; messages: Message[] };
 
 function hash(value: string) { return createHash('sha256').update(value).digest('hex'); }
@@ -72,22 +74,55 @@ async function getLanding(user: Identity) {
     sorts:[{property:'Landing Time',direction:'descending'}],
     page_size:1,
   });
-  const record = result.results[0];
-  if (!record || !('properties' in record)) return null;
+  const journey = ownJourney(result.results[0],user);
+  return journey?.station ? { ...journey,station:journey.station } : null;
+}
+
+function ownJourney(value: unknown, user: Identity) {
+  const record = value as { properties?: Props } | undefined;
+  if (!record?.properties) return null;
   const f = parseFlight(record as unknown as Record<string,unknown>);
-  if (f.passengerId !== user.passengerId || f.status !== 'landed' || !f.flightId) return null;
-  const props = record.properties as Props;
+  const arrived=Date.parse(f.landingTime || '');
+  if(f.passengerId!==user.passengerId || f.status!=='landed' || !f.flightId || !f.notionId || !Number.isFinite(arrived)) return null;
   const lat=f.arrivalLatitude, lon=f.arrivalLongitude;
-  const arrival=Date.parse(f.landingTime || '');
-  if (lat==null || lon==null || !Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(arrival) || !f.arrivalLocation) return null;
-  const match=CITIES.find((c) => Math.abs(c.latitude-lat)<.025 && Math.abs(c.longitude-lon)<.025);
-  const [city,country='']=f.arrivalLocation.split(/[,，]/).map((s) => s.trim());
-  const station: Station={
-    id:signature(f.flightId).slice(0,24), owner:'you',member:'平行的自己',
-    name:match?.displayName.split(',')[0] || city, country:match?.displayName.split(',').at(1)?.trim() || country,
-    timezone:match?.timezone || null, lat,lon, origin:[f.departureLongitude,f.departureLatitude], arrived:arrival,
+  const hasCoords=lat!=null && lon!=null && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat)<=90 && Math.abs(lon)<=180;
+  const match=hasCoords && CITIES.find((c) => Math.abs(c.latitude-lat)<.025 && Math.abs(c.longitude-lon)<.025);
+  const [city,country='']=(f.arrivalLocation || '').split(/[,，]/).map((part) => part.trim());
+  const label={
+    name:(match && match.displayName.split(',')[0]) || city || '降落紀錄',
+    country:(match && match.displayName.split(',').at(1)?.trim()) || country,
+    timezone:(match && match.timezone) || null,
+    arrived,
   };
-  return { flight:f, station, legacyNote:plain(props['Immigration Note']?.rich_text) };
+  const station: Station|null=hasCoords ? {
+    id:signature(f.flightId).slice(0,24), owner:'you', member:'平行的自己',
+    ...label, lat, lon, origin:[f.departureLongitude,f.departureLatitude],
+  } : null;
+  return {flight:f, station, label, legacyNote:plain(record.properties['Immigration Note']?.rich_text),
+    image:readFirstFileUrl(record.properties,'Files & media')};
+}
+
+function journeyReference(user: Identity, page: string) {
+  return page+'.'+signature('journey:'+user.passengerId+':'+page).slice(0,32);
+}
+function photoSource(url: string | undefined) {
+  if(!url) return undefined;
+  try { return new URL(url).protocol==='https:' ? url : undefined; } catch { return undefined; }
+}
+function journeyCard(journey: NonNullable<ReturnType<typeof ownJourney>>,user: Identity) {
+  const reference=journeyReference(user,journey.flight.notionId);
+  return {
+    ...journey.label,reference,stationId:journey.station?.id || null,
+    photo:photoSource(journey.image) || '/api/extended/personal/landing-photo?ref='+encodeURIComponent(reference),
+  };
+}
+
+async function resolveJourney(user: Identity, reference: unknown) {
+  if(typeof reference!=='string' || !/^[a-zA-Z0-9-]{1,80}\.[a-f0-9]{32}$/.test(reference)) return null;
+  const page=reference.split('.')[0];
+  if(!equal(reference,journeyReference(user,page))) return null;
+  const record=await getNotionClient().pages.retrieve({page_id:page});
+  return ownJourney(record,user);
 }
 
 async function notesAndHistory(pageId: string, legacyNote = '') {
@@ -192,6 +227,61 @@ router.get('/state',async (_req,res) => {
     const data=await history(landing);
     return res.json({station:landing.station,note:data.note,canNote:true,ai:Boolean(openAiApiKey()),messages:publicHistory(data)});
   } catch { return res.status(502).json({error:'暫時讀不到你的旅程，請稍後再試。'}); }
+});
+
+router.get('/journeys',async (req,res) => {
+  const user=res.locals.user as Identity;
+  const cursor=req.query.cursor;
+  if (cursor!==undefined && (typeof cursor!=='string' || !/^[a-zA-Z0-9-]{1,100}$/.test(cursor))) {
+    return res.status(400).json({error:'讀取日期的連結已失效。'});
+  }
+  try {
+    const result=await getNotionClient().databases.query({
+      database_id:process.env.NOTION_DASHBOARD_DB_ID!,
+      ...(cursor ? { start_cursor:cursor } : {}),
+      filter:{and:[
+        {property:'Passenger ID',rich_text:{equals:user.passengerId}},
+        {property:'Status',select:{equals:'landed'}},
+        {property:'Landing Time',date:{is_not_empty:true}},
+      ]},
+      sorts:[{property:'Landing Time',direction:'descending'}],
+      page_size:journeyPageSize,
+    });
+    const items=result.results.flatMap((page)=>{
+      const journey=ownJourney(page,user);
+      return journey?[journeyCard(journey,user)]:[];
+    });
+    return res.json({items,next:result.next_cursor || null});
+  } catch { return res.status(502).json({error:'暫時讀不到過去的航班，請稍後再試。'}); }
+});
+
+router.get('/journey',async (req,res) => {
+  try {
+    const user=res.locals.user as Identity;
+    const journey=await resolveJourney(user,req.query.ref);
+    if(!journey) return res.status(404).json({error:'找不到這趟旅程。'});
+    const data=await notesAndHistory(journey.flight.notionId,journey.legacyNote);
+    return res.json({
+      item:journeyCard(journey,user),station:journey.station, note:data.note,messages:publicHistory(data),
+    });
+  } catch { return res.status(502).json({error:'暫時無法打開這趟旅程。'}); }
+});
+
+router.get('/landing-photo',async (req,res) => {
+  try {
+    const user=res.locals.user as Identity;
+    const journey=await resolveJourney(user,req.query.ref);
+    if(!journey) return res.sendStatus(404);
+    const attached=photoSource(journey.image);
+    if(attached) return res.redirect(attached);
+    const image=await getArchivedLandingScenery(journey.flight.flightId);
+    if(!image || image.flightId!==journey.flight.flightId || (image.passengerId && image.passengerId!==user.passengerId)) return res.sendStatus(404);
+    const url=photoSource(image.imageUrl);
+    if(url) return res.redirect(url);
+    const data=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image.imageUrl || '');
+    if(data && data[2].length<=6_000_000) return res.type(data[1]).send(Buffer.from(data[2],'base64'));
+    return res.sendStatus(404);
+  } catch { return res.sendStatus(502); }
 });
 
 router.post('/note',async (req,res) => {

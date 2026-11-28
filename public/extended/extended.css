@@ -64,3 +64,23 @@ footer{width:min(1400px,100%);padding:17px clamp(18px,4.4vw,66px);margin:auto;di
 @media(max-width:450px){.back{font-size:0;white-space:nowrap;margin-right:0}.back .icon{width:16px;height:16px}.top-actions{gap:8px}}
 @media(max-width:385px){.back{display:none}.brand{gap:7px}.top-actions{gap:6px}.note-action{font-size:11px}.chat-head{padding-inline:12px}.chat-scroll{padding-inline:9px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important}}
+.timeline-jump{color:var(--accent);white-space:nowrap}
+.timeline{width:min(1400px,100%);margin:50px auto 0;padding:0 clamp(16px,4.4vw,66px) 12px;scroll-margin-top:22px}
+.timeline-header{display:flex;align-items:center;gap:12px;margin-bottom:23px}.timeline-header .station-icon{width:43px;height:43px;border-radius:15px}.timeline-header h2{font-size:clamp(23px,3vw,31px);letter-spacing:-.045em}.timeline-header p{color:var(--muted);font-size:13px;margin-top:3px}
+.timeline-day{display:grid;grid-template-columns:114px minmax(0,1fr);column-gap:22px;position:relative}
+.timeline-day::before{content:"";position:absolute;top:0;bottom:0;left:114px;width:1px;background:var(--line)}
+.timeline-date{position:relative;align-self:start;padding:12px 8px 12px 0;white-space:nowrap;font-size:17px;line-height:1.15;color:var(--ink);font-weight:700}
+.timeline-date small{display:block;color:var(--muted);margin-top:5px;font-size:11px;font-weight:500}
+.timeline-date:after{content:"";position:absolute;top:17px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--accent2);box-shadow:0 0 0 4px var(--ring)}
+.timeline-entries{padding:0 0 17px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:10px;min-width:0}
+.timeline-entry{width:100%;padding:8px;display:grid;grid-template-columns:minmax(120px,34%) minmax(0,1fr) 22px;gap:13px;align-items:center;text-align:left;border-radius:21px;min-height:100px;cursor:pointer}
+.timeline-entry:hover,.timeline-entry[aria-pressed=true]{background:var(--strong);box-shadow:0 10px 28px #59539a27}
+.timeline-entry[aria-pressed=true]{outline:1px solid var(--accent2)}
+.timeline-preview{position:relative;aspect-ratio:4/3;max-height:160px;overflow:hidden;border-radius:14px;background:linear-gradient(140deg,var(--orb),var(--field));display:grid;place-items:center}
+.timeline-preview img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}.timeline-placeholder{display:grid;justify-items:center;gap:5px;color:var(--muted);font-size:10px}.timeline-placeholder .icon{width:20px;height:20px}
+.timeline-copy{min-width:0}.timeline-copy strong{display:block;font-size:clamp(15px,2vw,21px);font-weight:720;overflow-wrap:anywhere}.timeline-copy small{display:block;color:var(--muted);font-size:12px;margin-top:4px;overflow-wrap:anywhere}.timeline-copy .timeline-time{color:var(--accent);font-size:11px;margin-top:8px}.timeline-entry>.icon{width:17px;height:17px;color:var(--accent)}
+.timeline-footer{display:flex;align-items:center;gap:9px;justify-content:center;padding-top:4px}.timeline-footer button{color:var(--accent)}
+#landing-photo:not(:empty){margin:0 0 17px}.landing-card{max-width:440px;margin:0 auto}.landing-card .photo-card{margin-top:5px}.landing-card h3{margin:0;font-size:13px;font-weight:650;color:var(--ink);display:flex;align-items:center;gap:5px}.landing-card h3 .icon{width:15px;height:15px;color:var(--accent)}
+#latest{color:var(--accent);font-size:12px}.dialog .read-only{background:var(--glass)}
+@media(max-width:780px){.timeline{margin-top:32px}.timeline-day{grid-template-columns:77px minmax(0,1fr);gap:14px}.timeline-day::before{left:77px}.timeline-date{font-size:14px}.timeline-entry{grid-template-columns:minmax(75px,37%) minmax(0,1fr) 15px;gap:8px;min-height:75px;border-radius:15px}.timeline-preview{border-radius:10px}.timeline-jump span{display:none}.timeline-jump{min-height:40px;min-width:40px;padding:0}}
+@media(max-width:420px){.timeline-day{grid-template-columns:57px minmax(0,1fr);gap:10px}.timeline-day::before{left:57px}.timeline-date{font-size:12px;padding-right:3px}.timeline-date small{font-size:9px}.timeline-copy small{font-size:10px}.timeline-copy .timeline-time{margin-top:4px}.timeline-entry>.icon{width:13px}.timeline-jump{min-width:32px;min-height:32px}.timeline-jump .icon{width:15px}.top-actions .circle{width:33px;height:33px}}

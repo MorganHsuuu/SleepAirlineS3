@@ -65,18 +65,26 @@ async function createLandscapeDb(client: Client, parentPageId: string): Promise<
   return db.id;
 }
 
+// The archive is read-only and must not create missing Notion databases.
+export async function resolveExistingLandscapeDbId(): Promise<string> {
+  if (cachedDbId) return cachedDbId;
+  const id = await resolveDbIdWithFallback({
+    client:getNotionClient(),
+    envDbId:process.env.NOTION_LANDSCAPE_DB_ID,
+    expectedTitle:LANDSCAPE_DB_TITLE,
+    findOnParentPage:findLandscapeOnPage,
+    parentPageId:getParentPageId(),
+  });
+  cachedDbId=id;
+  return id;
+}
+
 async function findOrCreateLandscapeDb(): Promise<string> {
   const client = getNotionClient();
   const parentPageId = getParentPageId();
 
   try {
-    return await resolveDbIdWithFallback({
-      client,
-      envDbId: process.env.NOTION_LANDSCAPE_DB_ID,
-      expectedTitle: LANDSCAPE_DB_TITLE,
-      findOnParentPage: findLandscapeOnPage,
-      parentPageId,
-    });
+    return await resolveExistingLandscapeDbId();
   } catch (fallbackErr) {
     if (!canWriteSchema()) throw fallbackErr;
 

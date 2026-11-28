@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 import routes from '../src/lib/extended/personal';
 import { getNotionClient } from '../src/lib/notion/client';
 
-test('personal diary stays out of the legacy feed and follows the authenticated flight and chat', async (t) => {
+test('personal diary and archived journeys stay scoped to the signed-in traveler', async (t) => {
   const passengerId='PAX-TESTPERSONAL';
   const code='synthetic-code-test-only-with-enough-length';
   const codeHash=createHash('sha256').update(code).digest('hex');
@@ -26,13 +26,28 @@ test('personal diary stays out of the legacy feed and follows the authenticated 
       'Arrival Longitude':{number:115.2654},'Arrival Latitude':{number:-8.5098},
       'Departure Longitude':{number:121.5},'Departure Latitude':{number:25},
       'Immigration Note':{type:'rich_text',...text('原本的筆記')},
+      'Files & media':{files:[{type:'file',file:{url:'https://images.example/landing.jpg'}}]},
     },
   };
   const blocks: Array<Record<string, unknown>>=[];
-  t.mock.method(notion.databases,'query',async ()=>({results:[page],next_cursor:null}));
+  const past={
+    id:'mock-previous-page',properties:{...page.properties,
+      'Flight ID':text('old-flight'),'Landing Time':date('2026-11-25T02:00:00Z'),
+      'Arrival Latitude':{number:null},'Immigration Note':text('舊航班筆記'),
+    },
+  };
+  const unrelated={...past,id:'someone-else',properties:{...past.properties,'Passenger ID':text('PAX-NOTTHEOWNER')}};
+  t.mock.method(notion.databases,'query',async (args:{page_size:number;start_cursor?:string})=>{
+    if(args.page_size===6) return args.start_cursor
+      ? {results:[past,unrelated],next_cursor:null}
+      : {results:[page],next_cursor:'test-cursor'};
+    return {results:[page],next_cursor:null};
+  });
+  t.mock.method(notion.pages,'retrieve',async ({page_id}:{page_id:string}) =>
+    page_id===page.id?page:past);
   t.mock.method(notion.blocks.children,'list',async ({block_id}:{block_id:string})=>{
-    assert.equal(block_id,page.id);
-    return {results:blocks,next_cursor:null};
+    assert([page.id,past.id].includes(block_id));
+    return {results:block_id===page.id?blocks:[],next_cursor:null};
   });
   t.mock.method(notion.blocks.children,'append',async ({block_id,children}:{block_id:string;children:Array<Record<string,unknown>>})=>{
     assert.equal(block_id,page.id);
@@ -59,7 +74,7 @@ test('personal diary stays out of the legacy feed and follows the authenticated 
   let cookie: string | undefined;
   function call(endpoint:string,body?:unknown) {
     return fetch(base+endpoint,{
-      method:body===undefined?'GET':'POST',
+      method:body===undefined?'GET':'POST',redirect:'manual',
       headers:{...(cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},
       body:body===undefined?undefined:JSON.stringify(body),
     });
@@ -73,6 +88,20 @@ test('personal diary stays out of the legacy feed and follows the authenticated 
   const start=await (await call('/state')).json() as ResponseState;
   assert.equal(start.station.timezone,'Asia/Makassar');
   assert.equal(start.note,'原本的筆記');
+  type Timeline={items:Array<{reference:string;stationId:string|null;photo:string}>;next:string|null};
+  const timeline=await (await call('/journeys')).json() as Timeline;
+  assert.equal(timeline.items.length,1);
+  assert.equal(timeline.next,'test-cursor');
+  assert.equal(timeline.items[0].photo,'https://images.example/landing.jpg');
+  assert.doesNotMatch(JSON.stringify(timeline),/原本的筆記|PAX-TESTPERSONAL/);
+  const older=await (await call('/journeys?cursor='+timeline.next)).json() as Timeline;
+  assert.equal(older.items.length,1);
+  assert.equal(older.items[0].stationId,null);
+  const ref=older.items[0].reference;
+  const archive=await (await call('/journey?ref='+ref)).json() as ResponseState;
+  assert.equal(archive.note,'舊航班筆記');
+  assert.equal((await call('/journey?ref='+ref.replace('previous','somebody'))).status,404);
+  assert.equal((await call('/landing-photo?ref='+ref.replace('previous','somebody'))).status,404);
   const station=start.station.id;
   const note='今天想好好休息，睡前把簡報收完了。';
   assert.equal((await call('/note',{station:'different-flight',note,previous:start.note})).status,409);

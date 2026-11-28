@@ -41,7 +41,25 @@ function demoState() {
   const messages=Array.isArray(saved.messages)&&saved.messages.length ? saved.messages : demoStart;
   return {station:demoStation,note:typeof saved.note==='string'?saved.note:'',messages,canNote:true,ai:true};
 }
+const demoArchives = [
+  {
+    item:{reference:'demo-ubud',name:'烏布',country:'印尼',timezone:'Asia/Makassar',arrived:date()-29*3600_000,photo:'/extended/ubud-demo.jpg'},
+    station:{...demoStation,id:'demo-ubud',name:'烏布',country:'印尼',timezone:'Asia/Makassar',lat:-8.5098,lon:115.2654},
+    note:'降落後想記得這裡午後的光。',
+    messages:[{id:'ubud-story',kind:'ai',created:date()-29*3600_000,labelTime:'14:05',text:'在走廊邊點了冰檸檬茶，杯墊上有一輛歪歪的腳踏車。'}],
+  },
+  {
+    item:{reference:'demo-tokyo',name:'東京',country:'日本',timezone:'Asia/Tokyo',arrived:date()-53*3600_000,photo:null},
+    station:{...demoStation,id:'demo-tokyo',name:'東京',country:'日本',timezone:'Asia/Tokyo',lat:35.6762,lon:139.6503},
+    note:'',
+    messages:[{id:'tokyo-story',kind:'ai',created:date()-53*3600_000,text:'在月台等了一班車，從車窗看見一排小小的燈。'}],
+  },
+];
+const demoTimeline = [{...demoStation,reference:'demo-current',photo:demoStart[0].photo,stationId:demoStation.id},...demoArchives.map((a)=>a.item)];
 let mode='demo', state=demoState(), busy=false, pending=null, retry=null;
+let archive=null, historyCursor=null, timelineItems=demoTimeline, timelineBusy=false, timelineLoaded=true;
+let historyView=0, historyList=0;
+const missingPhotos=new Set();
 const globe=window.ExtendedGlobe(() => goToChat());
 function syncTheme(theme) {
   document.body.dataset.theme=theme;
@@ -76,16 +94,16 @@ function goToChat() {
   if (matchMedia('(max-width:780px)').matches) section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'start'});
   else $('chat-scroll').focus({preventScroll:true});
 }
-$('station-card').onclick=() => { if(state.station) { globe.focus(state.station);goToChat(); } };
-function photoCard(url) {
+$('station-card').onclick=() => { const station=archive?archive.station:state.station;if(station) globe.focus(station);goToChat(); };
+function photoCard(url,landing=false) {
   const wrap=el('div');
   const btn=el('button','photo-card');
   btn.type='button';btn.setAttribute('aria-label','放大旅行照片');
-  const photo=el('img');photo.src=url;photo.alt='旅行訊息的照片';photo.decoding='async';
+  const photo=el('img');photo.src=url;photo.alt=landing?'這次降落的照片':'旅行訊息的照片';photo.decoding='async';
   photo.addEventListener('error',()=>{wrap.hidden=true;},{once:true});
   btn.append(photo,icon('expand'));
   btn.onclick=() => { $('lightbox-image').src=url;$('lightbox').showModal(); };
-  wrap.append(btn,el('span','photo-label','AI 生成照片'));
+  wrap.append(btn,el('span','photo-label',landing?'降落風景':'AI 生成照片'));
   return wrap;
 }
 function renderMessage(message) {
@@ -94,7 +112,7 @@ function renderMessage(message) {
   const avatar=el('span','avatar');
   avatar.append(icon(mine?'user':'spark'));
   const pack=el('div','pack'), meta=el('div','metadata',mine?'你':'AI 分身');
-  const stamp=message.labelTime || timeString(message.created,state.station?.timezone);
+  const stamp=message.labelTime || timeString(message.created,(archive?.item||state.station)?.timezone);
   if(stamp) meta.append(el('time','',stamp));
   const bubble=el('div','bubble');
   if(message.noteMessage) {
@@ -115,18 +133,34 @@ function renderTyping() {
   return row;
 }
 function render(scrollToEnd=false) {
-  const {station,messages}=state;
+  const {station,messages}=archive||state;
+  const place=archive?.item||station;
+  $('chat-title').textContent=archive?'旅程回顧':'平行的自己';
+  $('latest').hidden=!archive;
+  $('quick-row').hidden=Boolean(archive);
+  $('composer').hidden=Boolean(archive);
+  $('note-open').lastElementChild.textContent=archive?'查看筆記':'降落筆記';
+  const holder=$('landing-photo');
+  holder.replaceChildren();
+  if(archive?.item.photo&&!missingPhotos.has(archive.item.reference)) {
+    const figure=el('div','landing-card');
+    const heading=el('h3');
+    heading.append(icon('photo'),'這次降落的照片');
+    figure.append(heading,photoCard(archive.item.photo,true));
+    figure.querySelector('img').addEventListener('error',()=>{holder.replaceChildren();},{once:true});
+    holder.append(figure);
+  }
   const latest=messages.findLast((m)=>m.kind==='ai');
   const picked=station && {...station,story:latest};
   globe.set(picked?[picked]:[],picked?.id);
   $('source').textContent=mode==='live'?'個人旅程 · Notion 航班':'示範旅程';
   $('account-label').textContent=mode==='live'?'登出':'連接旅程';
-  $('chat-place').textContent=station ? [station.name,station.country].filter(Boolean).join('・') : '等待下一次降落';
-  $('station-card').hidden=!station;
-  $('note-open').disabled=!state.canNote;
-  $('station-name').textContent=station?.name||'';
-  $('station-detail').textContent=station?(mode==='demo'?'示範航點':(timeString(station.arrived,station.timezone,true)+' 抵達')):'';
-  $('chat-date').firstElementChild.textContent=station?(mode==='demo'?'加德滿都・旅行近況':timeString(station.arrived,station.timezone,true)+' 降落'):'';
+  $('chat-place').textContent=place ? [place.name,place.country].filter(Boolean).join('・') : '等待下一次降落';
+  $('station-card').hidden=!place;
+  $('note-open').disabled=archive?!archive.note:!state.canNote;
+  $('station-name').textContent=place?.name||'';
+  $('station-detail').textContent=place?(mode==='demo'&&!archive?'示範航點':(timeString(place.arrived,place.timezone,true)+' 抵達')):'';
+  $('chat-date').firstElementChild.textContent=place?(mode==='demo'&&!archive?'加德滿都・旅行近況':timeString(place.arrived,place.timezone,true)+' 降落'):'';
   $('ask').disabled=busy||!station||!state.ai;
   $('message').disabled=!station||!state.ai;
   $('send').disabled=busy||!station||!state.ai;
@@ -136,10 +170,10 @@ function render(scrollToEnd=false) {
   const scroll=$('chat-scroll');
   const prev=scroll.scrollTop;
   const rows=messages.map(renderMessage);
-  if(pending) rows.push(renderMessage(pending));
-  if(busy&&pending!==false) rows.push(renderTyping());
+  if(!archive&&pending) rows.push(renderMessage(pending));
+  if(!archive&&busy&&pending!==false) rows.push(renderTyping());
   if(!rows.length) {
-    const msg=station?(state.ai?'你可以寫一則降落筆記，或直接和分身說話。':'目前無法連接 AI，你仍可儲存降落筆記。'):'完成降落後，你可以在這裡和分身聊天、寫下筆記。';
+    const msg=archive?'這趟航班當時沒有留下對話。':station?(state.ai?'你可以寫一則降落筆記，或直接和分身說話。':'目前無法連接 AI，你仍可儲存降落筆記。'):'完成降落後，你可以在這裡和分身聊天、寫下筆記。';
     rows.push(el('p','empty',msg));
   }
   $('messages').replaceChildren(...rows);
@@ -157,7 +191,9 @@ async function request(path, body) {
 }
 async function bootLive() {
   const next=await request('/state');
-  state=next;mode='live';retry=null;
+  state=next;mode='live';retry=null;archive=null;
+  resetTimeline();
+  void loadTimeline();
   $('login').close();
   if(state.station) globe.focus(state.station);
   render(false);
@@ -169,7 +205,7 @@ function makeDemoResponse(action) {
   return demoReply[index] || '奶茶喝完了，我沿著剛才那條巷子慢慢走，等你下次再來找我。';
 }
 async function turn(action,text='') {
-  if(busy||!state.station||!state.ai) return;
+  if(archive||busy||!state.station||!state.ai) return;
   const token=retry?.action===action&&retry?.text===text ? retry.key : id();
   const now=date();
   pending=action==='chat'?{id:token,kind:'human',text,created:now}:
@@ -213,15 +249,21 @@ $('photo').onclick=async ()=>{
   finally { busy=false;pending=null;render(false); }
 };
 $('note-open').onclick=()=>{
-  if(!state.station||!state.canNote) return;
-  $('note-destination').textContent=[state.station.name,mode==='live'?'儲存到這筆 Notion 航班':'示範筆記儲存在此裝置'].join(' · ');
-  $('note-text').value=state.note;
+  if(!archive&&(!state.station||!state.canNote)) return;
+  $('note-destination').textContent=archive?archive.item.name:
+    [state.station.name,mode==='live'?'儲存到這筆 Notion 航班':'示範筆記儲存在此裝置'].join(' · ');
+  $('note-text').value=archive?.note??state.note;
+  $('note-text').readOnly=Boolean(archive);
+  $('note-label').textContent=archive?'當時的筆記':'想記下什麼？';
+  $('note-help').hidden=Boolean(archive);
+  $('note-form').querySelector('button[type=submit]').hidden=Boolean(archive);
   feedback('note-feedback','');
   $('note').showModal();
 };
 $('note-form').onsubmit=async (event)=>{
   event.preventDefault();
   const submit=event.submitter, note=$('note-text').value.trim();
+  if(archive) return;
   if(note===state.note) { $('note').close();return; }
   if(busy) return;
   submit.disabled=true;
@@ -246,7 +288,7 @@ $('account').onclick=async ()=>{
   if(busy) return;
   try {
     await request('/logout',{});
-    mode='demo';state=demoState();retry=null;pending=null;feedback('chat-feedback','');
+    mode='demo';state=demoState();retry=null;pending=null;archive=null;resetTimeline();renderTimeline();feedback('chat-feedback','');
     globe.focus(state.station);render();
   } catch(error) { feedback('chat-feedback',error.message); }
 };
@@ -260,6 +302,106 @@ $('login-form').onsubmit=async (event)=>{
   } catch(error) { feedback('login-feedback',error.message); }
   finally { submit.disabled=false; }
 };
+function resetTimeline() {
+  ++historyList;++historyView;
+  timelineItems=mode==='demo'?demoTimeline:[];
+  timelineLoaded=mode==='demo';
+  timelineBusy=false;historyCursor=null;missingPhotos.clear();
+  renderTimeline();
+}
+function timelineDay(at) {
+  const day=new Date(at);
+  const key=[day.getFullYear(),day.getMonth()+1,day.getDate()].join('-');
+  return {key,title:(day.getMonth()+1)+'月'+day.getDate()+'日',
+    year:day.getFullYear()+' · '+new Intl.DateTimeFormat('zh-TW',{weekday:'short'}).format(day)};
+}
+function makeEntry(item) {
+  const entry=el('button','glass timeline-entry');
+  entry.type='button';
+  entry.setAttribute('aria-pressed',String(archive?.item.reference===item.reference));
+  entry.setAttribute('aria-label',item.name+'，'+timelineDay(item.arrived).title+'降落，打開旅程');
+  entry.onclick=()=>openJourney(item);
+  const preview=el('span','timeline-preview'), empty=el('span','timeline-placeholder');
+  empty.append(icon('photo'));
+  preview.append(empty);
+  const unavailable=()=>empty.append(el('span','','沒有降落照片'));
+  if(item.photo&&!missingPhotos.has(item.reference)) {
+    const picture=el('img');picture.alt='';picture.loading='lazy';picture.decoding='async';
+    picture.addEventListener('load',()=>{empty.hidden=true;},{once:true});
+    picture.addEventListener('error',()=>{missingPhotos.add(item.reference);picture.remove();unavailable();},{once:true});
+    picture.src=item.photo;
+    preview.append(picture);
+  } else unavailable();
+  const copy=el('span','timeline-copy');
+  copy.append(el('strong','',item.name),el('small','',item.country),
+    el('small','timeline-time',(timeString(item.arrived,item.timezone)||'')+(item.timezone?' 目的地時間':' 降落')));
+  entry.append(preview,copy,icon('arrow'));
+  return entry;
+}
+function renderTimeline() {
+  const days=new Map();
+  for(const item of timelineItems) {
+    const day=timelineDay(item.arrived);
+    if(!days.has(day.key)) days.set(day.key,{...day,items:[]});
+    days.get(day.key).items.push(item);
+  }
+  const rows=[...days.values()].map((day)=>{
+    const date=el('h3','timeline-date',day.title);
+    date.append(el('small','',day.year));
+    const entries=el('div','timeline-entries');
+    for(const item of day.items) entries.append(makeEntry(item));
+    const row=el('div','timeline-day');
+    row.append(date,entries);
+    return row;
+  });
+  if(!rows.length&&timelineLoaded) rows.push(el('p','empty','完成降落後，航班與照片會依日期出現在這裡。'));
+  $('timeline-days').replaceChildren(...rows);
+  $('older').hidden=mode!=='live'||(timelineLoaded&&!historyCursor);
+  $('older').disabled=timelineBusy;
+  $('older').lastChild.textContent=timelineLoaded?' 載入更早旅程':' 讀取旅程';
+}
+async function loadTimeline() {
+  if(mode!=='live'||timelineBusy||(timelineLoaded&&!historyCursor)) return;
+  const cursor=historyCursor;
+  const version=historyList;
+  timelineBusy=true;
+  feedback('timeline-feedback','');
+  $('older').disabled=true;
+  try {
+    const data=await request('/journeys'+(cursor?'?cursor='+encodeURIComponent(cursor):''));
+    if(version!==historyList) return;
+    const all=new Map(timelineItems.map((row)=>[row.reference,row]));
+    for(const item of data.items) all.set(item.reference,item);
+    timelineItems=[...all.values()];
+    timelineLoaded=true;historyCursor=data.next;
+  } catch(error) { if(version===historyList) feedback('timeline-feedback',error.message); }
+  finally {
+    if(version===historyList) { timelineBusy=false;renderTimeline(); }
+  }
+}
+$('older').onclick=loadTimeline;
+function returnLatest() {
+  ++historyView;
+  archive=null;
+  if(state.station) globe.focus(state.station);
+  render();renderTimeline();
+}
+$('latest').onclick=returnLatest;
+async function openJourney(item) {
+  const version=++historyView, source=mode;
+  feedback('timeline-feedback','');
+  try {
+    const picked=source==='live' ? await request('/journey?ref='+encodeURIComponent(item.reference)):
+      item.reference==='demo-current'?{item,station:state.station,note:state.note,messages:state.messages.slice()}:
+      demoArchives.find((journey)=>journey.item.reference===item.reference);
+    if(version!==historyView||source!==mode||!picked) return;
+    archive=picked;
+    if(archive.station) globe.focus(archive.station);
+    render();renderTimeline();
+    $('chat-scroll').scrollTop=0;
+    $('conversation').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  } catch(error) { if(version===historyView) feedback('timeline-feedback',error.message); }
+}
 document.querySelectorAll('[data-close]').forEach((button)=>button.onclick=()=>$(button.dataset.close).close());
-render();
+render();renderTimeline();
 void request('/status').then((result)=>{if(result.authenticated) return bootLive();}).catch(()=>{});

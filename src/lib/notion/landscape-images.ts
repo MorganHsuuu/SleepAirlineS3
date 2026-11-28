@@ -16,7 +16,7 @@ import {
   wDate,
   wUrl,
 } from './client';
-import { resolveLandscapeDbId } from './ensure-landscape-db';
+import { resolveExistingLandscapeDbId, resolveLandscapeDbId } from './ensure-landscape-db';
 import { attachFileUploadToProperty, uploadImageToNotion, wFileUpload } from './notion-file-upload';
 import { getFlightByFlightId } from './flight-lookup';
 import {
@@ -320,6 +320,23 @@ async function readFlightMedia(flightId: string): Promise<LandingScenery | null>
     landingTime: flight.landingTime,
     createdAt: flight.createdAt,
   };
+}
+
+export async function getArchivedLandingScenery(flightId: string): Promise<LandingScenery | null> {
+  if (!flightId || !isNotionConfigured()) return null;
+  const existingDatabase=await resolveExistingLandscapeDbId();
+  const result=await getNotionClient().databases.query({
+    database_id:existingDatabase,
+    filter:{property:'Flight ID',rich_text:{equals:flightId}},
+    sorts:[{property:'Created At',direction:'descending'}],
+    page_size:5,
+  });
+  for(const page of result.results) {
+    if(!('properties' in page)) continue;
+    const scenery=parseLandscape(page as unknown as Record<string,unknown>);
+    if(scenery.imageUrl) return scenery;
+  }
+  return null;
 }
 
 export async function getLandscapeByFlightId(flightId: string): Promise<LandingScenery | null> {
