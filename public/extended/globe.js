@@ -45,10 +45,10 @@ window.ExtendedGlobe = function (select) {
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
   }
   function softenVerticalEdges(radius, centerY) {
-    const depth = Math.min(92, height * .21);
+    const depth = Math.min(76, height * .18);
     const feather = (clearance) => {
-      // Start softly just before the sphere reaches an edge, then widen the fade as it crops.
-      const amount = Math.max(0, Math.min(1, (20 - clearance) / (height * .14)));
+      // Leave the full globe intact and feather in as it approaches the viewport edge.
+      const amount = Math.max(0, Math.min(1, (8 - clearance) / (height * .12)));
       return Math.round(depth * amount * amount * (3 - 2 * amount));
     };
     const top = feather(centerY - radius);

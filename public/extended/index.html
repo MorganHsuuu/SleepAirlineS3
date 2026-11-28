@@ -112,7 +112,8 @@
       <button type="button" class="circle close" data-close="login" aria-label="關閉"><svg class="icon"><use href="#i-close"/></svg></button>
       <h2>連接你的旅程</h2>
       <label>旅客編號<input name="passenger" autocomplete="username" required maxlength="48" placeholder="PAX-…"></label>
-      <label>V3 恢復碼或 Extended 邀請碼<input name="code" type="password" autocomplete="current-password" required maxlength="128"></label>
+      <label>V3 恢復碼<input name="code" type="password" autocomplete="current-password" aria-describedby="recovery-help" required maxlength="128"></label>
+      <p id="recovery-help">請輸入當初配對裝置時保存的恢復碼。</p>
       <p class="feedback" id="login-feedback" role="status"></p>
       <button type="submit" class="primary pill">連接 V3 <svg class="icon"><use href="#i-arrow"/></svg></button>
     </form>
