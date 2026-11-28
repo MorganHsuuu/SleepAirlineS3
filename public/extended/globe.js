@@ -1,5 +1,6 @@
 window.ExtendedGlobe = function (select) {
   const canvas = document.querySelector('#earth');
+  const world = canvas.parentElement;
   const ctx = canvas.getContext('2d');
   const pins = document.querySelector('#pins');
   const note = document.querySelector('#map-note');
@@ -13,6 +14,7 @@ window.ExtendedGlobe = function (select) {
   let countries, features, selected, drag, frame, animation;
   let stations = [], elements = new Map(), zoom = 1;
   let width = 1, height = 1, ratio = 1;
+  let edgeFade = '';
 
   // The bundled Natural Earth GeoJSON uses RFC 7946 winding. D3 expects the reverse.
   fetch('../countries.geojson').then((r) => {
@@ -42,9 +44,25 @@ window.ExtendedGlobe = function (select) {
     if (fill) { ctx.fillStyle = fill; ctx.fill(); }
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
   }
+  function softenVerticalEdges(radius, centerY) {
+    const depth = Math.min(92, height * .21);
+    const feather = (clearance) => {
+      // Start softly just before the sphere reaches an edge, then widen the fade as it crops.
+      const amount = Math.max(0, Math.min(1, (20 - clearance) / (height * .14)));
+      return Math.round(depth * amount * amount * (3 - 2 * amount));
+    };
+    const top = feather(centerY - radius);
+    const bottom = feather(height - centerY - radius);
+    const key = top + ':' + bottom;
+    if (key === edgeFade) return;
+    edgeFade = key;
+    world.style.setProperty('--earth-fade-top', top + 'px');
+    world.style.setProperty('--earth-fade-bottom', bottom + 'px');
+  }
   function draw() {
     const x = width / 2, y = height / 2 + 1;
     const r = Math.max(1, Math.min(width * .402, height * .45) * zoom);
+    softenVerticalEdges(r, y);
     projection.scale(r).translate([x,y]).rotate(rotation);
     ctx.setTransform(ratio,0,0,ratio,0,0);
     ctx.clearRect(0,0,width,height);

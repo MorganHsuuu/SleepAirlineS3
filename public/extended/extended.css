@@ -43,8 +43,44 @@ h1,h2,p{margin:0}
 h1{margin:10px 0 10px;font-size:clamp(34px,5.05vw,72px);font-weight:670;line-height:1.05;letter-spacing:-.095em}h1 span{color:var(--sand)}#map-intro{color:var(--muted);font-size:14px;line-height:1.65}
 .world-wrap{position:relative;height:clamp(350px,35vw,510px);isolation:isolate;margin:-17px -8px -6px}
 .world-wrap:before{content:"";position:absolute;inset:10% 12% 5%;border-radius:50%;background:radial-gradient(ellipse,#bfb0f080 12%,#bacaf25c 54%,transparent 73%);filter:blur(23px);pointer-events:none}
-.world{position:absolute;inset:0}#earth{width:100%;height:100%;display:block;touch-action:none;cursor:grab}#earth:active{cursor:grabbing}
-.pins{position:absolute;inset:0;pointer-events:none}.pin{position:absolute;pointer-events:auto;transform:translate(-11px,-11px);display:flex;align-items:center;gap:7px;border:0;background:none;color:var(--ink);font-size:13px;font-weight:720;text-shadow:0 1px 5px var(--ring);white-space:nowrap;padding:0}.pin-dot{width:22px;height:22px;border-radius:50%;border:1px solid #fff;display:grid;place-items:center;background:#7664c976;box-shadow:0 0 17px #9475ff91;flex:none}.pin-dot:after{content:"";width:8px;height:8px;background:#fff5ff;border-radius:50%}
+.world {
+  position:absolute;
+  inset:0;
+  isolation:isolate;
+  --earth-fade-top:0px;
+  --earth-fade-bottom:0px;
+  --earth-mist:#dcd4f46b;
+}
+body[data-theme=night] .world { --earth-mist:#a194d457; }
+#earth {
+  width:100%;
+  height:100%;
+  display:block;
+  touch-action:none;
+  cursor:grab;
+  --earth-mask:linear-gradient(to bottom,
+    transparent, #0003 calc(var(--earth-fade-top) * .29), #000b calc(var(--earth-fade-top) * .64), #000 var(--earth-fade-top),
+    #000 calc(100% - var(--earth-fade-bottom)), #000b calc(100% - var(--earth-fade-bottom) * .64),
+    #0003 calc(100% - var(--earth-fade-bottom) * .29), transparent 100%);
+  -webkit-mask-image:var(--earth-mask);
+  mask-image:var(--earth-mask);
+}
+#earth:active { cursor:grabbing; }
+.world::before,.world::after {
+  content:"";
+  position:absolute;
+  inset-inline:0;
+  pointer-events:none;
+  background:var(--earth-mist);
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+  -webkit-mask-image:linear-gradient(transparent, #000b 26%, #0006 62%, transparent);
+  mask-image:linear-gradient(transparent, #000b 26%, #0006 62%, transparent);
+}
+.world::before { top:0; height:var(--earth-fade-top); }
+.world::after { bottom:0; height:var(--earth-fade-bottom); }
+
+.pins{position:absolute;inset:0;z-index:1;pointer-events:none}.pin{position:absolute;pointer-events:auto;transform:translate(-11px,-11px);display:flex;align-items:center;gap:7px;border:0;background:none;color:var(--ink);font-size:13px;font-weight:720;text-shadow:0 1px 5px var(--ring);white-space:nowrap;padding:0}.pin-dot{width:22px;height:22px;border-radius:50%;border:1px solid #fff;display:grid;place-items:center;background:#7664c976;box-shadow:0 0 17px #9475ff91;flex:none}.pin-dot:after{content:"";width:8px;height:8px;background:#fff5ff;border-radius:50%}
 .map-note{position:absolute;z-index:3;width:min(210px,52%);line-height:1.55;border-radius:17px;padding:10px 13px;text-align:left;font-size:12px;color:var(--ink);background:var(--strong)}.map-note small{display:block;color:var(--accent);font-weight:750;margin-bottom:3px}.map-note:after{content:"";height:12px;width:1px;background:var(--accent2);position:absolute;bottom:-12px;left:15px}
 .map-controls{position:absolute;right:10px;bottom:16px;display:flex;gap:6px}.map-controls .circle{width:37px;height:37px}.map-controls .icon{width:16px;height:16px}
 .station-card{margin:0 8px 0 0;align-self:flex-start;min-width:200px;max-width:100%;text-align:left;display:flex;align-items:center;gap:10px;border-radius:18px;padding:9px 12px}.station-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:var(--orb);color:var(--accent)}.station-card strong,.station-card small{display:block}.station-card strong{font-size:14px}.station-card small{margin-top:2px;color:var(--muted);font-size:11px}.station-link{margin-left:auto;color:var(--accent);width:15px}
